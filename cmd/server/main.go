@@ -8,26 +8,35 @@ import (
 	"strings"
 )
 
-// SF TODO
+// Хранилище метрик
 type MemStorage struct {
-	// SF TODO
+	// Данные датчиков. Ключ - название датчика, значение - данные датчика
 	gauge map[string]float64
 
-	// SF TODO
+	// Данные счетчиков. Ключ - название счетчика, значение - данные счетчика
 	counter map[string]int64
 }
 
-// SF TODO
+// Обновляет данные датчика
+//
+//	@param name  название датчика
+//	@param value данные датчика
 func (storage *MemStorage) updateGauge(name string, value float64) {
 	storage.gauge[name] = value
 }
 
-// SF TODO
+// Обновляет данные счетчика
+//
+//	@param name  название счетчика
+//	@param value данные счетчика
 func (storage *MemStorage) updateCounter(name string, value int64) {
 	storage.counter[name] += value
 }
 
-// SF TODO
+// Создаёт обработчик обновления метрик
+//
+//	@param storage хранилище метрик
+//	@returns обработчик обновления метрик
 func createHandlerUpdate(storage *MemStorage) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
@@ -95,17 +104,17 @@ func createHandlerUpdate(storage *MemStorage) http.HandlerFunc {
 			return
 		}
 
-		// SF TODO удалить
-		fmt.Printf("URL Path: %s\n", req.URL.Path)
-		fmt.Printf("Storage contains:\n%v", storage)
-		fmt.Println()
+		// TODO: заменить на дебажное логирование
+		fmt.Printf("\nDebug data:\n")
+		fmt.Printf("\tURL Path: %s\n", req.URL.Path)
+		fmt.Printf("\tStorage contains:\n%v\n\n", storage)
 	}
 }
 
 // Настраивает и запускает сервер
 //
-// @returns ошибку работы сервера
-// SF TODO
+//	@param storage хранилище метрик
+//	@returns ошибку работы сервера
 func run(storage *MemStorage) error {
 	mux := http.NewServeMux()
 	mux.Handle("/update/", http.StripPrefix("/update", createHandlerUpdate(storage)))
