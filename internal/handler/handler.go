@@ -21,7 +21,7 @@ func CreateHandlerUpdate(storage *model.MemStorage) http.HandlerFunc {
 		}
 
 		if contentType := req.Header.Get("Content-Type"); contentType != "text/plain" {
-			http.Error(resp, "Content-Type must be text/plain", http.StatusNotFound)
+			http.Error(resp, "Content-Type must be text/plain", http.StatusBadRequest)
 			return
 		}
 
