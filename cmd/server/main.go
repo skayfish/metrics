@@ -5,14 +5,14 @@ import (
 	"net/http"
 
 	"github.com/skayfish/metrics/internal/handler"
-	"github.com/skayfish/metrics/internal/model"
+	"github.com/skayfish/metrics/internal/storage"
 )
 
 // Настраивает и запускает сервер
 //
 //	@param storage хранилище метрик
 //	@returns ошибку работы сервера
-func run(storage *model.MemStorage) error {
+func run(storage *storage.MemStorage) error {
 	mux := http.NewServeMux()
 	mux.Handle("/update/", http.StripPrefix("/update", handler.CreateHandlerUpdate(storage)))
 	return http.ListenAndServe(":8080", mux)
@@ -20,6 +20,6 @@ func run(storage *model.MemStorage) error {
 
 // Запуск программы
 func main() {
-	storage := model.NewMemStorage()
+	storage := storage.NewMemStorage()
 	log.Fatal(run(&storage))
 }

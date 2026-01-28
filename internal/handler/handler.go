@@ -7,13 +7,14 @@ import (
 	"strings"
 
 	"github.com/skayfish/metrics/internal/model"
+	"github.com/skayfish/metrics/internal/storage"
 )
 
 // Создаёт обработчик обновления метрик
 //
 //	@param storage хранилище метрик
 //	@returns обработчик обновления метрик
-func CreateHandlerUpdate(storage *model.MemStorage) http.HandlerFunc {
+func CreateHandlerUpdate(storage *storage.MemStorage) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
 			http.Error(resp, "Method of request must be POST", http.StatusNotFound)
