@@ -42,7 +42,6 @@ func PingTCP(host string, port string, timeout time.Duration) error {
 
 // SF TODO
 func checkConnection() bool {
-	// Проверка соединения с сервером
 	totalTime := time.Duration(0)
 	totalAttempts := timeout.Nanoseconds() / waitInterval.Nanoseconds()
 	attemptsCounter := 1
@@ -55,15 +54,15 @@ func checkConnection() bool {
 		err := PingTCP(host, port, timeout)
 		if err != nil {
 			fmt.Printf("Не удалось подключиться к %s:%s: %v\n", host, port, err)
-			fmt.Printf("Жду 2 секунды... [%d/%d]\n", attemptsCounter, totalAttempts)
+			fmt.Printf("Попытка соединения с сервером... [%d/%d, ожидание %v]\n", attemptsCounter, totalAttempts, waitInterval)
 			attemptsCounter++
 		} else {
 			fmt.Printf("Успешно подключились к %s:%s\n\n", host, port)
 			return true
 		}
 
-		time.Sleep(2 * time.Second)
-		totalTime += 2 * time.Second
+		time.Sleep(waitInterval)
+		totalTime += waitInterval
 	}
 }
 
