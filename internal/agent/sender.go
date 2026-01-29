@@ -66,7 +66,7 @@ func (*sender) generateFloat64() float64 {
 	return min + gen.Float64()*(max-min)
 }
 
-func (this *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
+func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 	res = make(map[string]float64)
 
 	res["Alloc"] = float64(metrics.Alloc)
@@ -97,42 +97,42 @@ func (this *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) 
 	res["Sys"] = float64(metrics.Sys)
 	res["TotalAlloc"] = float64(metrics.TotalAlloc)
 
-	res["RandomValue"] = this.generateFloat64()
+	res["RandomValue"] = obj.generateFloat64()
 
 	return
 }
 
 // SF TODO
-func (this *sender) Run() error {
+func (obj *sender) Run() error {
 	for {
-		metrics := this.getMetrics()
-		this.pollCount++ // Обновление счетчика получения метрик
-		if this.totalTime%this.reportInterval == 0 {
+		metrics := obj.getMetrics()
+		obj.pollCount++ // Обновление счетчика получения метрик
+		if obj.totalTime%obj.reportInterval == 0 {
 			// Фильтрация метрик, полученных из системы
-			filteredMetrics := this.filtrate(metrics)
+			filteredMetrics := obj.filtrate(metrics)
 			// Добавление дополнительных gauge метрик
-			filteredMetrics["RandomValue"] = this.generateFloat64()
+			filteredMetrics["RandomValue"] = obj.generateFloat64()
 			// Отправка метрик серверу
-			err := this.send(filteredMetrics)
+			err := obj.send(filteredMetrics)
 			if err != nil {
 				return err
 			}
 		}
 
 		// Ожидание следующего считывания метрик
-		time.Sleep(this.pollInterval)
-		this.totalTime += this.pollInterval
+		time.Sleep(obj.pollInterval)
+		obj.totalTime += obj.pollInterval
 	}
 }
 
 // SF TODO
-func (this *sender) send(gaugeMetrics map[string]float64) error {
-	err := this.sendCounterMetrics()
+func (obj *sender) send(gaugeMetrics map[string]float64) error {
+	err := obj.sendCounterMetrics()
 	if err != nil {
 		return err
 	}
 
-	err = this.sendGaugeMetrics(gaugeMetrics)
+	err = obj.sendGaugeMetrics(gaugeMetrics)
 	if err != nil {
 		return err
 	}
@@ -141,17 +141,17 @@ func (this *sender) send(gaugeMetrics map[string]float64) error {
 }
 
 // SF TODO
-func (this *sender) sendGaugeMetric(name string, value float64) error {
-	url := fmt.Sprintf(URLFloatValueTemplate, this.serverAddress, model.Gauge, name, value)
-	_, err := this.client.Post(url, ContentTypeText, nil)
+func (obj *sender) sendGaugeMetric(name string, value float64) error {
+	url := fmt.Sprintf(URLFloatValueTemplate, obj.serverAddress, model.Gauge, name, value)
+	_, err := obj.client.Post(url, ContentTypeText, nil)
 
 	return err
 }
 
 // SF TODO
-func (this *sender) sendGaugeMetrics(metrics map[string]float64) error {
+func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 	for name, value := range metrics {
-		err := this.sendGaugeMetric(name, value)
+		err := obj.sendGaugeMetric(name, value)
 		if err != nil {
 			return err
 		}
@@ -165,20 +165,20 @@ func (this *sender) sendGaugeMetrics(metrics map[string]float64) error {
 }
 
 // SF TODO
-func (this *sender) sendCounterMetric(name string, value int64) error {
-	url := fmt.Sprintf(URLIntegerValueTemplate, this.serverAddress, model.Counter, name, value)
-	_, err := this.client.Post(url, ContentTypeText, nil)
+func (obj *sender) sendCounterMetric(name string, value int64) error {
+	url := fmt.Sprintf(URLIntegerValueTemplate, obj.serverAddress, model.Counter, name, value)
+	_, err := obj.client.Post(url, ContentTypeText, nil)
 
 	return err
 }
 
 // SF TODO
-func (this *sender) sendCounterMetrics() error {
-	err := this.sendCounterMetric("PollCount", this.pollCount)
+func (obj *sender) sendCounterMetrics() error {
+	err := obj.sendCounterMetric("PollCount", obj.pollCount)
 
 	// todo писать через дебажный логгер
 	fmt.Printf("Debug info:\n")
-	fmt.Printf("\tCounter metrics: [%s: %d]\n", "PollCount", this.pollCount)
+	fmt.Printf("\tCounter metrics: [%s: %d]\n", "PollCount", obj.pollCount)
 
 	return err
 }
