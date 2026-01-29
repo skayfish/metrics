@@ -19,7 +19,38 @@ func TestNewSender(t *testing.T) {
 		args args
 		want sender
 	}{
-		// TODO: Add test cases.
+		{
+			"Success",
+			args{
+				serverAddress:  "http://localhost:8080",
+				pollInterval:   10 * time.Second,
+				reportInterval: 0,
+			},
+			sender{
+				serverAddress:  "http://localhost:8080",
+				pollInterval:   10 * time.Second,
+				reportInterval: 0,
+				pollCount:      0,
+				totalTime:      0,
+				client:         http.Client{},
+			},
+		},
+		{
+			"Success",
+			args{
+				serverAddress:  "localhost",
+				pollInterval:   1000 * time.Minute,
+				reportInterval: 99 * time.Nanosecond,
+			},
+			sender{
+				serverAddress:  "localhost",
+				pollInterval:   1000 * time.Minute,
+				reportInterval: 99 * time.Nanosecond,
+				pollCount:      0,
+				totalTime:      0,
+				client:         http.Client{},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
