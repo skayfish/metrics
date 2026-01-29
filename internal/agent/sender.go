@@ -97,8 +97,6 @@ func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 	res["Sys"] = float64(metrics.Sys)
 	res["TotalAlloc"] = float64(metrics.TotalAlloc)
 
-	res["RandomValue"] = obj.generateFloat64()
-
 	return
 }
 
