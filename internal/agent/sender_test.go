@@ -249,217 +249,31 @@ func Test_sender_filtrate(t *testing.T) {
 }
 
 func Test_sender_Run(t *testing.T) {
-	type fields struct {
-		serverAddress  string
-		pollInterval   time.Duration
-		reportInterval time.Duration
-		pollCount      int64
-		totalTime      time.Duration
-		client         http.Client
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			obj := &sender{
-				serverAddress:  tt.fields.serverAddress,
-				pollInterval:   tt.fields.pollInterval,
-				reportInterval: tt.fields.reportInterval,
-				pollCount:      tt.fields.pollCount,
-				totalTime:      tt.fields.totalTime,
-				client:         tt.fields.client,
-			}
-			if err := obj.Run(); (err != nil) != tt.wantErr {
-				t.Errorf("sender.Run() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+	// TODO: Add test cases.
+	t.Skip()
 }
 
 func Test_sender_send(t *testing.T) {
-	type fields struct {
-		serverAddress  string
-		pollInterval   time.Duration
-		reportInterval time.Duration
-		pollCount      int64
-		totalTime      time.Duration
-		client         http.Client
-	}
-	type args struct {
-		gaugeMetrics map[string]float64
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			obj := &sender{
-				serverAddress:  tt.fields.serverAddress,
-				pollInterval:   tt.fields.pollInterval,
-				reportInterval: tt.fields.reportInterval,
-				pollCount:      tt.fields.pollCount,
-				totalTime:      tt.fields.totalTime,
-				client:         tt.fields.client,
-			}
-			if err := obj.send(tt.args.gaugeMetrics); (err != nil) != tt.wantErr {
-				t.Errorf("sender.send() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+	// TODO: Add test cases.
+	t.Skip()
 }
 
 func Test_sender_sendGaugeMetric(t *testing.T) {
-	type fields struct {
-		serverAddress  string
-		pollInterval   time.Duration
-		reportInterval time.Duration
-		pollCount      int64
-		totalTime      time.Duration
-		client         http.Client
-	}
-	type args struct {
-		name  string
-		value float64
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			obj := &sender{
-				serverAddress:  tt.fields.serverAddress,
-				pollInterval:   tt.fields.pollInterval,
-				reportInterval: tt.fields.reportInterval,
-				pollCount:      tt.fields.pollCount,
-				totalTime:      tt.fields.totalTime,
-				client:         tt.fields.client,
-			}
-			if err := obj.sendGaugeMetric(tt.args.name, tt.args.value); (err != nil) != tt.wantErr {
-				t.Errorf("sender.sendGaugeMetric() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+	// TODO: Add test cases.
+	t.Skip()
 }
 
 func Test_sender_sendGaugeMetrics(t *testing.T) {
-	type fields struct {
-		serverAddress  string
-		pollInterval   time.Duration
-		reportInterval time.Duration
-		pollCount      int64
-		totalTime      time.Duration
-		client         http.Client
-	}
-	type args struct {
-		metrics map[string]float64
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			obj := &sender{
-				serverAddress:  tt.fields.serverAddress,
-				pollInterval:   tt.fields.pollInterval,
-				reportInterval: tt.fields.reportInterval,
-				pollCount:      tt.fields.pollCount,
-				totalTime:      tt.fields.totalTime,
-				client:         tt.fields.client,
-			}
-			if err := obj.sendGaugeMetrics(tt.args.metrics); (err != nil) != tt.wantErr {
-				t.Errorf("sender.sendGaugeMetrics() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+	// TODO: Add test cases.
+	t.Skip()
 }
 
 func Test_sender_sendCounterMetric(t *testing.T) {
-	type fields struct {
-		serverAddress  string
-		pollInterval   time.Duration
-		reportInterval time.Duration
-		pollCount      int64
-		totalTime      time.Duration
-		client         http.Client
-	}
-	type args struct {
-		name  string
-		value int64
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			obj := &sender{
-				serverAddress:  tt.fields.serverAddress,
-				pollInterval:   tt.fields.pollInterval,
-				reportInterval: tt.fields.reportInterval,
-				pollCount:      tt.fields.pollCount,
-				totalTime:      tt.fields.totalTime,
-				client:         tt.fields.client,
-			}
-			if err := obj.sendCounterMetric(tt.args.name, tt.args.value); (err != nil) != tt.wantErr {
-				t.Errorf("sender.sendCounterMetric() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+	// TODO: Add test cases.
+	t.Skip()
 }
 
 func Test_sender_sendCounterMetrics(t *testing.T) {
-	type fields struct {
-		serverAddress  string
-		pollInterval   time.Duration
-		reportInterval time.Duration
-		pollCount      int64
-		totalTime      time.Duration
-		client         http.Client
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		wantErr bool
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			obj := &sender{
-				serverAddress:  tt.fields.serverAddress,
-				pollInterval:   tt.fields.pollInterval,
-				reportInterval: tt.fields.reportInterval,
-				pollCount:      tt.fields.pollCount,
-				totalTime:      tt.fields.totalTime,
-				client:         tt.fields.client,
-			}
-			if err := obj.sendCounterMetrics(); (err != nil) != tt.wantErr {
-				t.Errorf("sender.sendCounterMetrics() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
+	// TODO: Add test cases.
+	t.Skip()
 }
