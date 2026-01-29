@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/skayfish/metrics/internal/model"
-	"github.com/skayfish/metrics/internal/storage"
+	"github.com/skayfish/metrics/internal/server/storage"
 )
 
 // Создаёт обработчик обновления метрик

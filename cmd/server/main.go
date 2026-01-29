@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/skayfish/metrics/internal/handler"
-	"github.com/skayfish/metrics/internal/storage"
+	"github.com/skayfish/metrics/internal/server/storage"
 )
 
 // Настраивает и запускает сервер
