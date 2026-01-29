@@ -143,9 +143,12 @@ func (obj *sender) send(gaugeMetrics map[string]float64) error {
 // SF TODO
 func (obj *sender) sendGaugeMetric(name string, value float64) error {
 	url := fmt.Sprintf(URLFloatValueTemplate, obj.serverAddress, model.Gauge, name, value)
-	_, err := obj.client.Post(url, ContentTypeText, nil)
+	response, err := obj.client.Post(url, ContentTypeText, nil)
+	if err != nil {
+		return err
+	}
 
-	return err
+	return response.Body.Close()
 }
 
 // SF TODO
@@ -167,9 +170,12 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 // SF TODO
 func (obj *sender) sendCounterMetric(name string, value int64) error {
 	url := fmt.Sprintf(URLIntegerValueTemplate, obj.serverAddress, model.Counter, name, value)
-	_, err := obj.client.Post(url, ContentTypeText, nil)
+	response, err := obj.client.Post(url, ContentTypeText, nil)
+	if err != nil {
+		return err
+	}
 
-	return err
+	return response.Body.Close()
 }
 
 // SF TODO
