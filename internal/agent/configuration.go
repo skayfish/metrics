@@ -2,20 +2,22 @@ package agent
 
 import "time"
 
-// SF TODO
+// Конфигурация работы менеджера отправки метрик серверу
 type Configuration struct {
-	// SF TODO
+	// Безопасное соединение с сервером
 	SecureConnection bool
 
-	// SF TODO
+	// Хост сервера
 	Host string
 
-	// SF TODO
+	// Порт сервера
 	Port string
 
-	// SF TODO
+	// Частота обновления метрик (например, раз в 2 секунды)
 	PollInterval time.Duration
 
-	// SF TODO
+	// Частота отправки метрик серверу (например, раз в 2 секунды)
 	ReportInterval time.Duration
 }
+
+// todo добавить метод получения типа соединения

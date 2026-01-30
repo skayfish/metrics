@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+// Проверяет создание нового хранилища метрик
 func TestNewMemStorage(t *testing.T) {
 	want := MemStorage{
 		gauge:   make(map[string]float64),
@@ -15,6 +16,7 @@ func TestNewMemStorage(t *testing.T) {
 	assert.Equal(t, want, storage)
 }
 
+// Проверяет обновление метрики датчика
 func TestMemStorage_UpdateGauge(t *testing.T) {
 	t.Run("Empty storage", func(t *testing.T) {
 		storage := NewMemStorage()
@@ -64,6 +66,7 @@ func TestMemStorage_UpdateGauge(t *testing.T) {
 	})
 }
 
+// Проверяет обновление метрики счетчика
 func TestMemStorage_UpdateCounter(t *testing.T) {
 	t.Run("Empty storage", func(t *testing.T) {
 		storage := NewMemStorage()

@@ -11,41 +11,63 @@ import (
 	"github.com/skayfish/metrics/internal/model"
 )
 
-// SF TODO
+// Шаблон URL для отправки метрик, значения которых типа float64:
+//
+//	[1] - http, https
+//	[2] - хост сервера
+//	[3] - порт сервера
+//	[4] - тип метрики
+//	[5] - имя метрики
+//	[6] - значение метрики
 const URLFloatValueTemplate = "%s://%s:%s/update/%s/%s/%f"
 
-// SF TODO
+// Шаблон URL для отправки метрик, значения которых типа int64:
+//
+//	[1] - http, https
+//	[2] - хост сервера
+//	[3] - порт сервера
+//	[4] - тип метрики
+//	[5] - имя метрики
+//	[6] - значение метрики
 const URLIntegerValueTemplate = "%s://%s:%s/update/%s/%s/%d"
 
-// SF TODO
+// Тип контента - текст
 const ContentTypeText = "text/plain"
 
-// SF TODO
+// Менеджер отправки метрик серверу
 type sender struct {
-	// SF TODO
+	// Конфигурация работы системы
 	config Configuration
 
-	// SF TODO
+	// Количество обновлений метрик за время работы программы
 	pollCount int64
 
-	// SF TODO
+	// Общее время работы программы
 	totalTime time.Duration
 
-	// SF TODO
+	// Клиент для отправки запросов серверу
 	client http.Client
 }
 
-// SF TODO
+// Создаёт новый менеджер отправки метрик серверу
+//
+//	@param config конфигурация работы агента
+//	@returns новый менеджер отправки метрик серверу
 func NewSender(config Configuration) sender {
 	return sender{config: config}
 }
 
-// SF TODO
+// Получает метрики из системы
+//
+//	@returns метрики из системы
 func (*sender) getMetrics() (res runtime.MemStats) {
 	runtime.ReadMemStats(&res)
 	return
 }
 
+// Генерирует случайное вещественное число
+//
+//	@returns случайное вещественное число
 func (*sender) generateFloat64() float64 {
 	min := -math.MaxFloat32
 	max := math.MaxFloat32
@@ -56,6 +78,10 @@ func (*sender) generateFloat64() float64 {
 	return min + gen.Float64()*(max-min)
 }
 
+// Фильтрует необходимые метрики системы
+//
+//	@param metrics метрики системы
+//	@returns отфильтрованные метрики системы
 func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 	res = make(map[string]float64)
 
@@ -90,7 +116,9 @@ func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 	return
 }
 
-// SF TODO
+// Запускает обновление метрик и отправку их серверу
+//
+//	@returns ошибку работы менеджера отправки метрик
 func (obj *sender) Run() error {
 	for {
 		metrics := obj.getMetrics()
@@ -113,7 +141,10 @@ func (obj *sender) Run() error {
 	}
 }
 
-// SF TODO
+// Отправляет метрики серверу
+//
+//	@param gaugeMetrics метрики датчиков
+//	@returns ошибку отправки метрик серверу
 func (obj *sender) send(gaugeMetrics map[string]float64) error {
 	err := obj.sendCounterMetrics()
 	if err != nil {
@@ -128,6 +159,10 @@ func (obj *sender) send(gaugeMetrics map[string]float64) error {
 	return nil
 }
 
+// Возвращает тип соединения по настройкам работы агента
+//
+//	todo перенести в конфигурацию
+//	@returns тип соединения [https, http]
 func (obj *sender) getConnectionType() string {
 	if obj.config.SecureConnection {
 		return "https"
@@ -136,7 +171,11 @@ func (obj *sender) getConnectionType() string {
 	return "http"
 }
 
-// SF TODO
+// Отправляет метрику датчика на сервер
+//
+//	@param name  имя метрики
+//	@param value значение метрики
+//	@returns ошибку отправки метрики датчика на сервер
 func (obj *sender) sendGaugeMetric(name string, value float64) error {
 	url := fmt.Sprintf(URLFloatValueTemplate,
 		obj.getConnectionType(), obj.config.Host, obj.config.Port, model.Gauge, name, value)
@@ -148,7 +187,10 @@ func (obj *sender) sendGaugeMetric(name string, value float64) error {
 	return response.Body.Close()
 }
 
-// SF TODO
+// Отправляет метрики датчиков на сервер
+//
+//	@param metrics метрики датчиков
+//	@returns ошибку отправки метрик датчиков на сервер
 func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 	for name, value := range metrics {
 		err := obj.sendGaugeMetric(name, value)
@@ -164,7 +206,11 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 	return nil
 }
 
-// SF TODO
+// Отправляет метрику счетчика на сервер
+//
+//	@param name  имя метрики
+//	@param value значение метрики
+//	@returns ошибку отправления метрики счетчика на сервер
 func (obj *sender) sendCounterMetric(name string, value int64) error {
 	url := fmt.Sprintf(URLIntegerValueTemplate,
 		obj.getConnectionType(), obj.config.Host, obj.config.Port, model.Counter, name, value)
@@ -176,7 +222,9 @@ func (obj *sender) sendCounterMetric(name string, value int64) error {
 	return response.Body.Close()
 }
 
-// SF TODO
+// Отправляет метрики счетчиков на сервер
+//
+//	@returns ошибку отправления метрик счетчиков на сервер
 func (obj *sender) sendCounterMetrics() error {
 	err := obj.sendCounterMetric("PollCount", obj.pollCount)
 

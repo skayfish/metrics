@@ -8,6 +8,7 @@ import (
 	"time"
 )
 
+// Проверяет создание менеджера отправки метрик серверу
 func TestNewSender(t *testing.T) {
 	type args struct {
 		config Configuration
@@ -75,6 +76,7 @@ func TestNewSender(t *testing.T) {
 	}
 }
 
+// Проверяет фильтрацию метрик
 func Test_sender_filtrate(t *testing.T) {
 	type fields struct {
 		config    Configuration

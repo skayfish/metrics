@@ -8,28 +8,33 @@ import (
 	"github.com/skayfish/metrics/internal/agent"
 )
 
-// SF TODO
-const pollInterval time.Duration = 2 * time.Second
-
-// SF TODO
-const reportInterval time.Duration = 10 * time.Second
-
-// SF TODO
+// Хост сервера
 const host string = "localhost"
 
-// SF TODO
+// Порт сервера
 const port string = "8080"
 
-// SF TODO
+// Безопасное соединение с сервером
 const secureConnection bool = false
 
-// SF TODO
+// Таймаут ожидания подключения к серверу
 const timeout time.Duration = 30 * time.Second
 
-// SF TODO
+// Частота попыток подключения к серверу (например, раз в 2 секунды)
 const waitInterval time.Duration = 2 * time.Second
 
-// PingTCP проверяет, можно ли подключиться к хосту:порту за указанное время
+// Частота обновления метрик (например, раз в 2 секунды)
+const pollInterval time.Duration = 2 * time.Second
+
+// Частота отправки метрик серверу (например, раз в 2 секунды)
+const reportInterval time.Duration = 10 * time.Second
+
+// Проверяет, можно ли подключиться к хосту:порту за указанное время
+//
+//	@param host    хост сервера
+//	@param port    порт сервера
+//	@param timeout таймаут ожидания попытки подключения к серверу
+//	@returns ошибку попытки подключения к серверу
 func PingTCP(host string, port string, timeout time.Duration) error {
 	address := net.JoinHostPort(host, port)
 	conn, err := net.DialTimeout("tcp", address, timeout)
@@ -40,7 +45,9 @@ func PingTCP(host string, port string, timeout time.Duration) error {
 	return nil
 }
 
-// SF TODO
+// Проверяет можно ли подключиться к серверу
+//
+//	@returns true - подключение успешно, false - ошибка подключения
 func checkConnection() bool {
 	totalTime := time.Duration(0)
 	totalAttempts := timeout.Nanoseconds() / waitInterval.Nanoseconds()
@@ -66,13 +73,12 @@ func checkConnection() bool {
 	}
 }
 
-// SF TODO
+// Запуск агента
 func main() {
 	if !checkConnection() {
 		return
 	}
 
-	// Запуск отправки метрик
 	config := agent.Configuration{
 		SecureConnection: secureConnection,
 		Host:             host,

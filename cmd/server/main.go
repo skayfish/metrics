@@ -18,7 +18,7 @@ func run(storage *storage.MemStorage) error {
 	return http.ListenAndServe(":8080", mux)
 }
 
-// Запуск программы
+// Запуск сервера
 func main() {
 	storage := storage.NewMemStorage()
 	log.Fatal(run(&storage))

@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// Проверяет работу обработчика обновления метрики
 func TestCreateHandlerUpdate(t *testing.T) {
 	type want struct {
 		status      int
