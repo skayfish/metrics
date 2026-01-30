@@ -258,33 +258,3 @@ func Test_sender_filtrate(t *testing.T) {
 		})
 	}
 }
-
-func Test_sender_Run(t *testing.T) {
-	// TODO: Add test cases.
-	t.Skip()
-}
-
-func Test_sender_send(t *testing.T) {
-	// TODO: Add test cases.
-	t.Skip()
-}
-
-func Test_sender_sendGaugeMetric(t *testing.T) {
-	// TODO: Add test cases.
-	t.Skip()
-}
-
-func Test_sender_sendGaugeMetrics(t *testing.T) {
-	// TODO: Add test cases.
-	t.Skip()
-}
-
-func Test_sender_sendCounterMetric(t *testing.T) {
-	// TODO: Add test cases.
-	t.Skip()
-}
-
-func Test_sender_sendCounterMetrics(t *testing.T) {
-	// TODO: Add test cases.
-	t.Skip()
-}
