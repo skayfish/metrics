@@ -12,10 +12,10 @@ import (
 )
 
 // SF TODO
-const URLFloatValueTemplate = "%s/update/%s/%s/%f"
+const URLFloatValueTemplate = "%s://%s:%s/update/%s/%s/%f"
 
 // SF TODO
-const URLIntegerValueTemplate = "%s/update/%s/%s/%d"
+const URLIntegerValueTemplate = "%s://%s:%s/update/%s/%s/%d"
 
 // SF TODO
 const ContentTypeText = "text/plain"
@@ -23,13 +23,7 @@ const ContentTypeText = "text/plain"
 // SF TODO
 type sender struct {
 	// SF TODO
-	serverAddress string
-
-	// SF TODO
-	pollInterval time.Duration
-
-	// SF TODO
-	reportInterval time.Duration
+	config Configuration
 
 	// SF TODO
 	pollCount int64
@@ -42,12 +36,8 @@ type sender struct {
 }
 
 // SF TODO
-func NewSender(serverAddress string, pollInterval time.Duration, reportInterval time.Duration) sender {
-	return sender{
-		serverAddress:  serverAddress,
-		pollInterval:   pollInterval,
-		reportInterval: reportInterval,
-	}
+func NewSender(config Configuration) sender {
+	return sender{config: config}
 }
 
 // SF TODO
@@ -105,7 +95,7 @@ func (obj *sender) Run() error {
 	for {
 		metrics := obj.getMetrics()
 		obj.pollCount++ // Обновление счетчика получения метрик
-		if obj.totalTime%obj.reportInterval == 0 {
+		if obj.totalTime%obj.config.ReportInterval == 0 {
 			// Фильтрация метрик, полученных из системы
 			filteredMetrics := obj.filtrate(metrics)
 			// Добавление дополнительных gauge метрик
@@ -118,8 +108,8 @@ func (obj *sender) Run() error {
 		}
 
 		// Ожидание следующего считывания метрик
-		time.Sleep(obj.pollInterval)
-		obj.totalTime += obj.pollInterval
+		time.Sleep(obj.config.PollInterval)
+		obj.totalTime += obj.config.PollInterval
 	}
 }
 
@@ -138,9 +128,18 @@ func (obj *sender) send(gaugeMetrics map[string]float64) error {
 	return nil
 }
 
+func (obj *sender) getConnectionType() string {
+	if obj.config.SecureConnection {
+		return "https"
+	}
+
+	return "http"
+}
+
 // SF TODO
 func (obj *sender) sendGaugeMetric(name string, value float64) error {
-	url := fmt.Sprintf(URLFloatValueTemplate, obj.serverAddress, model.Gauge, name, value)
+	url := fmt.Sprintf(URLFloatValueTemplate,
+		obj.getConnectionType(), obj.config.Host, obj.config.Port, model.Gauge, name, value)
 	response, err := obj.client.Post(url, ContentTypeText, nil)
 	if err != nil {
 		return err
@@ -167,7 +166,8 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 
 // SF TODO
 func (obj *sender) sendCounterMetric(name string, value int64) error {
-	url := fmt.Sprintf(URLIntegerValueTemplate, obj.serverAddress, model.Counter, name, value)
+	url := fmt.Sprintf(URLIntegerValueTemplate,
+		obj.getConnectionType(), obj.config.Host, obj.config.Port, model.Counter, name, value)
 	response, err := obj.client.Post(url, ContentTypeText, nil)
 	if err != nil {
 		return err

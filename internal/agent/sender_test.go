@@ -10,9 +10,7 @@ import (
 
 func TestNewSender(t *testing.T) {
 	type args struct {
-		serverAddress  string
-		pollInterval   time.Duration
-		reportInterval time.Duration
+		config Configuration
 	}
 	tests := []struct {
 		name string
@@ -22,40 +20,55 @@ func TestNewSender(t *testing.T) {
 		{
 			"Success",
 			args{
-				serverAddress:  "http://localhost:8080",
-				pollInterval:   10 * time.Second,
-				reportInterval: 0,
+				config: Configuration{
+					SecureConnection: false,
+					Host:             "localhost",
+					Port:             "8080",
+					PollInterval:     10 * time.Second,
+					ReportInterval:   0,
+				},
 			},
 			sender{
-				serverAddress:  "http://localhost:8080",
-				pollInterval:   10 * time.Second,
-				reportInterval: 0,
-				pollCount:      0,
-				totalTime:      0,
-				client:         http.Client{},
+				config: Configuration{
+					SecureConnection: false,
+					Host:             "localhost",
+					Port:             "8080",
+					PollInterval:     10 * time.Second,
+					ReportInterval:   0,
+				},
+				pollCount: 0,
+				totalTime: 0,
+				client:    http.Client{},
 			},
 		},
 		{
 			"Success",
 			args{
-				serverAddress:  "localhost",
-				pollInterval:   1000 * time.Minute,
-				reportInterval: 99 * time.Nanosecond,
+				config: Configuration{
+					SecureConnection: true,
+					Host:             "localhost2",
+					Port:             "5050",
+					PollInterval:     1000 * time.Minute,
+					ReportInterval:   99 * time.Nanosecond,
+				},
 			},
 			sender{
-				serverAddress:  "localhost",
-				pollInterval:   1000 * time.Minute,
-				reportInterval: 99 * time.Nanosecond,
-				pollCount:      0,
-				totalTime:      0,
-				client:         http.Client{},
+				config: Configuration{
+					SecureConnection: true,
+					Host:             "localhost2",
+					Port:             "5050",
+					PollInterval:     1000 * time.Minute,
+					ReportInterval:   99 * time.Nanosecond,
+				},
+				pollCount: 0,
+				totalTime: 0,
+				client:    http.Client{},
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := NewSender(tt.args.serverAddress, tt.args.pollInterval, tt.args.reportInterval)
-			if !reflect.DeepEqual(got, tt.want) {
+			if got := NewSender(tt.args.config); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NewSender() = %v, want %v", got, tt.want)
 			}
 		})
@@ -64,12 +77,10 @@ func TestNewSender(t *testing.T) {
 
 func Test_sender_filtrate(t *testing.T) {
 	type fields struct {
-		serverAddress  string
-		pollInterval   time.Duration
-		reportInterval time.Duration
-		pollCount      int64
-		totalTime      time.Duration
-		client         http.Client
+		config    Configuration
+		pollCount int64
+		totalTime time.Duration
+		client    http.Client
 	}
 	type args struct {
 		metrics runtime.MemStats
@@ -83,12 +94,10 @@ func Test_sender_filtrate(t *testing.T) {
 		{
 			"Success",
 			fields{
-				serverAddress:  "http://localhost:8080",
-				pollInterval:   0,
-				reportInterval: 0,
-				pollCount:      0,
-				totalTime:      0,
-				client:         http.Client{},
+				config:    Configuration{},
+				pollCount: 0,
+				totalTime: 0,
+				client:    http.Client{},
 			},
 			args{
 				metrics: runtime.MemStats{
@@ -158,12 +167,16 @@ func Test_sender_filtrate(t *testing.T) {
 		{
 			"Success",
 			fields{
-				serverAddress:  "http://localhost:8080",
-				pollInterval:   10,
-				reportInterval: 10,
-				pollCount:      10,
-				totalTime:      11,
-				client:         http.Client{},
+				config: Configuration{
+					SecureConnection: false,
+					Host:             "localhost",
+					Port:             "8080",
+					PollInterval:     10 * time.Second,
+					ReportInterval:   0,
+				},
+				pollCount: 10,
+				totalTime: 11,
+				client:    http.Client{},
 			},
 			args{
 				metrics: runtime.MemStats{
@@ -234,12 +247,10 @@ func Test_sender_filtrate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			obj := &sender{
-				serverAddress:  tt.fields.serverAddress,
-				pollInterval:   tt.fields.pollInterval,
-				reportInterval: tt.fields.reportInterval,
-				pollCount:      tt.fields.pollCount,
-				totalTime:      tt.fields.totalTime,
-				client:         tt.fields.client,
+				config:    tt.fields.config,
+				pollCount: tt.fields.pollCount,
+				totalTime: tt.fields.totalTime,
+				client:    tt.fields.client,
 			}
 			if gotRes := obj.filtrate(tt.args.metrics); !reflect.DeepEqual(gotRes, tt.wantRes) {
 				t.Errorf("sender.filtrate() = %v, want %v", gotRes, tt.wantRes)

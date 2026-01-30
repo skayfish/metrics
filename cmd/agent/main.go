@@ -14,14 +14,14 @@ const pollInterval time.Duration = 2 * time.Second
 // SF TODO
 const reportInterval time.Duration = 10 * time.Second
 
-// SF LOGIC удалить
-const serverAddress string = "http://localhost:8080"
-
 // SF TODO
 const host string = "localhost"
 
 // SF TODO
 const port string = "8080"
+
+// SF TODO
+const secureConnection bool = false
 
 // SF TODO
 const timeout time.Duration = 30 * time.Second
@@ -73,7 +73,14 @@ func main() {
 	}
 
 	// Запуск отправки метрик
-	sender := agent.NewSender(serverAddress, pollInterval, reportInterval)
+	config := agent.Configuration{
+		SecureConnection: secureConnection,
+		Host:             host,
+		Port:             port,
+		PollInterval:     pollInterval,
+		ReportInterval:   reportInterval,
+	}
+	sender := agent.NewSender(config)
 	if err := sender.Run(); err != nil {
 		fmt.Println("Во время работы приложения произошла ошибка:\n", err)
 	}
