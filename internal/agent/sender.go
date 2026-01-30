@@ -159,18 +159,6 @@ func (obj *sender) send(gaugeMetrics map[string]float64) error {
 	return nil
 }
 
-// Возвращает тип соединения по настройкам работы агента
-//
-//	todo перенести в конфигурацию
-//	@returns тип соединения [https, http]
-func (obj *sender) getConnectionType() string {
-	if obj.config.SecureConnection {
-		return "https"
-	}
-
-	return "http"
-}
-
 // Отправляет метрику датчика на сервер
 //
 //	@param name  имя метрики
@@ -178,7 +166,7 @@ func (obj *sender) getConnectionType() string {
 //	@returns ошибку отправки метрики датчика на сервер
 func (obj *sender) sendGaugeMetric(name string, value float64) error {
 	url := fmt.Sprintf(URLFloatValueTemplate,
-		obj.getConnectionType(), obj.config.Host, obj.config.Port, model.Gauge, name, value)
+		obj.config.getConnectionType(), obj.config.Host, obj.config.Port, model.Gauge, name, value)
 	response, err := obj.client.Post(url, ContentTypeText, nil)
 	if err != nil {
 		return err
@@ -213,7 +201,7 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 //	@returns ошибку отправления метрики счетчика на сервер
 func (obj *sender) sendCounterMetric(name string, value int64) error {
 	url := fmt.Sprintf(URLIntegerValueTemplate,
-		obj.getConnectionType(), obj.config.Host, obj.config.Port, model.Counter, name, value)
+		obj.config.getConnectionType(), obj.config.Host, obj.config.Port, model.Counter, name, value)
 	response, err := obj.client.Post(url, ContentTypeText, nil)
 	if err != nil {
 		return err

@@ -20,4 +20,13 @@ type Configuration struct {
 	ReportInterval time.Duration
 }
 
-// todo добавить метод получения типа соединения
+// Возвращает тип соединения
+//
+//	@returns тип соединения [https, http]
+func (obj *Configuration) getConnectionType() string {
+	if obj.SecureConnection {
+		return "https"
+	}
+
+	return "http"
+}
