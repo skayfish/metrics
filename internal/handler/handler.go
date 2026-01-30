@@ -17,7 +17,7 @@ import (
 func CreateHandlerUpdate(storage *storage.MemStorage) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
 		if req.Method != http.MethodPost {
-			http.Error(resp, "Method of request must be POST", http.StatusNotFound)
+			http.Error(resp, "Method of request must be POST", http.StatusBadRequest)
 			return
 		}
 
@@ -33,16 +33,16 @@ func CreateHandlerUpdate(storage *storage.MemStorage) http.HandlerFunc {
 		// Проверяем, что путь соответствует шаблону /update/{metric type}/{metric name}/{metric value}
 		segmentsLength := len(segments)
 		switch {
-		case segmentsLength == 1 || (segmentsLength == 2 && segments[1] == ""):
+		case (segmentsLength == 1 && segments[0] != "") || (segmentsLength == 2 && segments[1] == ""):
 			metricType := segments[0]
 			if metricType != model.Gauge && metricType != model.Counter {
 				http.Error(resp,
-					"Bad Request: unknown type of metric. Use one of this [gauge, counter]",
+					fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", metricType),
 					http.StatusBadRequest)
 				return
 			}
 
-			http.Error(resp, "Not Found: metric`s name", http.StatusNotFound)
+			http.Error(resp, "Metric`s name not found in url", http.StatusNotFound)
 			return
 		case segmentsLength == 3:
 			metricType := segments[0]
@@ -53,7 +53,7 @@ func CreateHandlerUpdate(storage *storage.MemStorage) http.HandlerFunc {
 			case model.Gauge:
 				metricValue, err := strconv.ParseFloat(metricValueString, 64)
 				if err != nil {
-					http.Error(resp, "Bad Request: metric`s value must be float64", http.StatusBadRequest)
+					http.Error(resp, "Metric`s value must be float64", http.StatusBadRequest)
 					return
 				}
 
@@ -61,22 +61,21 @@ func CreateHandlerUpdate(storage *storage.MemStorage) http.HandlerFunc {
 			case model.Counter:
 				metricValue, err := strconv.ParseInt(metricValueString, 10, 64)
 				if err != nil {
-					http.Error(resp, "Bad Request: metric`s value must be int64", http.StatusBadRequest)
+					http.Error(resp, "Metric`s value must be int64", http.StatusBadRequest)
 					return
 				}
 
 				storage.UpdateCounter(metricName, metricValue)
 			default:
 				http.Error(resp,
-					fmt.Sprintf("Bad Request: unknown metric`s type \"%s\" [counter, gauge]",
-						metricType),
+					fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", metricType),
 					http.StatusBadRequest)
 				return
 			}
 
 		default:
 			http.Error(resp,
-				"Bad Request: expected /update/{metric type}/{metric name}/{metric value}",
+				"Expected request url: \"/update/{metric type}/{metric name}/{metric value}\"",
 				http.StatusBadRequest)
 			return
 		}
