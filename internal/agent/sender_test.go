@@ -1,12 +1,19 @@
 package agent
 
 import (
-	"net/http"
 	"reflect"
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/go-resty/resty/v2"
 )
+
+// Таймаут ожидания подключения к серверу
+const retryTimeout = 10 * time.Second
+
+// Частота попыток подключения к серверу (например, раз в 2 секунды)
+const retryWaitTime time.Duration = 2 * time.Second
 
 // Проверяет создание менеджера отправки метрик серверу
 func TestNewSender(t *testing.T) {
@@ -25,6 +32,8 @@ func TestNewSender(t *testing.T) {
 					SecureConnection: false,
 					Host:             "localhost",
 					Port:             "8080",
+					RetryTimeout:     retryTimeout,
+					RetryWaitTime:    retryWaitTime,
 					PollInterval:     10 * time.Second,
 					ReportInterval:   0,
 				},
@@ -34,12 +43,14 @@ func TestNewSender(t *testing.T) {
 					SecureConnection: false,
 					Host:             "localhost",
 					Port:             "8080",
+					RetryTimeout:     retryTimeout,
+					RetryWaitTime:    retryWaitTime,
 					PollInterval:     10 * time.Second,
 					ReportInterval:   0,
 				},
 				pollCount: 0,
 				totalTime: 0,
-				client:    http.Client{},
+				client:    nil,
 			},
 		},
 		{
@@ -49,6 +60,8 @@ func TestNewSender(t *testing.T) {
 					SecureConnection: true,
 					Host:             "localhost2",
 					Port:             "5050",
+					RetryTimeout:     retryTimeout,
+					RetryWaitTime:    retryWaitTime,
 					PollInterval:     1000 * time.Minute,
 					ReportInterval:   99 * time.Nanosecond,
 				},
@@ -58,18 +71,22 @@ func TestNewSender(t *testing.T) {
 					SecureConnection: true,
 					Host:             "localhost2",
 					Port:             "5050",
+					RetryTimeout:     retryTimeout,
+					RetryWaitTime:    retryWaitTime,
 					PollInterval:     1000 * time.Minute,
 					ReportInterval:   99 * time.Nanosecond,
 				},
 				pollCount: 0,
 				totalTime: 0,
-				client:    http.Client{},
+				client:    nil,
 			},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := NewSender(tt.args.config); !reflect.DeepEqual(got, tt.want) {
+			got := NewSender(tt.args.config)
+			got.client = nil
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("NewSender() = %v, want %v", got, tt.want)
 			}
 		})
@@ -82,7 +99,7 @@ func Test_sender_filtrate(t *testing.T) {
 		config    Configuration
 		pollCount int64
 		totalTime time.Duration
-		client    http.Client
+		client    *resty.Client
 	}
 	type args struct {
 		metrics runtime.MemStats
@@ -99,7 +116,7 @@ func Test_sender_filtrate(t *testing.T) {
 				config:    Configuration{},
 				pollCount: 0,
 				totalTime: 0,
-				client:    http.Client{},
+				client:    resty.New(),
 			},
 			args{
 				metrics: runtime.MemStats{
@@ -173,12 +190,14 @@ func Test_sender_filtrate(t *testing.T) {
 					SecureConnection: false,
 					Host:             "localhost",
 					Port:             "8080",
+					RetryTimeout:     retryTimeout,
+					RetryWaitTime:    retryWaitTime,
 					PollInterval:     10 * time.Second,
 					ReportInterval:   0,
 				},
 				pollCount: 10,
 				totalTime: 11,
-				client:    http.Client{},
+				client:    resty.New(),
 			},
 			args{
 				metrics: runtime.MemStats{

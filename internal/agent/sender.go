@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
-	"net/http"
 	"runtime"
 	"time"
 
+	"github.com/go-resty/resty/v2"
 	"github.com/skayfish/metrics/internal/model"
 )
 
@@ -46,7 +46,7 @@ type sender struct {
 	totalTime time.Duration
 
 	// Клиент для отправки запросов серверу
-	client http.Client
+	client *resty.Client
 }
 
 // Создаёт новый менеджер отправки метрик серверу
@@ -54,7 +54,12 @@ type sender struct {
 //	@param config конфигурация работы агента
 //	@returns новый менеджер отправки метрик серверу
 func NewSender(config Configuration) sender {
-	return sender{config: config}
+	client := resty.New()
+	client.
+		SetRetryCount(5).
+		SetRetryWaitTime(config.RetryWaitTime).
+		SetRetryMaxWaitTime(config.RetryTimeout)
+	return sender{config: config, client: client}
 }
 
 // Получает метрики из системы
@@ -167,12 +172,15 @@ func (obj *sender) send(gaugeMetrics map[string]float64) error {
 func (obj *sender) sendGaugeMetric(name string, value float64) error {
 	url := fmt.Sprintf(URLFloatValueTemplate,
 		obj.config.getConnectionType(), obj.config.Host, obj.config.Port, model.Gauge, name, value)
-	response, err := obj.client.Post(url, ContentTypeText, nil)
+	_, err := obj.client.R().
+		SetHeader("Content-Type", ContentTypeText).
+		Post(url)
+
 	if err != nil {
 		return err
 	}
 
-	return response.Body.Close()
+	return nil
 }
 
 // Отправляет метрики датчиков на сервер
@@ -202,12 +210,14 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 func (obj *sender) sendCounterMetric(name string, value int64) error {
 	url := fmt.Sprintf(URLIntegerValueTemplate,
 		obj.config.getConnectionType(), obj.config.Host, obj.config.Port, model.Counter, name, value)
-	response, err := obj.client.Post(url, ContentTypeText, nil)
+	_, err := obj.client.R().
+		SetHeader("Content-Type", ContentTypeText).
+		Post(url)
 	if err != nil {
 		return err
 	}
 
-	return response.Body.Close()
+	return nil
 }
 
 // Отправляет метрики счетчиков на сервер

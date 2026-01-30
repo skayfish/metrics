@@ -13,6 +13,12 @@ type Configuration struct {
 	// Порт сервера
 	Port string
 
+	// Таймаут ожидания подключения к серверу
+	RetryTimeout time.Duration
+
+	// Частота попыток подключения к серверу (например, раз в 2 секунды)
+	RetryWaitTime time.Duration
+
 	// Частота обновления метрик (например, раз в 2 секунды)
 	PollInterval time.Duration
 
