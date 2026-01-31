@@ -14,7 +14,7 @@ func getRouter(storage *storage.MemStorage) chi.Router {
 	router := chi.NewRouter()
 
 	router.Post("/update/{type}/{name}/{value}", handler.CreateUpdateHandler(storage))
-	router.Get("/value/{type}/{name}", handler.CreateValueHandler(storage))
+	router.Get("/value/{type}/{name}", handler.CreateGetValueHandler(storage))
 	return router
 }
 

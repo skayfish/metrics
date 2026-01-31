@@ -52,7 +52,7 @@ func CreateUpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 }
 
 // SF TODO
-func CreateValueHandler(storage *storage.MemStorage) http.HandlerFunc {
+func CreateGetValueHandler(storage *storage.MemStorage) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
 		mType := chi.URLParam(req, "type")
 		mName := chi.URLParam(req, "name")
