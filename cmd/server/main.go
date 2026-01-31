@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/skayfish/metrics/internal/handler"
+	"github.com/skayfish/metrics/internal/server/handler"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
 
