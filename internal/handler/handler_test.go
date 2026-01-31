@@ -191,3 +191,64 @@ func TestCreateGetValueHandler(t *testing.T) {
 		})
 	}
 }
+
+// Проверяет работу обработчика получения всех метрик
+func TestCreateGetAllValuesHandler(t *testing.T) {
+	type want struct {
+		status      int
+		contentType string
+		body        string
+	}
+	tests := []struct {
+		testName       string
+		gaugeMetrics   map[string]float64
+		counterMetrics map[string]int64
+		requestURL     string
+		want           want
+	}{
+		{
+			testName:   "no metrics",
+			requestURL: "/",
+			want: want{
+				status:      http.StatusOK,
+				contentType: "text/html; charset=UTF-8",
+			},
+		},
+		{
+			testName:       "many metrics",
+			gaugeMetrics:   map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
+			counterMetrics: map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
+			requestURL:     "/",
+			want: want{
+				status:      http.StatusOK,
+				contentType: "text/html; charset=UTF-8",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			storage := storage.NewMemStorage()
+			for name, value := range tt.counterMetrics {
+				storage.UpdateCounter(name, value)
+			}
+
+			for name, value := range tt.gaugeMetrics {
+				storage.UpdateGauge(name, value)
+			}
+
+			router := chi.NewRouter()
+			router.Get("/", CreateGetAllValuesHandler(&storage))
+			server := httptest.NewServer(router)
+			defer server.Close()
+
+			request := resty.New().R()
+			resp, err := request.Get(server.URL + tt.requestURL)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.want.status, resp.StatusCode())
+			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+			// TODO проверять body. Сейчас в случайном порядке возвращаются данные
+			//      assert.Equal(t, tt.want.body, string(resp.Body()))
+		})
+	}
+}
