@@ -1,12 +1,12 @@
 package handler
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
+	"github.com/go-resty/resty/v2"
 	"github.com/skayfish/metrics/internal/server/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,86 +20,15 @@ func TestCreateHandlerUpdate(t *testing.T) {
 		body        string
 	}
 	tests := []struct {
-		testName    string
-		storage     storage.MemStorage
-		method      string
-		contentType string
-		requestURL  string
-		want        want
+		testName   string
+		storage    storage.MemStorage
+		requestURL string
+		want       want
 	}{
-		// Error: not POST method
 		{
-			testName:    "Error: not POST method",
-			storage:     storage.MemStorage{},
-			method:      "GET",
-			contentType: "text/plain",
-			requestURL:  "/counter/MetricName/15",
-			want: want{
-				status:      http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Method of request must be POST\n",
-			},
-		},
-
-		// Error: unknown Content-Type
-		{
-			testName:    "Error: unknown Content-Type",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "application/json",
-			requestURL:  "/counter/MetricName/15",
-			want: want{
-				status:      http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Content-Type must be text/plain\n",
-			},
-		},
-
-		// Error: not expected url
-		{
-			testName:    "Error: not expected url",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/",
-			want: want{
-				status:      http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Expected request url: \"/update/{metric type}/{metric name}/{metric value}\"\n",
-			},
-		},
-		{
-			testName:    "Error: not expected url",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/counter/MetricName/15/notexpected",
-			want: want{
-				status:      http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Expected request url: \"/update/{metric type}/{metric name}/{metric value}\"\n",
-			},
-		},
-		{
-			testName:    "Error: not expected url",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/counter/MetricName",
-			want: want{
-				status:      http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Expected request url: \"/update/{metric type}/{metric name}/{metric value}\"\n",
-			},
-		},
-
-		// Error: unknown type of metric
-		{
-			testName:    "Error: unknown type of metric",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/unknown/",
+			testName:   "unknown type",
+			storage:    storage.MemStorage{},
+			requestURL: "/update/unknown/MetricName/15",
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
@@ -107,63 +36,9 @@ func TestCreateHandlerUpdate(t *testing.T) {
 			},
 		},
 		{
-			testName:    "Error: unknown type of metric",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/unknown",
-			want: want{
-				status:      http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Unknown metric`s type \"unknown\" [counter, gauge]\n",
-			},
-		},
-		{
-			testName:    "Error: unknown type of metric",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/unknown/MetricName/15",
-			want: want{
-				status:      http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Unknown metric`s type \"unknown\" [counter, gauge]\n",
-			},
-		},
-
-		// Error: not found name of metric in url
-		{
-			testName:    "Error: not found name of metric in url",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/counter",
-			want: want{
-				status:      http.StatusNotFound,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Metric`s name not found in url\n",
-			},
-		},
-		{
-			testName:    "Error: not found name of metric in url",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/counter/",
-			want: want{
-				status:      http.StatusNotFound,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Metric`s name not found in url\n",
-			},
-		},
-
-		// Error: error type of metric value
-		{
-			testName:    "Error: error type of metric value [int64]",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/counter/MetricName/",
+			testName:   "unknown value type",
+			storage:    storage.MemStorage{},
+			requestURL: "/update/counter/MetricName/string",
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
@@ -171,35 +46,9 @@ func TestCreateHandlerUpdate(t *testing.T) {
 			},
 		},
 		{
-			testName:    "Error: error type of metric value [int64]",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/counter/MetricName/string",
-			want: want{
-				status:      http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Metric`s value must be int64\n",
-			},
-		},
-		{
-			testName:    "Error: error type of metric value [float64]",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/gauge/MetricName/",
-			want: want{
-				status:      http.StatusBadRequest,
-				contentType: "text/plain; charset=utf-8",
-				body:        "Metric`s value must be float64\n",
-			},
-		},
-		{
-			testName:    "Error: error type of metric value [float64]",
-			storage:     storage.MemStorage{},
-			method:      "POST",
-			contentType: "text/plain",
-			requestURL:  "/gauge/MetricName/string",
+			testName:   "unknown value type",
+			storage:    storage.MemStorage{},
+			requestURL: "/update/gauge/MetricName/string",
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
@@ -209,23 +58,18 @@ func TestCreateHandlerUpdate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			emptyBody := ""
-			request := httptest.NewRequest(tt.method, tt.requestURL, strings.NewReader(emptyBody))
-			request.Header.Add("Content-Type", tt.contentType)
-			recorder := httptest.NewRecorder()
+			router := chi.NewRouter()
+			router.Post("/update/{type}/{name}/{value}", CreateHandlerUpdate(&tt.storage))
+			server := httptest.NewServer(router)
+			defer server.Close()
 
-			handler := CreateHandlerUpdate(&tt.storage)
-			handler(recorder, request)
-
-			res := recorder.Result()
-			assert.Equal(t, tt.want.status, res.StatusCode)
-			assert.Equal(t, tt.want.contentType, res.Header.Get("Content-Type"))
-
-			defer res.Body.Close()
-			resBody, err := io.ReadAll(res.Body)
-
+			request := resty.New().R()
+			resp, err := request.Post(server.URL + tt.requestURL)
 			require.NoError(t, err)
-			assert.Equal(t, tt.want.body, string(resBody))
+
+			assert.Equal(t, tt.want.status, resp.StatusCode())
+			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+			assert.Equal(t, tt.want.body, string(resp.Body()))
 		})
 	}
 }

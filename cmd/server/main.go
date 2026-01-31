@@ -4,22 +4,21 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/skayfish/metrics/internal/handler"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
 
-// Настраивает и запускает сервер
-//
-//	@param storage хранилище метрик
-//	@returns ошибку работы сервера
-func run(storage *storage.MemStorage) error {
-	mux := http.NewServeMux()
-	mux.Handle("/update/", http.StripPrefix("/update", handler.CreateHandlerUpdate(storage)))
-	return http.ListenAndServe(":8080", mux)
+// SF TODO
+func GetRouter(storage *storage.MemStorage) chi.Router {
+	router := chi.NewRouter()
+
+	router.Post("/update/{type}/{name}/{value}", handler.CreateHandlerUpdate(storage))
+	return router
 }
 
 // Запуск сервера
 func main() {
 	storage := storage.NewMemStorage()
-	log.Fatal(run(&storage))
+	log.Fatal(http.ListenAndServe(":8080", GetRouter(&storage)))
 }

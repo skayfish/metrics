@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
@@ -16,66 +16,30 @@ import (
 //	@returns обработчик обновления метрик
 func CreateHandlerUpdate(storage *storage.MemStorage) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
-		if req.Method != http.MethodPost {
-			http.Error(resp, "Method of request must be POST", http.StatusBadRequest)
-			return
-		}
+		mType := chi.URLParam(req, "type")
+		mName := chi.URLParam(req, "name")
+		mValue := chi.URLParam(req, "value")
 
-		if contentType := req.Header.Get("Content-Type"); contentType != "text/plain" {
-			http.Error(resp, "Content-Type must be text/plain", http.StatusBadRequest)
-			return
-		}
-
-		// Получаем путь и убираем начальный '/'
-		path := strings.TrimPrefix(req.URL.Path, "/")
-		segments := strings.Split(path, "/")
-
-		// Проверяем, что путь соответствует шаблону /update/{metric type}/{metric name}/{metric value}
-		segmentsLength := len(segments)
-		switch {
-		case (segmentsLength == 1 && segments[0] != "") || (segmentsLength == 2 && segments[1] == ""):
-			metricType := segments[0]
-			if metricType != model.Gauge && metricType != model.Counter {
-				http.Error(resp,
-					fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", metricType),
-					http.StatusBadRequest)
+		switch mType {
+		case model.Gauge:
+			value, err := strconv.ParseFloat(mValue, 64)
+			if err != nil {
+				http.Error(resp, "Metric`s value must be float64", http.StatusBadRequest)
 				return
 			}
 
-			http.Error(resp, "Metric`s name not found in url", http.StatusNotFound)
-			return
-		case segmentsLength == 3:
-			metricType := segments[0]
-			metricName := segments[1]
-			metricValueString := segments[2]
-
-			switch metricType {
-			case model.Gauge:
-				metricValue, err := strconv.ParseFloat(metricValueString, 64)
-				if err != nil {
-					http.Error(resp, "Metric`s value must be float64", http.StatusBadRequest)
-					return
-				}
-
-				storage.UpdateGauge(metricName, metricValue)
-			case model.Counter:
-				metricValue, err := strconv.ParseInt(metricValueString, 10, 64)
-				if err != nil {
-					http.Error(resp, "Metric`s value must be int64", http.StatusBadRequest)
-					return
-				}
-
-				storage.UpdateCounter(metricName, metricValue)
-			default:
-				http.Error(resp,
-					fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", metricType),
-					http.StatusBadRequest)
+			storage.UpdateGauge(mName, value)
+		case model.Counter:
+			value, err := strconv.ParseInt(mValue, 10, 64)
+			if err != nil {
+				http.Error(resp, "Metric`s value must be int64", http.StatusBadRequest)
 				return
 			}
 
+			storage.UpdateCounter(mName, value)
 		default:
 			http.Error(resp,
-				"Expected request url: \"/update/{metric type}/{metric name}/{metric value}\"",
+				fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", mType),
 				http.StatusBadRequest)
 			return
 		}
