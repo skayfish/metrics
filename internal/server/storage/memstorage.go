@@ -34,3 +34,15 @@ func (storage *MemStorage) UpdateGauge(name string, value float64) {
 func (storage *MemStorage) UpdateCounter(name string, value int64) {
 	storage.counter[name] += value
 }
+
+// SF TODO
+func (storage *MemStorage) GetGauge(name string) (value float64, ok bool) {
+	value, ok = storage.gauge[name]
+	return
+}
+
+// SF TODO
+func (storage *MemStorage) GetCounter(name string) (value int64, ok bool) {
+	value, ok = storage.counter[name]
+	return
+}

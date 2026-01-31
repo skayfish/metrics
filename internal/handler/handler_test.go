@@ -59,7 +59,7 @@ func TestCreateHandlerUpdate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			router := chi.NewRouter()
-			router.Post("/update/{type}/{name}/{value}", CreateHandlerUpdate(&tt.storage))
+			router.Post("/update/{type}/{name}/{value}", CreateUpdateHandler(&tt.storage))
 			server := httptest.NewServer(router)
 			defer server.Close()
 

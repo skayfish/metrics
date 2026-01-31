@@ -10,15 +10,16 @@ import (
 )
 
 // SF TODO
-func GetRouter(storage *storage.MemStorage) chi.Router {
+func getRouter(storage *storage.MemStorage) chi.Router {
 	router := chi.NewRouter()
 
-	router.Post("/update/{type}/{name}/{value}", handler.CreateHandlerUpdate(storage))
+	router.Post("/update/{type}/{name}/{value}", handler.CreateUpdateHandler(storage))
+	router.Get("/value/{type}/{name}", handler.CreateValueHandler(storage))
 	return router
 }
 
 // Запуск сервера
 func main() {
 	storage := storage.NewMemStorage()
-	log.Fatal(http.ListenAndServe(":8080", GetRouter(&storage)))
+	log.Fatal(http.ListenAndServe(":8080", getRouter(&storage)))
 }

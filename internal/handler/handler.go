@@ -14,7 +14,7 @@ import (
 //
 //	@param storage хранилище метрик
 //	@returns обработчик обновления метрик
-func CreateHandlerUpdate(storage *storage.MemStorage) http.HandlerFunc {
+func CreateUpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
 		mType := chi.URLParam(req, "type")
 		mName := chi.URLParam(req, "name")
@@ -48,5 +48,37 @@ func CreateHandlerUpdate(storage *storage.MemStorage) http.HandlerFunc {
 		fmt.Printf("\nDebug data:\n")
 		fmt.Printf("\tURL Path: %s\n", req.URL.Path)
 		fmt.Printf("\tStorage contains:\n\t%v\n\n", storage)
+	}
+}
+
+// SF TODO
+func CreateValueHandler(storage *storage.MemStorage) http.HandlerFunc {
+	return func(resp http.ResponseWriter, req *http.Request) {
+		mType := chi.URLParam(req, "type")
+		mName := chi.URLParam(req, "name")
+
+		// TODO: заменить на дебажное логирование
+		fmt.Printf("\nDebug data:\n")
+		fmt.Printf("\tURL Path: %s\n", req.URL.Path)
+
+		switch mType {
+		case model.Gauge:
+			if value, ok := storage.GetGauge(mName); ok {
+				resp.Write([]byte(fmt.Sprint(value)))
+			} else {
+				resp.WriteHeader(http.StatusNotFound)
+			}
+		case model.Counter:
+			if value, ok := storage.GetCounter(mName); ok {
+				resp.Write([]byte(fmt.Sprint(value)))
+			} else {
+				resp.WriteHeader(http.StatusNotFound)
+			}
+		default:
+			http.Error(resp,
+				fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", mType),
+				http.StatusBadRequest)
+			return
+		}
 	}
 }
