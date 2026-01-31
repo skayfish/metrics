@@ -26,7 +26,7 @@ func TestNewSender(t *testing.T) {
 		want sender
 	}{
 		{
-			"Success",
+			"success",
 			args{
 				config: Configuration{
 					SecureConnection: false,
@@ -54,7 +54,7 @@ func TestNewSender(t *testing.T) {
 			},
 		},
 		{
-			"Success",
+			"success",
 			args{
 				config: Configuration{
 					SecureConnection: true,
@@ -111,7 +111,7 @@ func Test_sender_filtrate(t *testing.T) {
 		wantRes map[string]float64
 	}{
 		{
-			"Success",
+			"success",
 			fields{
 				config:    Configuration{},
 				pollCount: 0,
@@ -184,7 +184,7 @@ func Test_sender_filtrate(t *testing.T) {
 			},
 		},
 		{
-			"Success",
+			"success",
 			fields{
 				config: Configuration{
 					SecureConnection: false,
