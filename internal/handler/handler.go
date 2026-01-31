@@ -60,6 +60,7 @@ func CreateGetValueHandler(storage *storage.MemStorage) http.HandlerFunc {
 		// TODO: заменить на дебажное логирование
 		fmt.Printf("\nDebug data:\n")
 		fmt.Printf("\tURL Path: %s\n", req.URL.Path)
+		fmt.Printf("\tStorage contains:\n\t%v\n\n", storage)
 
 		switch mType {
 		case model.Gauge:
@@ -80,5 +81,83 @@ func CreateGetValueHandler(storage *storage.MemStorage) http.HandlerFunc {
 				http.StatusBadRequest)
 			return
 		}
+	}
+}
+
+// SF TODO
+const htmlTableBegin = `
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Таблица метрик</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+    </style>
+</head>
+<body>
+
+<h2>Таблица метрик</h2>
+
+<table>
+    <thead>
+        <tr>
+            <th>Название</th>
+            <th>Значение</th>
+        </tr>
+    </thead>
+    <tbody>`
+
+// SF TODO
+const htmlTableRowFloatPattern = `
+        <tr>
+            <td>%s</td>
+            <td>%f</td>
+        </tr>`
+
+// SF TODO
+const htmlTableRowIntegerPattern = `
+        <tr>
+            <td>%s</td>
+            <td>%d</td>
+        </tr>`
+
+// SF TODO
+const htmlTableEnd = `
+    </tbody>
+</table>
+
+</body>
+</html>
+`
+
+// SF TODO
+func CreateGetAllValuesHandler(storage *storage.MemStorage) http.HandlerFunc {
+	return func(resp http.ResponseWriter, req *http.Request) {
+		// TODO: заменить на дебажное логирование
+		fmt.Printf("\nDebug data:\n")
+		fmt.Printf("\tURL Path: %s\n", req.URL.Path)
+		fmt.Printf("\tStorage contains:\n\t%v\n\n", storage)
+
+		table := htmlTableBegin
+		for mName, mValue := range storage.GetGauges() {
+			table += fmt.Sprintf(htmlTableRowFloatPattern, mName, mValue)
+		}
+
+		for mName, mValue := range storage.GetCounters() {
+			table += fmt.Sprintf(htmlTableRowIntegerPattern, mName, mValue)
+		}
+		table += htmlTableEnd
+
+		resp.Header().Set("Content-Type", "text/html; charset=UTF-8")
+		resp.Write([]byte(table))
 	}
 }

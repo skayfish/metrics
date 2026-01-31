@@ -46,3 +46,13 @@ func (storage *MemStorage) GetCounter(name string) (value int64, ok bool) {
 	value, ok = storage.counter[name]
 	return
 }
+
+// SF TODO
+func (storage *MemStorage) GetGauges() map[string]float64 {
+	return storage.gauge
+}
+
+// SF TODO
+func (storage *MemStorage) GetCounters() map[string]int64 {
+	return storage.counter
+}
