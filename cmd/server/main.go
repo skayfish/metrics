@@ -9,7 +9,10 @@ import (
 	"github.com/skayfish/metrics/internal/server/storage"
 )
 
-// SF TODO
+// Возвращает маршрутизатор запросов
+//
+//	@param storage хранилище метрик
+//	@returns маршрутизатор запросов
 func getRouter(storage *storage.MemStorage) chi.Router {
 	router := chi.NewRouter()
 

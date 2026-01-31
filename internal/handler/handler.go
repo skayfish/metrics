@@ -51,7 +51,10 @@ func CreateUpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 	}
 }
 
-// SF TODO
+// Создаёт обработчик получения конкретной метрики
+//
+//	@param storage хранилище метрик
+//	@returns обработчик получения конкретной метрики
 func CreateGetValueHandler(storage *storage.MemStorage) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
 		mType := chi.URLParam(req, "type")
@@ -84,7 +87,7 @@ func CreateGetValueHandler(storage *storage.MemStorage) http.HandlerFunc {
 	}
 }
 
-// SF TODO
+// Начало шаблона html таблицы метрик
 const htmlTableBegin = `
 <!DOCTYPE html>
 <html lang="ru">
@@ -116,21 +119,21 @@ const htmlTableBegin = `
     </thead>
     <tbody>`
 
-// SF TODO
+// Шаблон html строки в таблице метрик со значением вещественного типа
 const htmlTableRowFloatPattern = `
         <tr>
             <td>%s</td>
             <td>%f</td>
         </tr>`
 
-// SF TODO
+// Шаблон html строки в таблице метрик со значением целочисленного типа
 const htmlTableRowIntegerPattern = `
         <tr>
             <td>%s</td>
             <td>%d</td>
         </tr>`
 
-// SF TODO
+// Конец шаблона html таблицы метрик
 const htmlTableEnd = `
     </tbody>
 </table>
@@ -139,7 +142,10 @@ const htmlTableEnd = `
 </html>
 `
 
-// SF TODO
+// Создаёт обработчик получения всех метрик
+//
+//	@param storage хранилище метрик
+//	@returns обработчик получения всех метрик
 func CreateGetAllValuesHandler(storage *storage.MemStorage) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
 		// TODO: заменить на дебажное логирование
