@@ -12,12 +12,17 @@ type NetAddress struct {
 	Port int    // Порт сервера
 }
 
-// SF TODO возвращает строковое представление адреса
+// Возвращает строковое представление адреса
+//
+//	@returns строковое представление адреса
 func (a NetAddress) String() string {
 	return fmt.Sprintf("%s:%d", a.Host, a.Port)
 }
 
-// SF TODO обрабатывает входную строку и заполняет структуру
+// Обрабатывает входную строку флага и заполняет структуру
+//
+//	@param s входная строка флага
+//	@returns ошибка в случае передачи некорректных данных
 func (a *NetAddress) Set(s string) error {
 	parts := strings.Split(s, ":")
 	if len(parts) != 2 {
@@ -41,7 +46,9 @@ func (a *NetAddress) Set(s string) error {
 	return nil
 }
 
-// SF TODO возвращает тип значения для документации
+// Возвращает тип значения для документации
+//
+//	@returns тип значения для документации
 func (a *NetAddress) Type() string {
 	return "host:port"
 }

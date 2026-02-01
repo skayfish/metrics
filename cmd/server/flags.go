@@ -5,7 +5,9 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// SF TODO
+// Парсит флаги, указанные при запуске программы
+//
+//	@returns данные о хосте и порте
 func parseFlags() flags.NetAddress {
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
 	pflag.VarP(&addr, "address", "a", "Server listening address in host:port format")

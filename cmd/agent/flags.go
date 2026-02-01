@@ -8,7 +8,9 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// SF TODO
+// Парсит флаги, указанные при запуске программы
+//
+//	@returns конфигурацию работы менеджера отправки метрик серверу
 func parseFlags() agent.Config {
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
 
