@@ -11,29 +11,6 @@ import (
 	"github.com/skayfish/metrics/internal/model"
 )
 
-// Шаблон URL для отправки метрик, значения которых типа float64:
-//
-//	[1] - http, https
-//	[2] - хост сервера
-//	[3] - порт сервера
-//	[4] - тип метрики
-//	[5] - имя метрики
-//	[6] - значение метрики
-const URLFloatValueTemplate = "%s://%s:%d/update/%s/%s/%f"
-
-// Шаблон URL для отправки метрик, значения которых типа int64:
-//
-//	[1] - http, https
-//	[2] - хост сервера
-//	[3] - порт сервера
-//	[4] - тип метрики
-//	[5] - имя метрики
-//	[6] - значение метрики
-const URLIntegerValueTemplate = "%s://%s:%d/update/%s/%s/%d"
-
-// Тип контента - текст
-const ContentTypeText = "text/plain"
-
 // Менеджер отправки метрик серверу
 type sender struct {
 	// Конфигурация работы системы
@@ -170,10 +147,10 @@ func (obj *sender) send(gaugeMetrics map[string]float64) error {
 //	@param value значение метрики
 //	@returns ошибку отправки метрики датчика на сервер
 func (obj *sender) sendGaugeMetric(name string, value float64) error {
-	url := fmt.Sprintf(URLFloatValueTemplate,
+	url := fmt.Sprintf("%s://%s:%d/update/%s/%s/%f",
 		obj.config.getConnectionType(), obj.config.Host, obj.config.Port, model.Gauge, name, value)
 	_, err := obj.client.R().
-		SetHeader("Content-Type", ContentTypeText).
+		SetHeader("Content-Type", "text/plain").
 		Post(url)
 
 	if err != nil {
@@ -208,10 +185,10 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 //	@param value значение метрики
 //	@returns ошибку отправления метрики счетчика на сервер
 func (obj *sender) sendCounterMetric(name string, value int64) error {
-	url := fmt.Sprintf(URLIntegerValueTemplate,
+	url := fmt.Sprintf("%s://%s:%d/update/%s/%s/%d",
 		obj.config.getConnectionType(), obj.config.Host, obj.config.Port, model.Counter, name, value)
 	_, err := obj.client.R().
-		SetHeader("Content-Type", ContentTypeText).
+		SetHeader("Content-Type", "text/plain").
 		Post(url)
 	if err != nil {
 		return err

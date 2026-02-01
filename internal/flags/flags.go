@@ -26,7 +26,7 @@ func (a NetAddress) String() string {
 func (a *NetAddress) Set(input string) error {
 	parts := strings.Split(input, ":")
 	if len(parts) != 2 {
-		return fmt.Errorf("invalid format: expected 'host:port', got '%s'", input)
+		return fmt.Errorf("invalid format: expected 'host:port', got %q", input)
 	}
 
 	host := parts[0]
@@ -34,7 +34,7 @@ func (a *NetAddress) Set(input string) error {
 
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		return fmt.Errorf("invalid port: '%s'", portStr)
+		return fmt.Errorf("invalid port: %q", portStr)
 	}
 
 	if port < 1 || port > 65535 {

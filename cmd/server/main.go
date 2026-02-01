@@ -26,5 +26,7 @@ func getRouter(storage *storage.MemStorage) chi.Router {
 func main() {
 	netAddress := parseFlags()
 	storage := storage.NewMemStorage()
-	log.Fatal(http.ListenAndServe(netAddress.String(), getRouter(&storage)))
+	if err := http.ListenAndServe(netAddress.String(), getRouter(&storage)); err != http.ErrServerClosed {
+		log.Fatal(err)
+	}
 }
