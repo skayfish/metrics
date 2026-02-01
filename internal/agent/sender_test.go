@@ -10,7 +10,7 @@ import (
 )
 
 // Таймаут ожидания подключения к серверу
-const retryTimeout = 10 * time.Second
+const retryMaxWaitTime = 10 * time.Second
 
 // Частота попыток подключения к серверу (например, раз в 2 секунды)
 const retryWaitTime time.Duration = 2 * time.Second
@@ -18,7 +18,7 @@ const retryWaitTime time.Duration = 2 * time.Second
 // Проверяет создание менеджера отправки метрик серверу
 func TestNewSender(t *testing.T) {
 	type args struct {
-		config Configuration
+		config Config
 	}
 	tests := []struct {
 		name string
@@ -28,22 +28,22 @@ func TestNewSender(t *testing.T) {
 		{
 			"success",
 			args{
-				config: Configuration{
+				config: Config{
 					SecureConnection: false,
 					Host:             "localhost",
-					Port:             "8080",
-					RetryTimeout:     retryTimeout,
+					Port:             8080,
+					RetryMaxWaitTime: retryMaxWaitTime,
 					RetryWaitTime:    retryWaitTime,
 					PollInterval:     10 * time.Second,
 					ReportInterval:   0,
 				},
 			},
 			sender{
-				config: Configuration{
+				config: Config{
 					SecureConnection: false,
 					Host:             "localhost",
-					Port:             "8080",
-					RetryTimeout:     retryTimeout,
+					Port:             8080,
+					RetryMaxWaitTime: retryMaxWaitTime,
 					RetryWaitTime:    retryWaitTime,
 					PollInterval:     10 * time.Second,
 					ReportInterval:   0,
@@ -56,22 +56,22 @@ func TestNewSender(t *testing.T) {
 		{
 			"success",
 			args{
-				config: Configuration{
+				config: Config{
 					SecureConnection: true,
 					Host:             "localhost2",
-					Port:             "5050",
-					RetryTimeout:     retryTimeout,
+					Port:             5050,
+					RetryMaxWaitTime: retryMaxWaitTime,
 					RetryWaitTime:    retryWaitTime,
 					PollInterval:     1000 * time.Minute,
 					ReportInterval:   99 * time.Nanosecond,
 				},
 			},
 			sender{
-				config: Configuration{
+				config: Config{
 					SecureConnection: true,
 					Host:             "localhost2",
-					Port:             "5050",
-					RetryTimeout:     retryTimeout,
+					Port:             5050,
+					RetryMaxWaitTime: retryMaxWaitTime,
 					RetryWaitTime:    retryWaitTime,
 					PollInterval:     1000 * time.Minute,
 					ReportInterval:   99 * time.Nanosecond,
@@ -96,7 +96,7 @@ func TestNewSender(t *testing.T) {
 // Проверяет фильтрацию метрик
 func Test_sender_filtrate(t *testing.T) {
 	type fields struct {
-		config    Configuration
+		config    Config
 		pollCount int64
 		totalTime time.Duration
 		client    *resty.Client
@@ -113,7 +113,7 @@ func Test_sender_filtrate(t *testing.T) {
 		{
 			"success",
 			fields{
-				config:    Configuration{},
+				config:    Config{},
 				pollCount: 0,
 				totalTime: 0,
 				client:    resty.New(),
@@ -186,11 +186,11 @@ func Test_sender_filtrate(t *testing.T) {
 		{
 			"success",
 			fields{
-				config: Configuration{
+				config: Config{
 					SecureConnection: false,
 					Host:             "localhost",
-					Port:             "8080",
-					RetryTimeout:     retryTimeout,
+					Port:             8080,
+					RetryMaxWaitTime: retryMaxWaitTime,
 					RetryWaitTime:    retryWaitTime,
 					PollInterval:     10 * time.Second,
 					ReportInterval:   0,

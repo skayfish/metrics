@@ -3,7 +3,7 @@ package agent
 import "time"
 
 // Конфигурация работы менеджера отправки метрик серверу
-type Configuration struct {
+type Config struct {
 	// Безопасное соединение с сервером
 	SecureConnection bool
 
@@ -11,10 +11,10 @@ type Configuration struct {
 	Host string
 
 	// Порт сервера
-	Port string
+	Port int
 
-	// Таймаут ожидания подключения к серверу
-	RetryTimeout time.Duration
+	// Максимальное время ожидания между попытками подключения к серверу
+	RetryMaxWaitTime time.Duration
 
 	// Частота попыток подключения к серверу (например, раз в 2 секунды)
 	RetryWaitTime time.Duration
@@ -29,7 +29,7 @@ type Configuration struct {
 // Возвращает тип соединения
 //
 //	@returns тип соединения [https, http]
-func (obj *Configuration) getConnectionType() string {
+func (obj *Config) getConnectionType() string {
 	if obj.SecureConnection {
 		return "https"
 	}

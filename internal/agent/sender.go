@@ -37,7 +37,7 @@ const ContentTypeText = "text/plain"
 // Менеджер отправки метрик серверу
 type sender struct {
 	// Конфигурация работы системы
-	config Configuration
+	config Config
 
 	// Количество обновлений метрик за время работы программы
 	pollCount int64
@@ -53,12 +53,12 @@ type sender struct {
 //
 //	@param config конфигурация работы агента
 //	@returns новый менеджер отправки метрик серверу
-func NewSender(config Configuration) sender {
+func NewSender(config Config) sender {
 	client := resty.New()
 	client.
 		SetRetryCount(5).
 		SetRetryWaitTime(config.RetryWaitTime).
-		SetRetryMaxWaitTime(config.RetryTimeout)
+		SetRetryMaxWaitTime(config.RetryMaxWaitTime)
 	return sender{config: config, client: client}
 }
 
