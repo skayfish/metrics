@@ -21,12 +21,12 @@ func (a NetAddress) String() string {
 
 // Обрабатывает входную строку флага и заполняет структуру
 //
-//	@param s входная строка флага
+//	@param input входная строка флага
 //	@returns ошибка в случае передачи некорректных данных
-func (a *NetAddress) Set(s string) error {
-	parts := strings.Split(s, ":")
+func (a *NetAddress) Set(input string) error {
+	parts := strings.Split(input, ":")
 	if len(parts) != 2 {
-		return fmt.Errorf("invalid format: expected 'host:port', got %s", s)
+		return fmt.Errorf("invalid format: expected 'host:port', got '%s'", input)
 	}
 
 	host := parts[0]
@@ -34,7 +34,7 @@ func (a *NetAddress) Set(s string) error {
 
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		return fmt.Errorf("invalid port: %s", portStr)
+		return fmt.Errorf("invalid port: '%s'", portStr)
 	}
 
 	if port < 1 || port > 65535 {
