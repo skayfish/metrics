@@ -19,7 +19,7 @@ import (
 //	[4] - тип метрики
 //	[5] - имя метрики
 //	[6] - значение метрики
-const URLFloatValueTemplate = "%s://%s:%s/update/%s/%s/%f"
+const URLFloatValueTemplate = "%s://%s:%d/update/%s/%s/%f"
 
 // Шаблон URL для отправки метрик, значения которых типа int64:
 //
@@ -29,7 +29,7 @@ const URLFloatValueTemplate = "%s://%s:%s/update/%s/%s/%f"
 //	[4] - тип метрики
 //	[5] - имя метрики
 //	[6] - значение метрики
-const URLIntegerValueTemplate = "%s://%s:%s/update/%s/%s/%d"
+const URLIntegerValueTemplate = "%s://%s:%d/update/%s/%s/%d"
 
 // Тип контента - текст
 const ContentTypeText = "text/plain"
