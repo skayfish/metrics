@@ -24,6 +24,7 @@ func getRouter(storage *storage.MemStorage) chi.Router {
 
 // Запуск сервера
 func main() {
+	netAddress := parseFlags()
 	storage := storage.NewMemStorage()
-	log.Fatal(http.ListenAndServe(":8080", getRouter(&storage)))
+	log.Fatal(http.ListenAndServe(netAddress.String(), getRouter(&storage)))
 }
