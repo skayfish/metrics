@@ -149,11 +149,14 @@ const templateHTML = `
 </html>
 `
 
+// Ошибка обработки запроса на получение данных всех метрик
+const getAllValuesError = "Error during execution of the \"get all metrics\" request handler: "
+
 // Создаёт обработчик получения всех метрик
 //
 //	@param storage хранилище метрик
 //	@returns обработчик получения всех метрик
-func CreateGetAllValuesHandler(storage *storage.MemStorage) http.HandlerFunc {
+func CreateGetAllMetricsHandler(storage *storage.MemStorage) http.HandlerFunc {
 	// Структура метрики для HTML таблицы
 	type Metric struct {
 		Name  string      // Название метрики
@@ -178,12 +181,16 @@ func CreateGetAllValuesHandler(storage *storage.MemStorage) http.HandlerFunc {
 		tmpl, err := template.New("metrics-table").Parse(templateHTML)
 		if err != nil {
 			http.Error(resp, err.Error(), http.StatusInternalServerError)
+			log.Println(getAllValuesError, http.StatusText(http.StatusInternalServerError))
+			return
 		}
 
 		resultTableBuf := new(bytes.Buffer)
 		err = tmpl.Execute(resultTableBuf, metrics)
 		if err != nil {
 			http.Error(resp, err.Error(), http.StatusInternalServerError)
+			log.Println(getAllValuesError, http.StatusText(http.StatusInternalServerError))
+			return
 		}
 
 		resp.Header().Set("Content-Type", "text/html; charset=UTF-8")
