@@ -247,8 +247,6 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 
 			assert.Equal(t, tt.want.status, resp.StatusCode())
 			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			// TODO проверять body. Сейчас в случайном порядке возвращаются данные
-			//      assert.Equal(t, tt.want.body, string(resp.Body()))
 		})
 	}
 }

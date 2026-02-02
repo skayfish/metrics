@@ -2,6 +2,7 @@ package handler
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -44,10 +45,9 @@ func CreateUpdateHandler(storage *storage.MemStorage) http.HandlerFunc {
 			return
 		}
 
-		// TODO: заменить на дебажное логирование
-		fmt.Printf("\nDebug data:\n")
-		fmt.Printf("\tURL Path: %s\n", req.URL.Path)
-		fmt.Printf("\tStorage contains:\n\t%v\n\n", storage)
+		log.Printf("\nDebug data:\n")
+		log.Printf("\tURL Path: %s\n", req.URL.Path)
+		log.Printf("\tStorage contains:\n\t%v\n\n", storage)
 	}
 }
 
@@ -60,10 +60,9 @@ func CreateGetValueHandler(storage *storage.MemStorage) http.HandlerFunc {
 		mType := chi.URLParam(req, "type")
 		mName := chi.URLParam(req, "name")
 
-		// TODO: заменить на дебажное логирование
-		fmt.Printf("\nDebug data:\n")
-		fmt.Printf("\tURL Path: %s\n", req.URL.Path)
-		fmt.Printf("\tStorage contains:\n\t%v\n\n", storage)
+		log.Printf("\nDebug data:\n")
+		log.Printf("\tURL Path: %s\n", req.URL.Path)
+		log.Printf("\tStorage contains:\n\t%v\n\n", storage)
 
 		switch mType {
 		case model.Gauge:
@@ -148,10 +147,9 @@ const htmlTableEnd = `
 //	@returns обработчик получения всех метрик
 func CreateGetAllValuesHandler(storage *storage.MemStorage) http.HandlerFunc {
 	return func(resp http.ResponseWriter, req *http.Request) {
-		// TODO: заменить на дебажное логирование
-		fmt.Printf("\nDebug data:\n")
-		fmt.Printf("\tURL Path: %s\n", req.URL.Path)
-		fmt.Printf("\tStorage contains:\n\t%v\n\n", storage)
+		log.Printf("\nDebug data:\n")
+		log.Printf("\tURL Path: %s\n", req.URL.Path)
+		log.Printf("\tStorage contains:\n\t%v\n\n", storage)
 
 		table := htmlTableBegin
 		for mName, mValue := range storage.GetGauges() {
