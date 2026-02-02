@@ -101,12 +101,39 @@ func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 //	@param ctx контекст для завершения работы функции
 //	@returns ошибку работы менеджера отправки метрик
 func (obj *sender) Run(ctx *context.Context) error {
+	var metrics runtime.MemStats
+
+	updateMetrics := func() {
+		metrics = obj.getMetrics()
+		obj.pollCount++
+	}
+	reportMetrics := func() error {
+		// Фильтрация метрик, полученных из системы
+		filteredMetrics := obj.filtrate(metrics)
+		// Добавление дополнительных gauge метрик
+		filteredMetrics["RandomValue"] = obj.generateFloat64()
+		// Отправка метрик серверу
+		err := obj.send(filteredMetrics)
+		if err != nil {
+			return err
+		}
+
+		obj.pollCount = 0
+
+		return nil
+	}
+
+	// Сразу обновляются и отправляются метрики
+	updateMetrics()
+	if err := reportMetrics(); err != nil {
+		return err
+	}
+
+	// Ожидание интервалов
 	pollTicker := time.NewTicker(obj.config.PollInterval)
 	reportTicker := time.NewTicker(obj.config.ReportInterval)
 	defer pollTicker.Stop()
 	defer reportTicker.Stop()
-
-	var metrics runtime.MemStats
 	for {
 		if ctx != nil && (*ctx).Err() != nil {
 			return fmt.Errorf("metrics sending manager operation terminated: %w", (*ctx).Err())
@@ -114,20 +141,11 @@ func (obj *sender) Run(ctx *context.Context) error {
 
 		select {
 		case <-pollTicker.C:
-			metrics = obj.getMetrics()
-			obj.pollCount++
+			updateMetrics()
 		case <-reportTicker.C:
-			// Фильтрация метрик, полученных из системы
-			filteredMetrics := obj.filtrate(metrics)
-			// Добавление дополнительных gauge метрик
-			filteredMetrics["RandomValue"] = obj.generateFloat64()
-			// Отправка метрик серверу
-			err := obj.send(filteredMetrics)
-			if err != nil {
+			if err := reportMetrics(); err != nil {
 				return err
 			}
-
-			obj.pollCount = 0
 		}
 	}
 }

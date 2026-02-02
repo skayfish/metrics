@@ -299,15 +299,15 @@ func Test_sender_Run(t *testing.T) {
 			if mType == model.Counter && mName == "PollCount" {
 				value, err := strconv.ParseInt(mValue, 10, 64)
 				require.NoError(t, err)
-				switch handlerCounter {
-				case 0:
+				switch {
+				case handlerCounter == 0:
+					assert.Equal(t, int64(1), value)
+					fmt.Print("Handler count 0 succeed\n")
+				case handlerCounter < 3:
 					assert.Equal(t, int64(5), value)
-					fmt.Println("case 0 succeed")
-				case 1:
-					assert.Equal(t, int64(5), value)
-					fmt.Println("case 1 succeed")
+					fmt.Printf("Handler count %d succeed\n", handlerCounter)
 				default:
-					t.Error("expected handler call count: 2")
+					t.Errorf("expected handler call count = 3, actual = %d", handlerCounter+1)
 				}
 
 				handlerCounter++
@@ -339,6 +339,6 @@ func Test_sender_Run(t *testing.T) {
 		defer cancel()
 		err = sender.Run(&ctx)
 		require.Equal(t, context.DeadlineExceeded, errors.Unwrap(err))
-		assert.Equal(t, 2, handlerCounter)
+		assert.Equal(t, 3, handlerCounter)
 	})
 }
