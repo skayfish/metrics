@@ -151,9 +151,8 @@ func (obj *sender) sendGaugeMetric(name string, value float64) error {
 	_, err := obj.client.R().
 		SetHeader("Content-Type", "text/plain").
 		Post(url)
-
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to send gauge metric %q with value %f: %w", name, value, err)
 	}
 
 	return nil
@@ -190,7 +189,7 @@ func (obj *sender) sendCounterMetric(name string, value int64) error {
 		SetHeader("Content-Type", "text/plain").
 		Post(url)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to send counter metric %q with value %d: %w", name, value, err)
 	}
 
 	return nil
