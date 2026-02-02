@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"log"
 	"math"
 	"math/rand"
 	"runtime"
@@ -100,7 +101,7 @@ func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 //
 //	@param ctx контекст для завершения работы функции
 //	@returns ошибку работы менеджера отправки метрик
-func (obj *sender) Run(ctx *context.Context) error {
+func (obj *sender) Run(ctx context.Context) error {
 	var metrics runtime.MemStats
 
 	updateMetrics := func() {
@@ -135,8 +136,8 @@ func (obj *sender) Run(ctx *context.Context) error {
 	defer pollTicker.Stop()
 	defer reportTicker.Stop()
 	for {
-		if ctx != nil && (*ctx).Err() != nil {
-			return fmt.Errorf("metrics sending manager operation terminated: %w", (*ctx).Err())
+		if ctx != nil && ctx.Err() != nil {
+			return fmt.Errorf("metrics sending manager operation terminated: %w", ctx.Err())
 		}
 
 		select {
@@ -198,9 +199,8 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 		}
 	}
 
-	// todo писать через дебажный логгер
-	fmt.Printf("Debug info:\n")
-	fmt.Printf("\tGauge metrics: %v\n", metrics)
+	log.Printf("Debug info:\n")
+	log.Printf("\tGauge metrics: %v\n", metrics)
 
 	return nil
 }
@@ -229,9 +229,8 @@ func (obj *sender) sendCounterMetric(name string, value int64) error {
 func (obj *sender) sendCounterMetrics() error {
 	err := obj.sendCounterMetric("PollCount", obj.pollCount)
 
-	// todo писать через дебажный логгер
-	fmt.Printf("Debug info:\n")
-	fmt.Printf("\tCounter metrics: [%s: %d]\n", "PollCount", obj.pollCount)
+	log.Printf("Debug info:\n")
+	log.Printf("\tCounter metrics: [%s: %d]\n", "PollCount", obj.pollCount)
 
 	return err
 }

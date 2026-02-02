@@ -337,7 +337,7 @@ func Test_sender_Run(t *testing.T) {
 
 		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
 		defer cancel()
-		err = sender.Run(&ctx)
+		err = sender.Run(ctx)
 		require.Equal(t, context.DeadlineExceeded, errors.Unwrap(err))
 		assert.Equal(t, 3, handlerCounter)
 	})
