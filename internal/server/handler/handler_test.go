@@ -237,7 +237,9 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Get("/", CreateGetAllMetricsHandler(&storage))
+			getAllMetricsHandler, err := CreateGetAllMetricsHandler(&storage)
+			require.NoError(t, err)
+			router.Get("/", getAllMetricsHandler)
 			server := httptest.NewServer(router)
 			defer server.Close()
 

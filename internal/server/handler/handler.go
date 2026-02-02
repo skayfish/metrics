@@ -156,11 +156,17 @@ const getAllValuesError = "Error during execution of the \"get all metrics\" req
 //
 //	@param storage хранилище метрик
 //	@returns обработчик получения всех метрик
-func CreateGetAllMetricsHandler(storage *storage.MemStorage) http.HandlerFunc {
+func CreateGetAllMetricsHandler(storage *storage.MemStorage) (http.HandlerFunc, error) {
 	// Структура метрики для HTML таблицы
 	type Metric struct {
 		Name  string      // Название метрики
 		Value interface{} // Значение метрики
+	}
+
+	// Парсинг шаблона html
+	tmpl, err := template.New("metrics-table").Parse(templateHTML)
+	if err != nil {
+		return nil, err
 	}
 
 	return func(resp http.ResponseWriter, req *http.Request) {
@@ -177,14 +183,6 @@ func CreateGetAllMetricsHandler(storage *storage.MemStorage) http.HandlerFunc {
 			metrics = append(metrics, Metric{Name: mName, Value: mValue})
 		}
 
-		// Парсинг шаблона html
-		tmpl, err := template.New("metrics-table").Parse(templateHTML)
-		if err != nil {
-			http.Error(resp, err.Error(), http.StatusInternalServerError)
-			log.Println(getAllValuesError, http.StatusText(http.StatusInternalServerError))
-			return
-		}
-
 		resultTableBuf := new(bytes.Buffer)
 		err = tmpl.Execute(resultTableBuf, metrics)
 		if err != nil {
@@ -195,5 +193,5 @@ func CreateGetAllMetricsHandler(storage *storage.MemStorage) http.HandlerFunc {
 
 		resp.Header().Set("Content-Type", "text/html; charset=UTF-8")
 		resp.Write(resultTableBuf.Bytes())
-	}
+	}, nil
 }

@@ -13,20 +13,30 @@ import (
 //
 //	@param storage хранилище метрик
 //	@returns маршрутизатор запросов
-func getRouter(storage *storage.MemStorage) chi.Router {
+func getRouter(storage *storage.MemStorage) (chi.Router, error) {
 	router := chi.NewRouter()
 
 	router.Post("/update/{type}/{name}/{value}", handler.CreateUpdateHandler(storage))
 	router.Get("/value/{type}/{name}", handler.CreateGetValueHandler(storage))
-	router.Get("/", handler.CreateGetAllMetricsHandler(storage))
-	return router
+	getAllMetricsHandler, err := handler.CreateGetAllMetricsHandler(storage)
+	if err != nil {
+		return nil, err
+	}
+
+	router.Get("/", getAllMetricsHandler)
+	return router, nil
 }
 
 // Запуск сервера
 func main() {
 	netAddress := parseFlags()
 	storage := storage.NewMemStorage()
-	if err := http.ListenAndServe(netAddress.String(), getRouter(&storage)); err != http.ErrServerClosed {
+	router, err := getRouter(&storage)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	if err = http.ListenAndServe(netAddress.String(), router); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }
