@@ -156,7 +156,8 @@ const getAllValuesError = "Error during execution of the \"get all metrics\" req
 // Создаёт обработчик получения всех метрик
 //
 //	@param storage хранилище метрик
-//	@returns обработчик получения всех метрик
+//	@returns обработчик получения всех метрик в случае успеха
+//	@returns ошибку в ином случае
 func CreateGetAllMetricsHandler(storage *storage.MemStorage) (http.HandlerFunc, error) {
 	// Структура метрики для HTML таблицы
 	type Metric struct {

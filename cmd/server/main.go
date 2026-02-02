@@ -12,7 +12,8 @@ import (
 // Возвращает маршрутизатор запросов
 //
 //	@param storage хранилище метрик
-//	@returns маршрутизатор запросов
+//	@returns маршрутизатор запросов в случае успеха
+//	@returns ошибку в ином случае
 func getRouter(storage *storage.MemStorage) (chi.Router, error) {
 	router := chi.NewRouter()
 
