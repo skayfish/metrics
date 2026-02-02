@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"math/rand"
@@ -97,17 +98,24 @@ func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 
 // Запускает обновление метрик и отправку их серверу
 //
+//	@param ctx контекст для завершения работы функции
 //	@returns ошибку работы менеджера отправки метрик
-func (obj *sender) Run() error {
+func (obj *sender) Run(ctx *context.Context) error {
 	pollTicker := time.NewTicker(obj.config.PollInterval)
 	reportTicker := time.NewTicker(obj.config.ReportInterval)
+	defer pollTicker.Stop()
+	defer reportTicker.Stop()
 
 	var metrics runtime.MemStats
 	for {
+		if ctx != nil && (*ctx).Err() != nil {
+			return fmt.Errorf("Metrics sending manager operation terminated: %w", (*ctx).Err())
+		}
+
 		select {
 		case <-pollTicker.C:
 			metrics = obj.getMetrics()
-			obj.pollCount++ // Обновление счетчика получения метрик
+			obj.pollCount++
 		case <-reportTicker.C:
 			// Фильтрация метрик, полученных из системы
 			filteredMetrics := obj.filtrate(metrics)
@@ -118,6 +126,8 @@ func (obj *sender) Run() error {
 			if err != nil {
 				return err
 			}
+
+			obj.pollCount = 0
 		}
 	}
 }

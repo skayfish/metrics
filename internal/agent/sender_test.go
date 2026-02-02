@@ -1,12 +1,23 @@
 package agent
 
 import (
+	"context"
+	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"runtime"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/go-resty/resty/v2"
+	"github.com/skayfish/metrics/internal/model"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Таймаут ожидания подключения к серверу
@@ -113,7 +124,6 @@ func Test_sender_filtrate(t *testing.T) {
 			fields{
 				config:    Config{},
 				pollCount: 0,
-				totalTime: 0,
 				client:    resty.New(),
 			},
 			args{
@@ -194,7 +204,6 @@ func Test_sender_filtrate(t *testing.T) {
 					ReportInterval:   0,
 				},
 				pollCount: 10,
-				totalTime: 11,
 				client:    resty.New(),
 			},
 			args{
@@ -275,4 +284,61 @@ func Test_sender_filtrate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Проверяет запуск менеджера отправки метрик серверу
+func Test_sender_Run(t *testing.T) {
+	t.Run("correct poll counting", func(t *testing.T) {
+		router := chi.NewRouter()
+		handlerCounter := 0
+		router.Post("/update/{type}/{name}/{value}", func(resp http.ResponseWriter, req *http.Request) {
+			mType := chi.URLParam(req, "type")
+			mName := chi.URLParam(req, "name")
+			mValue := chi.URLParam(req, "value")
+
+			if mType == model.Counter && mName == "PollCount" {
+				value, err := strconv.ParseInt(mValue, 10, 64)
+				require.NoError(t, err)
+				switch handlerCounter {
+				case 0:
+					assert.Equal(t, int64(5), value)
+					fmt.Println("case 0 succeed")
+				case 1:
+					assert.Equal(t, int64(5), value)
+					fmt.Println("case 1 succeed")
+				default:
+					t.Error("expected handler call count: 2")
+				}
+
+				handlerCounter++
+			}
+
+		})
+		server := httptest.NewServer(router)
+		defer server.Close()
+
+		hostPort := strings.Split(server.URL[7:], ":")
+		port, err := strconv.Atoi(string(hostPort[1]))
+		require.NoError(t, err)
+
+		sender := sender{
+			config: Config{
+				SecureConnection: false,
+				Host:             string(hostPort[0]),
+				Port:             port,
+				RetryMaxWaitTime: retryMaxWaitTime,
+				RetryWaitTime:    retryWaitTime,
+				PollInterval:     1 * time.Second,
+				ReportInterval:   5 * time.Second,
+			},
+			pollCount: 0,
+			client:    resty.New(),
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 12*time.Second)
+		defer cancel()
+		err = sender.Run(&ctx)
+		require.Equal(t, context.DeadlineExceeded, errors.Unwrap(err))
+		assert.Equal(t, 2, handlerCounter)
+	})
 }
