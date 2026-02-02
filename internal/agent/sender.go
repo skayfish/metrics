@@ -109,7 +109,7 @@ func (obj *sender) Run(ctx *context.Context) error {
 	var metrics runtime.MemStats
 	for {
 		if ctx != nil && (*ctx).Err() != nil {
-			return fmt.Errorf("Metrics sending manager operation terminated: %w", (*ctx).Err())
+			return fmt.Errorf("metrics sending manager operation terminated: %w", (*ctx).Err())
 		}
 
 		select {
