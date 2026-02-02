@@ -19,9 +19,6 @@ type sender struct {
 	// Количество обновлений метрик за время работы программы
 	pollCount int64
 
-	// Общее время работы программы
-	totalTime time.Duration
-
 	// Клиент для отправки запросов серверу
 	client *resty.Client
 }
@@ -102,10 +99,16 @@ func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 //
 //	@returns ошибку работы менеджера отправки метрик
 func (obj *sender) Run() error {
+	pollTicker := time.NewTicker(obj.config.PollInterval)
+	reportTicker := time.NewTicker(obj.config.ReportInterval)
+
+	var metrics runtime.MemStats
 	for {
-		metrics := obj.getMetrics()
-		obj.pollCount++ // Обновление счетчика получения метрик
-		if obj.totalTime%obj.config.ReportInterval == 0 {
+		select {
+		case <-pollTicker.C:
+			metrics = obj.getMetrics()
+			obj.pollCount++ // Обновление счетчика получения метрик
+		case <-reportTicker.C:
 			// Фильтрация метрик, полученных из системы
 			filteredMetrics := obj.filtrate(metrics)
 			// Добавление дополнительных gauge метрик
@@ -116,10 +119,6 @@ func (obj *sender) Run() error {
 				return err
 			}
 		}
-
-		// Ожидание следующего считывания метрик
-		time.Sleep(obj.config.PollInterval)
-		obj.totalTime += obj.config.PollInterval
 	}
 }
 

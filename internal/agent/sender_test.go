@@ -49,7 +49,6 @@ func TestNewSender(t *testing.T) {
 					ReportInterval:   0,
 				},
 				pollCount: 0,
-				totalTime: 0,
 				client:    nil,
 			},
 		},
@@ -77,7 +76,6 @@ func TestNewSender(t *testing.T) {
 					ReportInterval:   99 * time.Nanosecond,
 				},
 				pollCount: 0,
-				totalTime: 0,
 				client:    nil,
 			},
 		},
@@ -270,7 +268,6 @@ func Test_sender_filtrate(t *testing.T) {
 			obj := &sender{
 				config:    tt.fields.config,
 				pollCount: tt.fields.pollCount,
-				totalTime: tt.fields.totalTime,
 				client:    tt.fields.client,
 			}
 			if gotRes := obj.filtrate(tt.args.metrics); !reflect.DeepEqual(gotRes, tt.wantRes) {
