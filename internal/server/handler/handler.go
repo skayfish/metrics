@@ -1,7 +1,9 @@
 package handler
 
 import (
+	"bytes"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"strconv"
@@ -86,8 +88,8 @@ func CreateGetValueHandler(storage *storage.MemStorage) http.HandlerFunc {
 	}
 }
 
-// Начало шаблона html таблицы метрик
-const htmlTableBegin = `
+// HTML шаблон таблицы метрик
+const templateHTML = `
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -103,6 +105,8 @@ const htmlTableBegin = `
             padding: 8px;
             text-align: left;
         }
+        .float-value { color: blue; }
+        .int-value { color: green; }
     </style>
 </head>
 <body>
@@ -116,24 +120,28 @@ const htmlTableBegin = `
             <th>Значение</th>
         </tr>
     </thead>
-    <tbody>`
-
-// Шаблон html строки в таблице метрик со значением вещественного типа
-const htmlTableRowFloatPattern = `
+    <tbody>
+        {{range .}}
         <tr>
-            <td>%s</td>
-            <td>%f</td>
-        </tr>`
-
-// Шаблон html строки в таблице метрик со значением целочисленного типа
-const htmlTableRowIntegerPattern = `
-        <tr>
-            <td>%s</td>
-            <td>%d</td>
-        </tr>`
-
-// Конец шаблона html таблицы метрик
-const htmlTableEnd = `
+            <td>
+                {{if eq (printf "%T" .Value) "float64"}}
+                    <span class="float-value">{{.Name}}</span>
+                {{else if eq (printf "%T" .Value) "int64"}}
+                    <span class="int-value">{{.Name}}</span>
+                {{else}}
+                    <span class="unknown">{{.Name}}</span>
+                {{end}}</td>
+            <td>
+                {{if eq (printf "%T" .Value) "float64"}}
+                    <span class="float-value">{{printf "%.2f" .Value}}</span>
+                {{else if eq (printf "%T" .Value) "int64"}}
+                    <span class="int-value">{{printf "%d" .Value}}</span>
+                {{else}}
+                    <span class="unknown">Неизвестный тип</span>
+                {{end}}
+            </td>
+        </tr>
+        {{end}}
     </tbody>
 </table>
 
@@ -146,22 +154,39 @@ const htmlTableEnd = `
 //	@param storage хранилище метрик
 //	@returns обработчик получения всех метрик
 func CreateGetAllValuesHandler(storage *storage.MemStorage) http.HandlerFunc {
+	// Структура метрики для HTML таблицы
+	type Metric struct {
+		Name  string      // Название метрики
+		Value interface{} // Значение метрики
+	}
+
 	return func(resp http.ResponseWriter, req *http.Request) {
 		log.Printf("\nDebug data:\n")
 		log.Printf("\tURL Path: %s\n", req.URL.Path)
 		log.Printf("\tStorage contains:\n\t%v\n\n", storage)
 
-		table := htmlTableBegin
+		metrics := []Metric{}
 		for mName, mValue := range storage.GetGauges() {
-			table += fmt.Sprintf(htmlTableRowFloatPattern, mName, mValue)
+			metrics = append(metrics, Metric{Name: mName, Value: mValue})
 		}
 
 		for mName, mValue := range storage.GetCounters() {
-			table += fmt.Sprintf(htmlTableRowIntegerPattern, mName, mValue)
+			metrics = append(metrics, Metric{Name: mName, Value: mValue})
 		}
-		table += htmlTableEnd
+
+		// Парсинг шаблона html
+		tmpl, err := template.New("metrics-table").Parse(templateHTML)
+		if err != nil {
+			http.Error(resp, err.Error(), http.StatusInternalServerError)
+		}
+
+		resultTableBuf := new(bytes.Buffer)
+		err = tmpl.Execute(resultTableBuf, metrics)
+		if err != nil {
+			http.Error(resp, err.Error(), http.StatusInternalServerError)
+		}
 
 		resp.Header().Set("Content-Type", "text/html; charset=UTF-8")
-		resp.Write([]byte(table))
+		resp.Write(resultTableBuf.Bytes())
 	}
 }
