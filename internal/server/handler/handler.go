@@ -2,6 +2,7 @@ package handler
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -166,7 +167,7 @@ func CreateGetAllMetricsHandler(storage *storage.MemStorage) (http.HandlerFunc, 
 	// Парсинг шаблона html
 	tmpl, err := template.New("metrics-table").Parse(templateHTML)
 	if err != nil {
-		return nil, err
+		return nil, errors.New(fmt.Sprint(getAllValuesError, err))
 	}
 
 	return func(resp http.ResponseWriter, req *http.Request) {
