@@ -16,11 +16,11 @@ import (
 //	@returns ошибку в ином случае
 //
 // SF TODO
-func getRouter(controller *controller.Controller) chi.Router {
+func getRouter(controller *controller.MetricsController) chi.Router {
 	router := chi.NewRouter()
-	router.Post("/update/{type}/{name}/{value}", controller.UpdateHandler)
-	router.Get("/value/{type}/{name}", controller.GetValueHandler)
-	router.Get("/", controller.GetAllMetricsHandler)
+	router.Post("/update/{type}/{name}/{value}", controller.Update)
+	router.Get("/value/{type}/{name}", controller.GetValue)
+	router.Get("/", controller.GetAllMetrics)
 
 	return router
 }
@@ -29,12 +29,12 @@ func getRouter(controller *controller.Controller) chi.Router {
 func main() {
 	netAddress := parseFlags()
 	storage := storage.NewMemStorage()
-	controller, err := controller.NewController(&storage)
+	metricsController, err := controller.NewMetricsController(&storage)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	router := getRouter(controller)
+	router := getRouter(metricsController)
 
 	if err = http.ListenAndServe(netAddress.String(), router); err != http.ErrServerClosed {
 		log.Fatal(err)

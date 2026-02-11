@@ -13,13 +13,13 @@ import (
 	"github.com/skayfish/metrics/internal/server/storage"
 )
 
-// SF TODO
-type Controller struct {
+// Контроллер обработки запросов, связанных с метриками
+type MetricsController struct {
 	// SF TODO
 	storage *storage.MemStorage
 
 	// SF TODO
-	metricsTableHTMLTemplate *template.Template
+	tableHTMLTemplate *template.Template
 }
 
 // HTML шаблон таблицы метрик
@@ -85,17 +85,17 @@ const templateHTML = `
 
 // Ошибка обработки запроса на получение данных всех метрик
 // SF TODO
-const newControllerError = "controller: Controller creation failed"
+const newMetricsControllerError = "controller: metrics controller creation failed"
 
 // SF TODO
-func NewController(storage *storage.MemStorage) (*Controller, error) {
+func NewMetricsController(storage *storage.MemStorage) (*MetricsController, error) {
 	// Парсинг шаблона html
 	tmpl, err := template.New("metrics-table").Parse(templateHTML)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s", newControllerError, err)
+		return nil, fmt.Errorf("%s: %s", newMetricsControllerError, err)
 	}
 
-	return &Controller{storage: storage, metricsTableHTMLTemplate: tmpl}, nil
+	return &MetricsController{storage: storage, tableHTMLTemplate: tmpl}, nil
 }
 
 // Создаёт обработчик обновления метрик
@@ -104,7 +104,7 @@ func NewController(storage *storage.MemStorage) (*Controller, error) {
 //	@returns обработчик обновления метрик
 //
 // SF TODO
-func (c *Controller) UpdateHandler(resp http.ResponseWriter, req *http.Request) {
+func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) {
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
 	mValue := chi.URLParam(req, "value")
@@ -144,7 +144,7 @@ func (c *Controller) UpdateHandler(resp http.ResponseWriter, req *http.Request) 
 //	@returns обработчик получения конкретной метрики
 //
 // SF TODO
-func (c *Controller) GetValueHandler(resp http.ResponseWriter, req *http.Request) {
+func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request) {
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
 
@@ -174,7 +174,7 @@ func (c *Controller) GetValueHandler(resp http.ResponseWriter, req *http.Request
 }
 
 // Ошибка обработки запроса на получение данных всех метрик
-const getAllMetricsError = "controller: An error occurred while retrieving all metrics"
+const getAllMetricsError = "controller: an error occurred while retrieving all metrics"
 
 // Структура метрики для HTML таблицы
 type metric struct {
@@ -189,7 +189,7 @@ type metric struct {
 //	@returns ошибку в ином случае
 //
 // SF TODO
-func (c *Controller) GetAllMetricsHandler(resp http.ResponseWriter, req *http.Request) {
+func (c *MetricsController) GetAllMetrics(resp http.ResponseWriter, req *http.Request) {
 	log.Printf("\nDebug data:\n")
 	log.Printf("\tURL Path: %s\n", req.URL.Path)
 	log.Printf("\tStorage contains:\n\t%v\n\n", c.storage)
@@ -204,7 +204,7 @@ func (c *Controller) GetAllMetricsHandler(resp http.ResponseWriter, req *http.Re
 	}
 
 	resultTableBuf := new(bytes.Buffer)
-	err := c.metricsTableHTMLTemplate.Execute(resultTableBuf, metrics)
+	err := c.tableHTMLTemplate.Execute(resultTableBuf, metrics)
 	if err != nil {
 		http.Error(resp, err.Error(), http.StatusInternalServerError)
 		log.Printf("%s: %s", getAllMetricsError, http.StatusText(http.StatusInternalServerError))

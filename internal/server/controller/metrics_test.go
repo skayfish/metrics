@@ -79,7 +79,7 @@ func TestCreateUpdateHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			storage := storage.NewMemStorage()
-			controller, err := NewController(&storage)
+			controller, err := NewMetricsController(&storage)
 			require.NoError(t, err)
 
 			for name, value := range tt.counterMetrics {
@@ -91,7 +91,7 @@ func TestCreateUpdateHandler(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Post("/update/{type}/{name}/{value}", controller.UpdateHandler)
+			router.Post("/update/{type}/{name}/{value}", controller.Update)
 			server := httptest.NewServer(router)
 			defer server.Close()
 
@@ -171,7 +171,7 @@ func TestCreateGetValueHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			storage := storage.NewMemStorage()
-			controller, err := NewController(&storage)
+			controller, err := NewMetricsController(&storage)
 			require.NoError(t, err)
 
 			for name, value := range tt.counterMetrics {
@@ -183,7 +183,7 @@ func TestCreateGetValueHandler(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Get("/value/{type}/{name}", controller.GetValueHandler)
+			router.Get("/value/{type}/{name}", controller.GetValue)
 			server := httptest.NewServer(router)
 			defer server.Close()
 
@@ -234,7 +234,7 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			storage := storage.NewMemStorage()
-			controller, err := NewController(&storage)
+			controller, err := NewMetricsController(&storage)
 			require.NoError(t, err)
 
 			for name, value := range tt.counterMetrics {
@@ -246,7 +246,7 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Get("/", controller.GetAllMetricsHandler)
+			router.Get("/", controller.GetAllMetrics)
 			server := httptest.NewServer(router)
 			defer server.Close()
 
