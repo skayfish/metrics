@@ -15,11 +15,8 @@ import (
 
 // Контроллер обработки запросов, связанных с метриками
 type MetricsController struct {
-	// SF TODO
-	storage *storage.MemStorage
-
-	// SF TODO
-	tableHTMLTemplate *template.Template
+	storage           *storage.MemStorage // Хранилище метрик
+	tableHTMLTemplate *template.Template  // Шаблон html таблицы метрик
 }
 
 // HTML шаблон таблицы метрик
@@ -83,11 +80,14 @@ const templateHTML = `
 </html>
 `
 
-// Ошибка обработки запроса на получение данных всех метрик
-// SF TODO
+// Ошибка во время создания контроллера метрик
 const newMetricsControllerError = "controller: metrics controller creation failed"
 
-// SF TODO
+// Создаёт новый контроллер метрик
+//
+//	@param storage хранилище метрик
+//	@returns *MetricsController контроллер метрик, в случае успеха
+//	@returns error ошибка создания, в ином случае
 func NewMetricsController(storage *storage.MemStorage) (*MetricsController, error) {
 	// Парсинг шаблона html
 	tmpl, err := template.New("metrics-table").Parse(templateHTML)
@@ -98,12 +98,10 @@ func NewMetricsController(storage *storage.MemStorage) (*MetricsController, erro
 	return &MetricsController{storage: storage, tableHTMLTemplate: tmpl}, nil
 }
 
-// Создаёт обработчик обновления метрик
+// Обновляет/добавляет метрику в хранилище
 //
-//	@param storage хранилище метрик
-//	@returns обработчик обновления метрик
-//
-// SF TODO
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
 func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) {
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
@@ -138,12 +136,10 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 	log.Printf("\tStorage contains:\n\t%v\n\n", c.storage)
 }
 
-// Создаёт обработчик получения конкретной метрики
+// Возвращает в ответе значение запрошенной метрики
 //
-//	@param storage хранилище метрик
-//	@returns обработчик получения конкретной метрики
-//
-// SF TODO
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
 func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request) {
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
@@ -182,13 +178,10 @@ type metric struct {
 	Value interface{} // Значение метрики
 }
 
-// Создаёт обработчик получения всех метрик
+// Возвращает в ответе html таблицу со всеми метриками и их значениями
 //
-//	@param storage хранилище метрик
-//	@returns обработчик получения всех метрик в случае успеха
-//	@returns ошибку в ином случае
-//
-// SF TODO
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
 func (c *MetricsController) GetAllMetrics(resp http.ResponseWriter, req *http.Request) {
 	log.Printf("\nDebug data:\n")
 	log.Printf("\tURL Path: %s\n", req.URL.Path)
