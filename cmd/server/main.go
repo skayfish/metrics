@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/skayfish/metrics/internal/server/handler"
+	"github.com/skayfish/metrics/internal/server/controller"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
 
@@ -14,28 +14,27 @@ import (
 //	@param storage хранилище метрик
 //	@returns маршрутизатор запросов в случае успеха
 //	@returns ошибку в ином случае
-func getRouter(storage *storage.MemStorage) (chi.Router, error) {
+//
+// SF TODO
+func getRouter(controller *controller.Controller) chi.Router {
 	router := chi.NewRouter()
+	router.Post("/update/{type}/{name}/{value}", controller.UpdateHandler)
+	router.Get("/value/{type}/{name}", controller.GetValueHandler)
+	router.Get("/", controller.GetAllMetricsHandler)
 
-	router.Post("/update/{type}/{name}/{value}", handler.CreateUpdateHandler(storage))
-	router.Get("/value/{type}/{name}", handler.CreateGetValueHandler(storage))
-	getAllMetricsHandler, err := handler.CreateGetAllMetricsHandler(storage)
-	if err != nil {
-		return nil, err
-	}
-
-	router.Get("/", getAllMetricsHandler)
-	return router, nil
+	return router
 }
 
 // Запуск сервера
 func main() {
 	netAddress := parseFlags()
 	storage := storage.NewMemStorage()
-	router, err := getRouter(&storage)
+	controller, err := controller.NewController(&storage)
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	router := getRouter(controller)
 
 	if err = http.ListenAndServe(netAddress.String(), router); err != http.ErrServerClosed {
 		log.Fatal(err)

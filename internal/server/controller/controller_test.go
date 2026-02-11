@@ -1,4 +1,4 @@
-package handler
+package controller
 
 import (
 	"net/http"
@@ -79,6 +79,9 @@ func TestCreateUpdateHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			storage := storage.NewMemStorage()
+			controller, err := NewController(&storage)
+			require.NoError(t, err)
+
 			for name, value := range tt.counterMetrics {
 				storage.UpdateCounter(name, value)
 			}
@@ -88,7 +91,7 @@ func TestCreateUpdateHandler(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Post("/update/{type}/{name}/{value}", CreateUpdateHandler(&storage))
+			router.Post("/update/{type}/{name}/{value}", controller.UpdateHandler)
 			server := httptest.NewServer(router)
 			defer server.Close()
 
@@ -168,6 +171,9 @@ func TestCreateGetValueHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			storage := storage.NewMemStorage()
+			controller, err := NewController(&storage)
+			require.NoError(t, err)
+
 			for name, value := range tt.counterMetrics {
 				storage.UpdateCounter(name, value)
 			}
@@ -177,7 +183,7 @@ func TestCreateGetValueHandler(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Get("/value/{type}/{name}", CreateGetValueHandler(&storage))
+			router.Get("/value/{type}/{name}", controller.GetValueHandler)
 			server := httptest.NewServer(router)
 			defer server.Close()
 
@@ -228,6 +234,9 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			storage := storage.NewMemStorage()
+			controller, err := NewController(&storage)
+			require.NoError(t, err)
+
 			for name, value := range tt.counterMetrics {
 				storage.UpdateCounter(name, value)
 			}
@@ -237,9 +246,7 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			getAllMetricsHandler, err := CreateGetAllMetricsHandler(&storage)
-			require.NoError(t, err)
-			router.Get("/", getAllMetricsHandler)
+			router.Get("/", controller.GetAllMetricsHandler)
 			server := httptest.NewServer(router)
 			defer server.Close()
 
