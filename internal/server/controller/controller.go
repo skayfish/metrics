@@ -2,7 +2,6 @@ package controller
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"html/template"
 	"log"
@@ -93,7 +92,7 @@ func NewController(storage *storage.MemStorage) (*Controller, error) {
 	// Парсинг шаблона html
 	tmpl, err := template.New("metrics-table").Parse(templateHTML)
 	if err != nil {
-		return nil, errors.New(fmt.Sprintf("%s: %s", newControllerError, err))
+		return nil, fmt.Errorf("%s: %s", newControllerError, err)
 	}
 
 	return &Controller{storage: storage, metricsTableHTMLTemplate: tmpl}, nil
