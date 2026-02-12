@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/skayfish/metrics/internal/flags"
@@ -34,6 +35,10 @@ func parseConfig() (*flags.NetAddress, error) {
 	if envs.Address != nil {
 		addr = *envs.Address
 	}
+
+	log.Printf("Debug data:\n")
+	log.Printf("\tHost: %s", addr.Host)
+	log.Printf("\tPort: %d", addr.Port)
 
 	return &addr, nil
 }

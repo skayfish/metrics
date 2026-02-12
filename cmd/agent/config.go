@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/caarlos0/env/v6"
@@ -61,6 +62,15 @@ func parseConfig() (*agent.Config, error) {
 	if envs.ReportInterval != nil {
 		*reportInterval = *envs.ReportInterval
 	}
+
+	log.Printf("Debug data:\n")
+	log.Printf("\tHost: %s", addr.Host)
+	log.Printf("\tPort: %d", addr.Port)
+	log.Printf("\tSecure: %t", *isSecure)
+	log.Printf("\tRetryMaxWaitTime: %ds", *retryMaxWaitTime)
+	log.Printf("\tRetryWaitTime: %ds", *retryWaitTime)
+	log.Printf("\tPollInterval: %ds", *pollInterval)
+	log.Printf("\tReportInterval: %ds", *reportInterval)
 
 	return &agent.Config{
 		SecureConnection: *isSecure,
