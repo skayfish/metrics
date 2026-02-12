@@ -24,7 +24,11 @@ func getRouter(controller *controller.MetricsController) chi.Router {
 
 // Запуск сервера
 func main() {
-	netAddress := parseFlags()
+	address, err := parseFlags()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	storage := storage.NewMemStorage()
 	metricsController, err := controller.NewMetricsController(&storage)
 	if err != nil {
@@ -33,7 +37,7 @@ func main() {
 
 	router := getRouter(metricsController)
 
-	if err = http.ListenAndServe(netAddress.String(), router); err != http.ErrServerClosed {
+	if err = http.ListenAndServe(address.String(), router); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

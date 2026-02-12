@@ -13,6 +13,8 @@ import (
 // Парсит флаги, указанные при запуске программы и переменные окружения
 //
 //	@returns конфигурацию работы менеджера отправки метрик серверу
+//
+// SF TODO
 func parseFlags() (*agent.Config, error) {
 	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
@@ -37,11 +39,8 @@ func parseFlags() (*agent.Config, error) {
 		return nil, fmt.Errorf("main: failed to parse environment variables: %v", err)
 	}
 
-	host := addr.Host
-	port := addr.Port
 	if config.Address != nil {
-		host = config.Address.Host
-		port = config.Address.Port
+		addr = *config.Address
 	}
 
 	if config.PollInterval != nil {
@@ -54,8 +53,8 @@ func parseFlags() (*agent.Config, error) {
 
 	return &agent.Config{
 		SecureConnection: *isSecure,
-		Host:             host,
-		Port:             port,
+		Host:             addr.Host,
+		Port:             addr.Port,
 		RetryMaxWaitTime: time.Duration(*retryMaxWaitTime) * time.Second,
 		RetryWaitTime:    time.Duration(*retryWaitTime) * time.Second,
 		PollInterval:     time.Duration(*pollInterval) * time.Second,
