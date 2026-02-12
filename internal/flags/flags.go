@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 )
 
 // Структура для хранения хоста и порта сервера
@@ -55,18 +54,18 @@ func (a *NetAddress) Type() string {
 }
 
 // SF TODO
+func (a *NetAddress) UnmarshalText(text []byte) error {
+	return a.Set(string(text))
+}
+
+// SF TODO
 type Config struct {
 	// SF TODO
 	Address *NetAddress `env:"ADDRESS"`
 
 	// SF TODO
-	ReportInterval *time.Duration `env:"REPORT_INTERVAL"`
+	ReportInterval *uint `env:"REPORT_INTERVAL"`
 
 	// SF TODO
-	PollInterval *time.Duration `env:"POLL_INTERVAL"`
-}
-
-// SF TODO
-func (a *NetAddress) UnmarshalText(text []byte) error {
-	return a.Set(string(text))
+	PollInterval *uint `env:"POLL_INTERVAL"`
 }

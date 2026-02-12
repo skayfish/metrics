@@ -44,14 +44,12 @@ func parseFlags() (*agent.Config, error) {
 		port = config.Address.Port
 	}
 
-	pollIntervalDuration := time.Duration(*pollInterval) * time.Second
 	if config.PollInterval != nil {
-		pollIntervalDuration = *config.PollInterval
+		*pollInterval = *config.PollInterval
 	}
 
-	reportIntervalDuration := time.Duration(*reportInterval) * time.Second
 	if config.ReportInterval != nil {
-		reportIntervalDuration = *config.ReportInterval
+		*reportInterval = *config.ReportInterval
 	}
 
 	return &agent.Config{
@@ -60,7 +58,7 @@ func parseFlags() (*agent.Config, error) {
 		Port:             port,
 		RetryMaxWaitTime: time.Duration(*retryMaxWaitTime) * time.Second,
 		RetryWaitTime:    time.Duration(*retryWaitTime) * time.Second,
-		PollInterval:     pollIntervalDuration,
-		ReportInterval:   reportIntervalDuration,
+		PollInterval:     time.Duration(*pollInterval) * time.Second,
+		ReportInterval:   time.Duration(*reportInterval) * time.Second,
 	}, nil
 }
