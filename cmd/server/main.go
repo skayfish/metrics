@@ -24,7 +24,7 @@ func getRouter(controller *controller.MetricsController) chi.Router {
 
 // Запуск сервера
 func main() {
-	address, err := parseFlags()
+	address, err := parseConfig()
 	if err != nil {
 		log.Fatal(err)
 	}

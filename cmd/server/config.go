@@ -18,7 +18,7 @@ type environments struct {
 //
 //	@returns *flags.NetAddress данные о хосте и порте, в случае успеха
 //	@returns error ошибку, в противном случае
-func parseFlags() (*flags.NetAddress, error) {
+func parseConfig() (*flags.NetAddress, error) {
 	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
 	pflag.VarP(&addr, "address", "a", "Server listening address in host:port format")

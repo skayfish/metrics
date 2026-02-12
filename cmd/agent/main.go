@@ -10,7 +10,7 @@ import (
 
 // Запуск агента
 func main() {
-	config, err := parseFlags()
+	config, err := parseConfig()
 	if err != nil {
 		log.Fatal(err)
 	}

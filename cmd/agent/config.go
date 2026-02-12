@@ -26,7 +26,7 @@ type environments struct {
 //
 // @returns *agent.Config конфигурацию работы менеджера отправки метрик серверу, в случае успеха
 // @returns error ошибку, в противном случае
-func parseFlags() (*agent.Config, error) {
+func parseConfig() (*agent.Config, error) {
 	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
 	pflag.VarP(&addr, "address", "a", "Server address in format host:port")
