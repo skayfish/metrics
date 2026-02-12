@@ -13,9 +13,6 @@ import (
 //
 //	@param storage хранилище метрик
 //	@returns маршрутизатор запросов в случае успеха
-//	@returns ошибку в ином случае
-//
-// SF TODO
 func getRouter(controller *controller.MetricsController) chi.Router {
 	router := chi.NewRouter()
 	router.Post("/update/{type}/{name}/{value}", controller.Update)
