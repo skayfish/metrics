@@ -1,19 +1,21 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
+	"github.com/caarlos0/env/v6"
 	"github.com/skayfish/metrics/internal/agent"
 	"github.com/skayfish/metrics/internal/flags"
 	"github.com/spf13/pflag"
 )
 
-// Парсит флаги, указанные при запуске программы
+// Парсит флаги, указанные при запуске программы и переменные окружения
 //
 //	@returns конфигурацию работы менеджера отправки метрик серверу
-func parseFlags() agent.Config {
+func parseFlags() (*agent.Config, error) {
+	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
-
 	pflag.VarP(&addr, "address", "a", "Server address in format host:port")
 	pollInterval := pflag.UintP("poll-interval", "p", 2,
 		"Metrics collection frequency, in seconds")
@@ -28,13 +30,37 @@ func parseFlags() agent.Config {
 
 	pflag.Parse()
 
-	return agent.Config{
+	// Парсинг переменных окружения
+	var config flags.Config
+	err := env.Parse(&config)
+	if err != nil {
+		return nil, fmt.Errorf("main: failed to parse environment variables: %v", err)
+	}
+
+	host := addr.Host
+	port := addr.Port
+	if config.Address != nil {
+		host = config.Address.Host
+		port = config.Address.Port
+	}
+
+	pollIntervalDuration := time.Duration(*pollInterval) * time.Second
+	if config.PollInterval != nil {
+		pollIntervalDuration = *config.PollInterval
+	}
+
+	reportIntervalDuration := time.Duration(*reportInterval) * time.Second
+	if config.ReportInterval != nil {
+		reportIntervalDuration = *config.ReportInterval
+	}
+
+	return &agent.Config{
 		SecureConnection: *isSecure,
-		Host:             addr.Host,
-		Port:             addr.Port,
+		Host:             host,
+		Port:             port,
 		RetryMaxWaitTime: time.Duration(*retryMaxWaitTime) * time.Second,
 		RetryWaitTime:    time.Duration(*retryWaitTime) * time.Second,
-		PollInterval:     time.Duration(*pollInterval) * time.Second,
-		ReportInterval:   time.Duration(*reportInterval) * time.Second,
-	}
+		PollInterval:     pollIntervalDuration,
+		ReportInterval:   reportIntervalDuration,
+	}, nil
 }
