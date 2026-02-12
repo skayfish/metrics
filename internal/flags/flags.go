@@ -22,7 +22,7 @@ func (a NetAddress) String() string {
 // Обрабатывает входную строку флага и заполняет структуру
 //
 //	@param input входная строка флага
-//	@returns ошибка в случае передачи некорректных данных
+//	@returns ошибку в случае передачи некорректных данных
 func (a *NetAddress) Set(input string) error {
 	parts := strings.Split(input, ":")
 	if len(parts) != 2 {
@@ -53,19 +53,10 @@ func (a *NetAddress) Type() string {
 	return "host:port"
 }
 
-// SF TODO
+// Обрабатывает входную строку переменной окружения и заполняет структуру
+//
+//	@param text входная строка переменной окружения
+//	@returns ошибку в случае передачи некорректных данных
 func (a *NetAddress) UnmarshalText(text []byte) error {
 	return a.Set(string(text))
-}
-
-// SF TODO
-type Config struct {
-	// SF TODO
-	Address *NetAddress `env:"ADDRESS"`
-
-	// SF TODO
-	ReportInterval *uint `env:"REPORT_INTERVAL"`
-
-	// SF TODO
-	PollInterval *uint `env:"POLL_INTERVAL"`
 }

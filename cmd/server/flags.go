@@ -8,11 +8,16 @@ import (
 	"github.com/spf13/pflag"
 )
 
+// Переменные окружения
+type environments struct {
+	// Сетевой адрес
+	Address *flags.NetAddress `env:"ADDRESS" example:"localhost:8080"`
+}
+
 // Парсит флаги, указанные при запуске программы и переменные окружения
 //
-//	@returns данные о хосте и порте
-//
-// SF TODO
+//	@returns *flags.NetAddress данные о хосте и порте, в случае успеха
+//	@returns error ошибку, в противном случае
 func parseFlags() (*flags.NetAddress, error) {
 	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
@@ -20,14 +25,14 @@ func parseFlags() (*flags.NetAddress, error) {
 	pflag.Parse()
 
 	// Парсинг переменных окружения
-	var config flags.Config
-	err := env.Parse(&config)
+	var envs environments
+	err := env.Parse(&envs)
 	if err != nil {
 		return nil, fmt.Errorf("main: failed to parse environment variables: %v", err)
 	}
 
-	if config.Address != nil {
-		addr = *config.Address
+	if envs.Address != nil {
+		addr = *envs.Address
 	}
 
 	return &addr, nil

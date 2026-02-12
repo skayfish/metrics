@@ -10,11 +10,22 @@ import (
 	"github.com/spf13/pflag"
 )
 
+// Переменные окружения
+type environments struct {
+	// Сетевой адрес
+	Address *flags.NetAddress `env:"ADDRESS" example:"localhost:8080"`
+
+	// Частота отправки метрик серверу (например, раз в 2 секунды)
+	ReportInterval *uint `env:"REPORT_INTERVAL" example:"2"`
+
+	// Частота обновления метрик (например, раз в 2 секунды)
+	PollInterval *uint `env:"POLL_INTERVAL" example:"2"`
+}
+
 // Парсит флаги, указанные при запуске программы и переменные окружения
 //
-//	@returns конфигурацию работы менеджера отправки метрик серверу
-//
-// SF TODO
+// @returns *agent.Config конфигурацию работы менеджера отправки метрик серверу, в случае успеха
+// @returns error ошибку, в противном случае
 func parseFlags() (*agent.Config, error) {
 	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
@@ -33,22 +44,22 @@ func parseFlags() (*agent.Config, error) {
 	pflag.Parse()
 
 	// Парсинг переменных окружения
-	var config flags.Config
-	err := env.Parse(&config)
+	var envs environments
+	err := env.Parse(&envs)
 	if err != nil {
 		return nil, fmt.Errorf("main: failed to parse environment variables: %v", err)
 	}
 
-	if config.Address != nil {
-		addr = *config.Address
+	if envs.Address != nil {
+		addr = *envs.Address
 	}
 
-	if config.PollInterval != nil {
-		*pollInterval = *config.PollInterval
+	if envs.PollInterval != nil {
+		*pollInterval = *envs.PollInterval
 	}
 
-	if config.ReportInterval != nil {
-		*reportInterval = *config.ReportInterval
+	if envs.ReportInterval != nil {
+		*reportInterval = *envs.ReportInterval
 	}
 
 	return &agent.Config{
