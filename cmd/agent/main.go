@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 
 	"github.com/skayfish/metrics/internal/agent"
+	"github.com/skayfish/metrics/internal/logger"
 )
 
 // Запуск агента
@@ -15,8 +15,12 @@ func main() {
 		log.Fatal(err)
 	}
 
+	if err = logger.Init(config.LogLevel); err != nil || logger.LogS == nil {
+		log.Fatal(err)
+	}
+
 	sender := agent.NewSender(*config)
 	if err := sender.Run(context.TODO()); err != nil {
-		fmt.Println("Во время работы приложения произошла ошибка:\n", err)
+		logger.Log.Error(err.Error())
 	}
 }
