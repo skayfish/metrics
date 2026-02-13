@@ -2,23 +2,26 @@ package logger
 
 import "go.uber.org/zap/zapcore"
 
-// SF TODO
+// Уровень логирования
 type Level struct {
-	// SF TODO
-	Lvl zapcore.Level
+	Lvl zapcore.Level // уровень логирования // SF LOGIC попробовать убрать структуру
 }
 
-// SF TODO
+// Возвращает тип значения уровня логирования для документации
+//	@returns тип значения уровня логирования для документации
 func (Level) Type() string {
 	return `["debug","info","warn","error","dpanic","panic","fatal"]`
 }
 
-// SF TODO
+// Обрабатывает входную строку уровня логирования и заполняет структуру
+//	@param input входная строка уровня логирования
+//	@returns ошибку в случае передачи некорректных данных
 func (l *Level) Set(input string) error {
 	return l.Lvl.Set(input)
 }
 
-// SF TODO
+// Возвращает строковое представление уровня логирования
+//	@returns строковое представление адреса
 func (l Level) String() string {
 	return l.Lvl.String()
 }

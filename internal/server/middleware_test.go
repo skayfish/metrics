@@ -10,14 +10,14 @@ import (
 )
 
 type ResponseMockWriter struct {
-	Hheader http.Header
+	header http.Header
 }
 
-func (r ResponseMockWriter) Header() http.Header        { return r.Hheader }
+func (r ResponseMockWriter) Header() http.Header        { return r.header }
 func (r *ResponseMockWriter) Write([]byte) (int, error) { return 50, nil }
 func (r *ResponseMockWriter) WriteHeader(int)           {}
 
-// SF TODO
+// Проверяет, что обёртка с логированием над ответом запроса возвращает правильные настройки ответа
 func Test_loggingResponseWriter_Header(t *testing.T) {
 	tests := []struct {
 		testName   string
@@ -35,14 +35,14 @@ func Test_loggingResponseWriter_Header(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			resp := loggingResponseWriter{
-				responseWriter: &ResponseMockWriter{Hheader: http.Header(tt.headerData)},
+				responseWriter: &ResponseMockWriter{header: http.Header(tt.headerData)},
 			}
 			assert.Equal(t, http.Header(tt.headerData), resp.Header())
 		})
 	}
 }
 
-// SF TODO
+// Проверяет, что обёртка с логированием над ответом запроса правильно записывает размер данных ответа
 func Test_loggingResponseWriter_Write(t *testing.T) {
 	resp := loggingResponseWriter{
 		responseWriter: &ResponseMockWriter{},
@@ -64,6 +64,7 @@ func Test_loggingResponseWriter_Write(t *testing.T) {
 	assert.Equal(t, uint64(150), resp.responseData.size)
 }
 
+// Проверяет, что обёртка с логированием над ответом запроса правильно записывает статус ответа
 func Test_loggingResponseWriter_WriteHeader(t *testing.T) {
 	tests := []struct {
 		testName string
@@ -93,6 +94,7 @@ func Test_loggingResponseWriter_WriteHeader(t *testing.T) {
 	}
 }
 
+// Проверяет, что обёртка с логированием вызывает переданную ей функцию
 func TestLoggingMiddleware(t *testing.T) {
 	tests := []struct {
 		testName string

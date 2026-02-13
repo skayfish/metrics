@@ -19,10 +19,8 @@ type environments struct {
 
 // Парсит флаги, указанные при запуске программы и переменные окружения
 //
-//	@returns *flags.NetAddress данные о хосте и порте, в случае успеха
+//	@returns *server.Config конфигурацию сервера в случае успеха
 //	@returns error ошибку, в противном случае
-//
-// SF TODO
 func parseConfig() (*server.Config, error) {
 	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}

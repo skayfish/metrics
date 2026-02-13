@@ -7,40 +7,49 @@ import (
 	"github.com/skayfish/metrics/internal/logger"
 )
 
-// SF TODO
+// Данные ответа
 type responseData struct {
-	// SF TODO
-	status int
-
-	// SF TODO
-	size uint64
+	status int    // Статус ответа
+	size   uint64 // Размер данных ответа
 }
 
-// SF TODO
+// Обёртка над ответом запроса, с данными ответа
 type loggingResponseWriter struct {
-	responseWriter http.ResponseWriter
-	responseData   responseData
+	responseWriter http.ResponseWriter // Ответ на запрос
+	responseData   responseData        // Данные ответа
 }
 
-// SF TODO
+// Возвращает настройки ответа
+//
+//	@returns http.Header настройки ответа
 func (l loggingResponseWriter) Header() http.Header {
 	return l.responseWriter.Header()
 }
 
-// SF TODO
+// Записывает данные в ответ
+//
+//	@param data данные, которые нужно записать
+//	@returns int размер записанных данных
+//	@returns error ошибку, в случае некорректной записи данных в ответ
 func (l *loggingResponseWriter) Write(data []byte) (int, error) {
 	size, err := l.responseWriter.Write(data)
 	l.responseData.size += uint64(size)
 	return size, err
 }
 
-// SF TODO
+// Записывает статус код в ответ
+//
+//	@param statusCode статус код ответа
 func (l *loggingResponseWriter) WriteHeader(statusCode int) {
 	l.responseData.status = statusCode
 	l.responseWriter.WriteHeader(statusCode)
 }
 
-// SF TODO
+// Возвращает обёртку над обработчиком запроса.
+// Внутри обёртки записывает информацию о запросе и ответе в менеджер логирования
+//
+//	@param handler обработчик запроса
+//	@returns http.Handler обёртку над обработчиком запроса
 func LoggingMiddleware(handler http.Handler) http.Handler {
 	logfn := func(resp http.ResponseWriter, req *http.Request) {
 		logger.LogS.Infow("HTTP Request",

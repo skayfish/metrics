@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// SF TODO
+// Проверяет возвращаемый тип уровня логирования
 func TestLevel_Type(t *testing.T) {
 	tests := []struct {
 		testName string
@@ -55,7 +55,7 @@ func TestLevel_Type(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет устанавливаемое значение уровня логирования
 func TestLevel_Set(t *testing.T) {
 	tests := []struct {
 		testName string
@@ -118,7 +118,7 @@ func TestLevel_Set(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет возвращаемое строковое представление уровня логирования
 func TestLevel_String(t *testing.T) {
 	tests := []struct {
 		testName string

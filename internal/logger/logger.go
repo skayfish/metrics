@@ -2,13 +2,17 @@ package logger
 
 import "go.uber.org/zap"
 
-// SF TODO
+// Менеджер логирования
 var Log *zap.Logger = zap.NewNop()
 
-// SF TODO
+// Менеджер логирования с дополнительным функционалом.
+//
+// Более медленный менеджер логирования, но более удобное использование
 var LogS *zap.SugaredLogger = Log.Sugar()
 
-// SF TODO
+// Инициализирует менеджер логирования
+//	@param level уровень логирования
+//	@returns error ошибку, если не удалось создать менеджеры логирования
 func Init(level zap.AtomicLevel) error {
 	var config zap.Config
 	if level.Level() == zap.DebugLevel {

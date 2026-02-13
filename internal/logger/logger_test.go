@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// SF TODO
+// Проверяет инициализацию менеджера логирования
 func TestInit(t *testing.T) {
 	tests := []struct {
 		testName string

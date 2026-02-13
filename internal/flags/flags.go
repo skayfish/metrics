@@ -46,9 +46,9 @@ func (n *NetAddress) Set(input string) error {
 	return nil
 }
 
-// Возвращает тип значения для документации
+// Возвращает тип значения адреса для документации
 //
-//	@returns тип значения для документации
+//	@returns тип значения адреса для документации
 func (NetAddress) Type() string {
 	return `"host:port"`
 }

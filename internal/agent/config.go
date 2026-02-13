@@ -29,7 +29,7 @@ type Config struct {
 	// Частота отправки метрик серверу (например, раз в 2 секунды)
 	ReportInterval time.Duration
 
-	// SF TODO
+	// Уровень логирования // SF LOGIC использовать собственный
 	LogLevel zap.AtomicLevel
 }
 

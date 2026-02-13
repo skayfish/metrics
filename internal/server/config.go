@@ -5,11 +5,11 @@ import (
 	"go.uber.org/zap"
 )
 
-// SF TODO
+// Конфигурация сервера
 type Config struct {
-	// SF TODO
+	// Адрес, по которому сервер ждёт запросы
 	Address flags.NetAddress
 
-	// SF TODO
+	// Уровень логирования // SF LOGIC использовать собственный
 	LogLevel zap.AtomicLevel
 }
