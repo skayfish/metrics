@@ -9,7 +9,6 @@ import (
 	"github.com/skayfish/metrics/internal/flags"
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/spf13/pflag"
-	"go.uber.org/zap"
 )
 
 // Переменные окружения
@@ -42,7 +41,7 @@ func parseConfig() (*agent.Config, error) {
 		"Maximum wait time between connection attempts, in seconds")
 	retryWaitTime := pflag.Uint("retry-wait-time", 2,
 		"Connection retry interval, in seconds")
-	logLevel := logger.Level{}
+	var logLevel logger.Level
 	pflag.VarP(&logLevel, "log-level", "l", "Logging level")
 
 	pflag.Parse()
@@ -74,6 +73,6 @@ func parseConfig() (*agent.Config, error) {
 		RetryWaitTime:    time.Duration(*retryWaitTime) * time.Second,
 		PollInterval:     time.Duration(*pollInterval) * time.Second,
 		ReportInterval:   time.Duration(*reportInterval) * time.Second,
-		LogLevel:         zap.NewAtomicLevelAt(logLevel.Lvl),
+		LogLevel:         logLevel,
 	}, nil
 }

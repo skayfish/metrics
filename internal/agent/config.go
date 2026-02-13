@@ -3,7 +3,7 @@ package agent
 import (
 	"time"
 
-	"go.uber.org/zap"
+	"github.com/skayfish/metrics/internal/logger"
 )
 
 // Конфигурация работы менеджера отправки метрик серверу
@@ -29,8 +29,8 @@ type Config struct {
 	// Частота отправки метрик серверу (например, раз в 2 секунды)
 	ReportInterval time.Duration
 
-	// Уровень логирования // SF LOGIC использовать собственный
-	LogLevel zap.AtomicLevel
+	// Уровень логирования
+	LogLevel logger.Level
 }
 
 // Возвращает тип соединения

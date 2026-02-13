@@ -8,7 +8,6 @@ import (
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/server"
 	"github.com/spf13/pflag"
-	"go.uber.org/zap"
 )
 
 // Переменные окружения
@@ -25,7 +24,7 @@ func parseConfig() (*server.Config, error) {
 	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
 	pflag.VarP(&addr, "address", "a", "Server listening address in host:port format")
-	logLevel := logger.Level{}
+	var logLevel logger.Level
 	pflag.VarP(&logLevel, "log-level", "l", "Logging level")
 
 	pflag.Parse()
@@ -43,7 +42,7 @@ func parseConfig() (*server.Config, error) {
 
 	result := server.Config{
 		Address:  addr,
-		LogLevel: zap.NewAtomicLevelAt(logLevel.Lvl),
+		LogLevel: logLevel,
 	}
 
 	return &result, nil

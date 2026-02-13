@@ -5,7 +5,6 @@ import (
 
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
@@ -13,39 +12,39 @@ import (
 func TestInit(t *testing.T) {
 	tests := []struct {
 		testName string
-		level    zap.AtomicLevel
+		level    logger.Level
 	}{
 		{
 			testName: "DebugLevel",
-			level:    zap.NewAtomicLevelAt(zapcore.DebugLevel),
+			level:    logger.Level(zapcore.DebugLevel),
 		},
 		{
 			testName: "InfoLevel",
-			level:    zap.NewAtomicLevelAt(zapcore.InfoLevel),
+			level:    logger.Level(zapcore.InfoLevel),
 		},
 		{
 			testName: "WarnLevel",
-			level:    zap.NewAtomicLevelAt(zapcore.WarnLevel),
+			level:    logger.Level(zapcore.WarnLevel),
 		},
 		{
 			testName: "ErrorLevel",
-			level:    zap.NewAtomicLevelAt(zapcore.ErrorLevel),
+			level:    logger.Level(zapcore.ErrorLevel),
 		},
 		{
 			testName: "DPanicLevel",
-			level:    zap.NewAtomicLevelAt(zapcore.DPanicLevel),
+			level:    logger.Level(zapcore.DPanicLevel),
 		},
 		{
 			testName: "PanicLevel",
-			level:    zap.NewAtomicLevelAt(zapcore.PanicLevel),
+			level:    logger.Level(zapcore.PanicLevel),
 		},
 		{
 			testName: "FatalLevel",
-			level:    zap.NewAtomicLevelAt(zapcore.FatalLevel),
+			level:    logger.Level(zapcore.FatalLevel),
 		},
 		{
 			testName: "Invalid",
-			level:    zap.NewAtomicLevelAt(zapcore.InvalidLevel),
+			level:    logger.Level(zapcore.InvalidLevel),
 		},
 	}
 	for _, tt := range tests {

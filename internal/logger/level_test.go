@@ -50,7 +50,7 @@ func TestLevel_Type(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			assert.Equal(t, `["debug","info","warn","error","dpanic","panic","fatal"]`, Level{tt.level}.Type())
+			assert.Equal(t, `["debug","info","warn","error","dpanic","panic","fatal"]`, Level(tt.level).Type())
 		})
 	}
 }
@@ -106,13 +106,13 @@ func TestLevel_Set(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			level := Level{Lvl: tt.level}
+			level := Level(tt.level)
 			err := level.Set(tt.input)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, tt.level, level.Lvl)
+				assert.Equal(t, tt.level, zapcore.Level(level))
 			}
 		})
 	}
@@ -168,7 +168,7 @@ func TestLevel_String(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			assert.Equal(t, tt.want, Level{Lvl: tt.level}.String())
+			assert.Equal(t, tt.want, Level(tt.level).String())
 		})
 	}
 }

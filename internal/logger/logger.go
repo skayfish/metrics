@@ -1,6 +1,9 @@
 package logger
 
-import "go.uber.org/zap"
+import (
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+)
 
 // Менеджер логирования
 var Log *zap.Logger = zap.NewNop()
@@ -11,17 +14,18 @@ var Log *zap.Logger = zap.NewNop()
 var LogS *zap.SugaredLogger = Log.Sugar()
 
 // Инициализирует менеджер логирования
+//
 //	@param level уровень логирования
 //	@returns error ошибку, если не удалось создать менеджеры логирования
-func Init(level zap.AtomicLevel) error {
+func Init(level Level) error {
 	var config zap.Config
-	if level.Level() == zap.DebugLevel {
+	if zapcore.Level(level) == zap.DebugLevel {
 		config = zap.NewDevelopmentConfig()
 	} else {
 		config = zap.NewProductionConfig()
 	}
 
-	config.Level = level
+	config.Level = zap.NewAtomicLevelAt(zapcore.Level(level))
 
 	logger, err := config.Build()
 	if err != nil {
