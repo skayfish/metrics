@@ -6,7 +6,7 @@ import "go.uber.org/zap"
 var Log *zap.Logger = zap.NewNop()
 
 // SF TODO
-var LogS *zap.SugaredLogger = nil
+var LogS *zap.SugaredLogger = Log.Sugar()
 
 // SF TODO
 func Init(level zap.AtomicLevel) error {

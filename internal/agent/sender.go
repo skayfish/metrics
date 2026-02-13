@@ -3,13 +3,13 @@ package agent
 import (
 	"context"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"runtime"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 )
 
@@ -35,6 +35,17 @@ func NewSender(config Config) sender {
 		SetRetryCount(5).
 		SetRetryWaitTime(config.RetryWaitTime).
 		SetRetryMaxWaitTime(config.RetryMaxWaitTime)
+
+	logger.LogS.Infow("Client launch successful",
+		"Host", config.Host,
+		"Port", config.Port,
+		"SecureConnection", config.SecureConnection,
+		"RetryMaxWaitTime", config.RetryMaxWaitTime,
+		"RetryWaitTime", config.RetryWaitTime,
+		"PollInterval", config.PollInterval,
+		"ReportInterval", config.ReportInterval,
+	)
+
 	return sender{config: config, client: client}
 }
 
@@ -199,8 +210,9 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 		}
 	}
 
-	log.Printf("Debug info:\n")
-	log.Printf("\tGauge metrics: %v\n", metrics)
+	logger.LogS.Debugw("Data sent successfully",
+		"gauge metrics", metrics,
+	)
 
 	return nil
 }
@@ -229,8 +241,9 @@ func (obj *sender) sendCounterMetric(name string, value int64) error {
 func (obj *sender) sendCounterMetrics() error {
 	err := obj.sendCounterMetric("PollCount", obj.pollCount)
 
-	log.Printf("Debug info:\n")
-	log.Printf("\tCounter metrics: [%s: %d]\n", "PollCount", obj.pollCount)
+	logger.LogS.Debugw("Data sent successfully",
+		"counter metrics", map[string]interface{}{"PollCount": obj.pollCount},
+	)
 
 	return err
 }

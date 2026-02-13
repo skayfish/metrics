@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 
 	"github.com/skayfish/metrics/internal/agent"
@@ -15,12 +16,16 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if err = logger.Init(config.LogLevel); err != nil || logger.LogS == nil {
+	if err = logger.Init(config.LogLevel); err != nil {
 		log.Fatal(err)
 	}
 
+	defer logger.Log.Sync()
+
 	sender := agent.NewSender(*config)
 	if err := sender.Run(context.TODO()); err != nil {
-		logger.Log.Error(err.Error())
+		if !errors.Is(err, context.DeadlineExceeded) {
+			logger.Log.Fatal(err.Error())
+		}
 	}
 }
