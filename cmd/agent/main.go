@@ -22,6 +22,8 @@ func main() {
 
 	defer logger.Log.Sync()
 
+	logger.LogS.Debugw("Agent configuration", "config", config)
+
 	sender := agent.NewSender(*config)
 	if err := sender.Run(context.TODO()); err != nil {
 		if !errors.Is(err, context.DeadlineExceeded) {

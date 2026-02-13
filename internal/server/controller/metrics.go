@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
@@ -107,6 +107,11 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 	mName := chi.URLParam(req, "name")
 	mValue := chi.URLParam(req, "value")
 
+	logger.LogS.Debugw("controller: MetricsController.Update (before)",
+		"counter metrics", c.storage.GetCounters(),
+		"gauge metrics", c.storage.GetGauges(),
+	)
+
 	switch mType {
 	case model.Gauge:
 		value, err := strconv.ParseFloat(mValue, 64)
@@ -131,9 +136,10 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	log.Printf("\nDebug data:\n")
-	log.Printf("\tURL Path: %s\n", req.URL.Path)
-	log.Printf("\tStorage contains:\n\t%v\n\n", c.storage)
+	logger.LogS.Debugw("controller: MetricsController.Update (after)",
+		"counter metrics", c.storage.GetCounters(),
+		"gauge metrics", c.storage.GetGauges(),
+	)
 }
 
 // Возвращает в ответе значение запрошенной метрики
@@ -144,20 +150,21 @@ func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
 
-	log.Printf("\nDebug data:\n")
-	log.Printf("\tURL Path: %s\n", req.URL.Path)
-	log.Printf("\tStorage contains:\n\t%v\n\n", c.storage)
+	logger.LogS.Debugw("controller: MetricsController.GetValue",
+		"counter metrics", c.storage.GetCounters(),
+		"gauge metrics", c.storage.GetGauges(),
+	)
 
 	switch mType {
 	case model.Gauge:
 		if value, ok := c.storage.GetGauge(mName); ok {
-			resp.Write([]byte(fmt.Sprint(value)))
+			fmt.Fprint(resp, value)
 		} else {
 			resp.WriteHeader(http.StatusNotFound)
 		}
 	case model.Counter:
 		if value, ok := c.storage.GetCounter(mName); ok {
-			resp.Write([]byte(fmt.Sprint(value)))
+			fmt.Fprint(resp, value)
 		} else {
 			resp.WriteHeader(http.StatusNotFound)
 		}
@@ -183,9 +190,10 @@ type metric struct {
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
 func (c *MetricsController) GetAllMetrics(resp http.ResponseWriter, req *http.Request) {
-	log.Printf("\nDebug data:\n")
-	log.Printf("\tURL Path: %s\n", req.URL.Path)
-	log.Printf("\tStorage contains:\n\t%v\n\n", c.storage)
+	logger.LogS.Debugw("controller: MetricsController.GetAllMetrics",
+		"counter metrics", c.storage.GetCounters(),
+		"gauge metrics", c.storage.GetGauges(),
+	)
 
 	metrics := []metric{}
 	for mName, mValue := range c.storage.GetGauges() {
@@ -199,8 +207,11 @@ func (c *MetricsController) GetAllMetrics(resp http.ResponseWriter, req *http.Re
 	resultTableBuf := new(bytes.Buffer)
 	err := c.tableHTMLTemplate.Execute(resultTableBuf, metrics)
 	if err != nil {
+		logger.LogS.Errorw(getAllMetricsError,
+			"error", http.StatusText(http.StatusInternalServerError),
+		)
 		http.Error(resp, err.Error(), http.StatusInternalServerError)
-		log.Printf("%s: %s", getAllMetricsError, http.StatusText(http.StatusInternalServerError))
+		return
 	}
 
 	resp.Header().Set("Content-Type", "text/html; charset=UTF-8")

@@ -36,15 +36,7 @@ func NewSender(config Config) sender {
 		SetRetryWaitTime(config.RetryWaitTime).
 		SetRetryMaxWaitTime(config.RetryMaxWaitTime)
 
-	logger.LogS.Infow("Client launch successful",
-		"Host", config.Host,
-		"Port", config.Port,
-		"SecureConnection", config.SecureConnection,
-		"RetryMaxWaitTime", config.RetryMaxWaitTime,
-		"RetryWaitTime", config.RetryWaitTime,
-		"PollInterval", config.PollInterval,
-		"ReportInterval", config.ReportInterval,
-	)
+	logger.LogS.Infow("Client launch successful")
 
 	return sender{config: config, client: client}
 }

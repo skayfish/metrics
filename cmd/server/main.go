@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/server/controller"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
@@ -24,12 +25,20 @@ func getRouter(controller *controller.MetricsController) chi.Router {
 
 // Запуск сервера
 func main() {
-	address, err := parseConfig()
+	config, err := parseConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	if err = logger.Init(config.LogLevel); err != nil {
+		log.Fatal(err)
+	}
+
+	defer logger.Log.Sync()
+	logger.LogS.Debugw("Server configuration", "config", config)
+
 	storage := storage.NewMemStorage()
+
 	metricsController, err := controller.NewMetricsController(&storage)
 	if err != nil {
 		log.Fatal(err)
@@ -37,7 +46,8 @@ func main() {
 
 	router := getRouter(metricsController)
 
-	if err = http.ListenAndServe(address.String(), router); err != http.ErrServerClosed {
+	logger.LogS.Info("Server launch successful")
+	if err = http.ListenAndServe(config.Address.String(), router); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
 }

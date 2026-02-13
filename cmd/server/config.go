@@ -2,11 +2,13 @@ package main
 
 import (
 	"fmt"
-	"log"
 
 	"github.com/caarlos0/env/v6"
 	"github.com/skayfish/metrics/internal/flags"
+	"github.com/skayfish/metrics/internal/logger"
+	"github.com/skayfish/metrics/internal/server"
 	"github.com/spf13/pflag"
+	"go.uber.org/zap"
 )
 
 // Переменные окружения
@@ -19,10 +21,15 @@ type environments struct {
 //
 //	@returns *flags.NetAddress данные о хосте и порте, в случае успеха
 //	@returns error ошибку, в противном случае
-func parseConfig() (*flags.NetAddress, error) {
+//
+// SF TODO
+func parseConfig() (*server.Config, error) {
 	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
 	pflag.VarP(&addr, "address", "a", "Server listening address in host:port format")
+	logLevel := logger.Level{}
+	pflag.VarP(&logLevel, "log-level", "l", "Logging level")
+
 	pflag.Parse()
 
 	// Парсинг переменных окружения
@@ -36,9 +43,10 @@ func parseConfig() (*flags.NetAddress, error) {
 		addr = *envs.Address
 	}
 
-	log.Printf("Debug data:\n")
-	log.Printf("\tHost: %s", addr.Host)
-	log.Printf("\tPort: %d", addr.Port)
+	result := server.Config{
+		Address:  addr,
+		LogLevel: zap.NewAtomicLevelAt(logLevel.Lvl),
+	}
 
-	return &addr, nil
+	return &result, nil
 }
