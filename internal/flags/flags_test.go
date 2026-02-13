@@ -124,7 +124,7 @@ func TestNetAddress_Set(t *testing.T) {
 
 // Проверяет возвращаемый тип значения для документации
 func TestNetAddress_Type(t *testing.T) {
-	want := "host:port"
+	want := `"host:port"`
 	tests := []struct {
 		testName string
 		addr     flags.NetAddress
@@ -167,50 +167,50 @@ func TestNetAddress_UnmarshalText(t *testing.T) {
 		},
 		{
 			testName: "invalid format",
-			text:    []byte(string("beleb_.erda")),
+			text:     []byte(string("beleb_.erda")),
 			wantErr:  true,
 			err:      errors.New("invalid format: expected 'host:port', got \"beleb_.erda\""),
 		},
 		{
 			testName: "invalid format",
-			text:    []byte(string("::")),
+			text:     []byte(string("::")),
 			wantErr:  true,
 			err:      errors.New("invalid format: expected 'host:port', got \"::\""),
 		},
 		{
 			testName: "invalid port",
-			text:    []byte(string(":port")),
+			text:     []byte(string(":port")),
 			wantErr:  true,
 			err:      errors.New("invalid port: \"port\""),
 		},
 		{
 			testName: "port not in range",
-			text:    []byte(string(":-1")),
+			text:     []byte(string(":-1")),
 			wantErr:  true,
 			err:      errors.New("port must be in range 1–65535, got -1"),
 		},
 		{
 			testName: "port not in range",
-			text:    []byte(string(":0")),
+			text:     []byte(string(":0")),
 			wantErr:  true,
 			err:      errors.New("port must be in range 1–65535, got 0"),
 		},
 		{
 			testName: "port not in range",
-			text:    []byte(string(":999999")),
+			text:     []byte(string(":999999")),
 			wantErr:  true,
 			err:      errors.New("port must be in range 1–65535, got 999999"),
 		},
 		{
 			testName: "empty host",
-			text:    []byte(string(":9999")),
+			text:     []byte(string(":9999")),
 			wantErr:  false,
 			host:     "",
 			port:     9999,
 		},
 		{
 			testName: "correct",
-			text:    []byte(string("localhost:9999")),
+			text:     []byte(string("localhost:9999")),
 			wantErr:  false,
 			host:     "localhost",
 			port:     9999,
