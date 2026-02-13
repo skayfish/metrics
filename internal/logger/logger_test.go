@@ -1,9 +1,8 @@
-package logger_test
+package logger
 
 import (
 	"testing"
 
-	"github.com/skayfish/metrics/internal/logger"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap/zapcore"
 )
@@ -12,44 +11,44 @@ import (
 func TestInit(t *testing.T) {
 	tests := []struct {
 		testName string
-		level    logger.Level
+		level    Level
 	}{
 		{
 			testName: "DebugLevel",
-			level:    logger.Level(zapcore.DebugLevel),
+			level:    Level(zapcore.DebugLevel),
 		},
 		{
 			testName: "InfoLevel",
-			level:    logger.Level(zapcore.InfoLevel),
+			level:    Level(zapcore.InfoLevel),
 		},
 		{
 			testName: "WarnLevel",
-			level:    logger.Level(zapcore.WarnLevel),
+			level:    Level(zapcore.WarnLevel),
 		},
 		{
 			testName: "ErrorLevel",
-			level:    logger.Level(zapcore.ErrorLevel),
+			level:    Level(zapcore.ErrorLevel),
 		},
 		{
 			testName: "DPanicLevel",
-			level:    logger.Level(zapcore.DPanicLevel),
+			level:    Level(zapcore.DPanicLevel),
 		},
 		{
 			testName: "PanicLevel",
-			level:    logger.Level(zapcore.PanicLevel),
+			level:    Level(zapcore.PanicLevel),
 		},
 		{
 			testName: "FatalLevel",
-			level:    logger.Level(zapcore.FatalLevel),
+			level:    Level(zapcore.FatalLevel),
 		},
 		{
 			testName: "Invalid",
-			level:    logger.Level(zapcore.InvalidLevel),
+			level:    Level(zapcore.InvalidLevel),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			err := logger.Init(tt.level)
+			err := Init(tt.level)
 			require.NoError(t, err)
 		})
 	}
