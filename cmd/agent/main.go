@@ -11,11 +11,13 @@ import (
 
 // Запуск агента
 func main() {
+	// Парсинг конфигурации из флагов запуска приложения и переменных окружения
 	config, err := parseConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Инициализация логгера
 	if err = logger.Init(config.LogLevel); err != nil {
 		log.Fatal(err)
 	}
@@ -24,10 +26,13 @@ func main() {
 
 	logger.LogS.Debugw("Agent configuration", "config", config)
 
+	// Инициализация и запуск менеджера отправки данных серверу
 	sender := agent.NewSender(*config)
 	if err := sender.Run(context.TODO()); err != nil {
-		if !errors.Is(err, context.DeadlineExceeded) {
-			logger.Log.Fatal(err.Error())
+		if errors.Is(err, context.DeadlineExceeded) {
+			return
 		}
+
+		logger.Log.Fatal(err.Error())
 	}
 }

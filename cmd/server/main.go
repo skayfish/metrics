@@ -25,11 +25,13 @@ func getRouter(controller *controller.MetricsController) chi.Router {
 
 // Запуск сервера
 func main() {
+	// Парсинг конфигурации из флагов запуска приложения и переменных окружения
 	config, err := parseConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
+	// Инициализация логгера
 	if err = logger.Init(config.LogLevel); err != nil {
 		log.Fatal(err)
 	}
@@ -37,6 +39,7 @@ func main() {
 	defer logger.Log.Sync()
 	logger.LogS.Debugw("Server configuration", "config", config)
 
+	// Инициализация хранилища, контроллеров
 	storage := storage.NewMemStorage()
 
 	metricsController, err := controller.NewMetricsController(&storage)
@@ -44,8 +47,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Настройка маршрутизации запросов
 	router := getRouter(metricsController)
 
+	// Запуск сервера
 	logger.LogS.Info("Server launch successful")
 	if err = http.ListenAndServe(config.Address.String(), router); err != http.ErrServerClosed {
 		log.Fatal(err)
