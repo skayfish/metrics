@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -56,11 +57,11 @@ const templateHTML = `
         <tr>
             <td>
                 {{if eq (printf "%T" .Value) "float64"}}
-                    <span class="float-value">{{.Name}}</span>
+                    <span class="float-value">{{.ID}}</span>
                 {{else if eq (printf "%T" .Value) "int64"}}
-                    <span class="int-value">{{.Name}}</span>
+                    <span class="int-value">{{.ID}}</span>
                 {{else}}
-                    <span class="unknown">{{.Name}}</span>
+                    <span class="unknown">{{.ID}}</span>
                 {{end}}</td>
             <td>
                 {{if eq (printf "%T" .Value) "float64"}}
@@ -108,8 +109,7 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 	mValue := chi.URLParam(req, "value")
 
 	logger.LogS.Debugw("controller: MetricsController.Update (before)",
-		"counter metrics", c.storage.GetCounters(),
-		"gauge metrics", c.storage.GetGauges(),
+		"metrics", c.storage.GetMetrics(),
 	)
 
 	switch mType {
@@ -137,8 +137,7 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 	}
 
 	logger.LogS.Debugw("controller: MetricsController.Update (after)",
-		"counter metrics", c.storage.GetCounters(),
-		"gauge metrics", c.storage.GetGauges(),
+		"metrics", c.storage.GetMetrics(),
 	)
 }
 
@@ -151,27 +150,38 @@ func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request
 	mName := chi.URLParam(req, "name")
 
 	logger.LogS.Debugw("controller: MetricsController.GetValue",
-		"counter metrics", c.storage.GetCounters(),
-		"gauge metrics", c.storage.GetGauges(),
+		"metrics", c.storage.GetMetrics(),
 	)
 
+	var value interface{}
+	var err error
 	switch mType {
 	case model.Gauge:
-		if value, ok := c.storage.GetGauge(mName); ok {
-			fmt.Fprint(resp, value)
-		} else {
-			resp.WriteHeader(http.StatusNotFound)
-		}
+		value, err = c.storage.GetGauge(mName)
 	case model.Counter:
-		if value, ok := c.storage.GetCounter(mName); ok {
-			fmt.Fprint(resp, value)
-		} else {
-			resp.WriteHeader(http.StatusNotFound)
-		}
+		value, err = c.storage.GetCounter(mName)
 	default:
 		http.Error(resp,
 			fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", mType),
 			http.StatusBadRequest)
+		return
+	}
+
+	switch {
+	case err == nil:
+		fmt.Fprint(resp, value)
+	case errors.Is(err, storage.ErrNotFound):
+		resp.WriteHeader(http.StatusNotFound)
+	case errors.Is(err, storage.ErrIncorrectCounterMetricType) || errors.Is(err, storage.ErrIncorrectGaugeMetricType):
+		http.Error(resp, err.Error(), http.StatusBadRequest)
+		return
+	default:
+		logger.LogS.Errorw("controller: unknown error while accessing the storage",
+			"err", err,
+			"metric type", mType,
+			"metric name", mName,
+		)
+		http.Error(resp, fmt.Sprint("Unknown error while accessing the storage: ", err), http.StatusInternalServerError)
 		return
 	}
 }
@@ -180,8 +190,8 @@ func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request
 const getAllMetricsError = "controller: an error occurred while retrieving all metrics"
 
 // Структура метрики для HTML таблицы
-type metric struct {
-	Name  string      // Название метрики
+type metricHTML struct {
+	ID    string      // Идентификатор метрики
 	Value interface{} // Значение метрики
 }
 
@@ -191,17 +201,19 @@ type metric struct {
 //	@param req  объект запроса
 func (c *MetricsController) GetAllMetrics(resp http.ResponseWriter, req *http.Request) {
 	logger.LogS.Debugw("controller: MetricsController.GetAllMetrics",
-		"counter metrics", c.storage.GetCounters(),
-		"gauge metrics", c.storage.GetGauges(),
+		"metrics", c.storage.GetMetrics(),
 	)
 
-	metrics := []metric{}
-	for mName, mValue := range c.storage.GetGauges() {
-		metrics = append(metrics, metric{Name: mName, Value: mValue})
-	}
-
-	for mName, mValue := range c.storage.GetCounters() {
-		metrics = append(metrics, metric{Name: mName, Value: mValue})
+	metrics := []metricHTML{}
+	for id, metric := range c.storage.GetMetrics() {
+		switch metric.MType {
+		case model.Counter:
+			metrics = append(metrics, metricHTML{ID: id, Value: *metric.Delta})
+		case model.Gauge:
+			metrics = append(metrics, metricHTML{ID: id, Value: *metric.Value})
+		default:
+			logger.LogS.Warnw("Unknown metric type", "type", metric.MType)
+		}
 	}
 
 	resultTableBuf := new(bytes.Buffer)

@@ -1,74 +1,139 @@
 package storage
 
-// Хранилище метрик
-type MemStorage struct {
-	// Данные датчиков. Ключ - название метрики датчика, значение - данные датчика
-	gauge map[string]float64
+import (
+	"errors"
+	"fmt"
+	"math"
 
-	// Данные счетчиков. Ключ - название метрики счетчика, значение - данные счетчика
-	counter map[string]int64
-}
+	"github.com/skayfish/metrics/internal/model"
+)
+
+// Хранилище метрик
+type MemStorage map[string]model.Metrics
 
 // Создаёт пустое хранилище метрик
 //
 //	@returns пустое хранилище метрик
 func NewMemStorage() MemStorage {
-	return MemStorage{
-		gauge:   make(map[string]float64),
-		counter: make(map[string]int64),
-	}
+	return make(MemStorage, 0)
 }
+
+var (
+	// SF TODO
+	ErrIncorrectGaugeMetricType = errors.New(`storage: incorrect metric type, expected "gauge"`)
+
+	// SF TODO
+	ErrIncorrectCounterMetricType = errors.New(`storage: incorrect metric type, expected "counter"`)
+)
+
+// SF TODO
+var ErrNotFound = errors.New(`storage: metric not found`)
 
 // Обновляет данные датчика
 //
 //	@param name  название метрики датчика
 //	@param value данные метрики датчика
-func (storage *MemStorage) UpdateGauge(name string, value float64) {
-	storage.gauge[name] = value
+//
+// SF TODO
+func (ms *MemStorage) UpdateGauge(id string, value float64) error {
+	metric, found := (*ms)[id]
+	if !found {
+		(*ms)[id] = model.Metrics{
+			ID:    id,
+			MType: model.Gauge,
+			Value: &value,
+		}
+
+		return nil
+	}
+
+	if metric.MType != model.Gauge {
+		return ErrIncorrectGaugeMetricType
+	}
+
+	*(*ms)[id].Value = value
+
+	return nil
 }
 
 // Обновляет данные счетчика
 //
 //	@param name  название метрики счетчика
 //	@param value данные метрики счетчика
-func (storage *MemStorage) UpdateCounter(name string, value int64) {
-	storage.counter[name] += value
+//
+// SF TODO
+func (ms *MemStorage) UpdateCounter(id string, value int64) error {
+	metric, found := (*ms)[id]
+	if !found {
+		(*ms)[id] = model.Metrics{
+			ID:    id,
+			MType: model.Counter,
+			Delta: &value,
+		}
+
+		return nil
+	}
+
+	if metric.MType != model.Counter {
+		return ErrIncorrectCounterMetricType
+	}
+
+	*(*ms)[id].Delta += value
+
+	return nil
 }
 
 // Возвращает значение конкретной метрики датчика
+//
 //	@param name название метрики датчика
 //	@returns value значение метрики датчика
 //	@returns
 //		- true - если значение нашлось,
 //		- false - в ином случае
-func (storage *MemStorage) GetGauge(name string) (value float64, ok bool) {
-	value, ok = storage.gauge[name]
-	return
+//
+// SF TODO
+func (ms MemStorage) GetGauge(id string) (float64, error) {
+	metric, found := ms[id]
+	if !found {
+		return math.MaxFloat64, fmt.Errorf("%w (id: %s)", ErrNotFound, id)
+	}
+
+	if metric.MType != model.Gauge {
+		return math.MaxFloat64, ErrIncorrectGaugeMetricType
+	}
+
+	return *metric.Value, nil
 }
 
 // Возвращает значение конкретной метрики счетчика
+//
 //	@param name название метрики счетчика
 //	@returns value значение метрики счетчика
 //	@returns
 //		true - если значение нашлось,
 //		false - в ином случае
-func (storage *MemStorage) GetCounter(name string) (value int64, ok bool) {
-	value, ok = storage.counter[name]
-	return
+//
+// SF TODO
+func (ms MemStorage) GetCounter(id string) (int64, error) {
+	metric, found := ms[id]
+	if !found {
+		return math.MaxInt64, fmt.Errorf("%w (id: %s)", ErrNotFound, id)
+	}
+
+	if metric.MType != model.Counter {
+		return math.MaxInt64, ErrIncorrectCounterMetricType
+	}
+
+	return *metric.Delta, nil
 }
 
 // Возвращает все метрики датчиков
+//
 //	@returns все метрики датчиков:
 //		- ключ - название метрики датчика,
 //		- значение - значение метрики датчика
-func (storage *MemStorage) GetGauges() map[string]float64 {
-	return storage.gauge
-}
-
-// Возвращает все метрики счетчиков
-//	@returns все метрики счетчиков:
-//		- ключ - название метрики счетчика,
-//		- значение - значение метрики счетчика
-func (storage *MemStorage) GetCounters() map[string]int64 {
-	return storage.counter
+//
+// SF TODO
+func (ms MemStorage) GetMetrics() map[string]model.Metrics {
+	return ms
 }

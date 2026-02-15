@@ -1,214 +1,420 @@
 package storage
 
 import (
+	"math"
+	"reflect"
 	"testing"
 
+	"github.com/skayfish/metrics/internal/model"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Проверяет создание нового хранилища метрик
 func TestNewMemStorage(t *testing.T) {
-	want := MemStorage{
-		gauge:   make(map[string]float64),
-		counter: make(map[string]int64),
-	}
+	want := make(MemStorage, 0)
 	storage := NewMemStorage()
 	assert.Equal(t, want, storage)
 }
 
+func float64Equal(t *testing.T, expected, num float64) {
+	assert.Truef(t, math.Abs(expected-num) <= 1e-10, "expected(%f) != num(%f)", expected, num)
+}
+
+// SF TODO
+func metricsEqual(t *testing.T, expected, metrics model.Metrics) {
+	require.Equal(t, reflect.TypeFor[model.Metrics]().NumField(), 5)
+
+	assert.Equal(t, expected.ID, metrics.ID)
+	assert.Equal(t, expected.Hash, metrics.Hash)
+	require.Equal(t, expected.MType, metrics.MType)
+	switch expected.MType {
+	case model.Gauge:
+		require.NotNil(t, expected.Value)
+		require.NotNil(t, metrics.Value)
+		float64Equal(t, *expected.Value, *metrics.Value)
+	case model.Counter:
+		require.NotNil(t, expected.Delta)
+		require.NotNil(t, metrics.Delta)
+		assert.Equal(t, *expected.Delta, *metrics.Delta)
+	default:
+		t.Error("Unknown metric type")
+	}
+}
+
+// SF TODO
+func storagesEqual(t *testing.T, expected, storage MemStorage) {
+	if len(expected) != len(storage) {
+		t.Errorf("Mismatched storage sizes: len(expected)=%d vs len(RHS)=%d", len(expected), len(storage))
+	}
+
+	for id, metric := range expected {
+		metricRHS, found := storage[id]
+		if !found {
+			t.Errorf("RHS storage does not contain ID: %s", id)
+		}
+
+		metricsEqual(t, metric, metricRHS)
+	}
+}
+
 // Проверяет обновление метрики датчика
 func TestMemStorage_UpdateGauge(t *testing.T) {
-	t.Run("empty storage", func(t *testing.T) {
+	t.Run("add new", func(t *testing.T) {
 		storage := NewMemStorage()
-		storage.UpdateGauge("MetricName", 5.123)
+		err := storage.UpdateGauge("MetricName", 5.123)
+		require.NoError(t, err)
 
-		assert.Equal(t, map[string]float64{"MetricName": 5.123}, storage.gauge)
-		assert.Equal(t, map[string]int64{}, storage.counter)
+		value := 5.123
+		storagesEqual(t, MemStorage{
+			"MetricName": {
+				ID:    "MetricName",
+				MType: model.Gauge,
+				Value: &value,
+			},
+		}, storage)
 	})
-	t.Run("empty storage", func(t *testing.T) {
+	t.Run("add new", func(t *testing.T) {
 		storage := NewMemStorage()
 		storage.UpdateGauge("MetricName", 5)
 
-		assert.Equal(t, map[string]float64{"MetricName": 5.0}, storage.gauge)
-		assert.Equal(t, map[string]int64{}, storage.counter)
+		value := float64(5)
+		storagesEqual(t, MemStorage{
+			"MetricName": {
+				ID:    "MetricName",
+				MType: model.Gauge,
+				Value: &value,
+			},
+		}, storage)
 	})
-	t.Run("empty storage", func(t *testing.T) {
+	t.Run("add two metrics", func(t *testing.T) {
 		storage := NewMemStorage()
 		storage.UpdateGauge("MetricName", 5)
 		storage.UpdateGauge("MetricNameNew", -34.4441)
 
-		expected := map[string]float64{
-			"MetricName":    5.0,
-			"MetricNameNew": -34.4441,
+		value1 := 5.0
+		value2 := -34.4441
+		expected := MemStorage{
+			"MetricName": {
+				ID:    "MetricName",
+				MType: model.Gauge,
+				Value: &value1,
+			},
+			"MetricNameNew": {
+				ID:    "MetricNameNew",
+				MType: model.Gauge,
+				Value: &value2,
+			},
 		}
-		assert.Equal(t, expected, storage.gauge)
-		assert.Equal(t, map[string]int64{}, storage.counter)
+
+		storagesEqual(t, expected, storage)
 	})
-	t.Run("empty storage", func(t *testing.T) {
+	t.Run("add and update", func(t *testing.T) {
 		storage := NewMemStorage()
 		storage.UpdateGauge("MetricName", 5.123)
 		storage.UpdateGauge("MetricName", -34.4441)
 
-		expected := map[string]float64{"MetricName": -34.4441}
-		assert.Equal(t, expected, storage.gauge)
-		assert.Equal(t, map[string]int64{}, storage.counter)
+		value := -34.4441
+		expected := MemStorage{
+			"MetricName": {
+				ID:    "MetricName",
+				MType: model.Gauge,
+				Value: &value,
+			},
+		}
+
+		storagesEqual(t, expected, storage)
 	})
 
-	t.Run("not empty storage", func(t *testing.T) {
-		storage := NewMemStorage()
-		storage.counter = map[string]int64{"MetricName": -34}
-		storage.gauge = map[string]float64{"MetricName": -34.4441}
-		storage.UpdateGauge("MetricName", 5.123)
+	t.Run("update old", func(t *testing.T) {
+		oldGaugeValue := -34.4441
+		oldCounterValue := int64(-15)
+		storage := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &oldGaugeValue,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &oldCounterValue,
+			},
+		}
 
-		expected := map[string]float64{"MetricName": 5.123}
-		assert.Equal(t, expected, storage.gauge)
-		assert.Equal(t, map[string]int64{"MetricName": -34}, storage.counter)
+		value := 5.123
+		(&storage).UpdateGauge("MetricNameGauge", value)
+
+		expected := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &value,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &oldCounterValue,
+			},
+		}
+
+		storagesEqual(t, expected, storage)
 	})
 }
 
 // Проверяет обновление метрики счетчика
 func TestMemStorage_UpdateCounter(t *testing.T) {
-	t.Run("empty storage", func(t *testing.T) {
+	t.Run("add new", func(t *testing.T) {
 		storage := NewMemStorage()
 		storage.UpdateCounter("MetricName", 53)
 
-		assert.Equal(t, map[string]float64{}, storage.gauge)
-		assert.Equal(t, map[string]int64{"MetricName": 53}, storage.counter)
-	})
-	t.Run("empty storage", func(t *testing.T) {
-		storage := NewMemStorage()
-		storage.UpdateCounter("MetricName", 5)
-		storage.UpdateCounter("MetricNameNew", -34)
-
-		expected := map[string]int64{
-			"MetricName":    5,
-			"MetricNameNew": -34,
+		value := int64(53)
+		expected := MemStorage{
+			"MetricName": {
+				ID:    "MetricName",
+				MType: model.Counter,
+				Delta: &value,
+			},
 		}
-		assert.Equal(t, map[string]float64{}, storage.gauge)
-		assert.Equal(t, expected, storage.counter)
+
+		storagesEqual(t, expected, storage)
 	})
-	t.Run("empty storage", func(t *testing.T) {
+	t.Run("add two metrics", func(t *testing.T) {
+		storage := NewMemStorage()
+		storage.UpdateCounter("MetricName1", 5)
+		storage.UpdateCounter("MetricName2", -34)
+
+		value1 := int64(5)
+		value2 := int64(-34)
+		expected := MemStorage{
+			"MetricName1": {
+				ID:    "MetricName1",
+				MType: model.Counter,
+				Delta: &value1,
+			},
+			"MetricName2": {
+				ID:    "MetricName2",
+				MType: model.Counter,
+				Delta: &value2,
+			},
+		}
+
+		storagesEqual(t, expected, storage)
+	})
+	t.Run("add and update", func(t *testing.T) {
 		storage := NewMemStorage()
 		storage.UpdateCounter("MetricName", 5)
 		storage.UpdateCounter("MetricName", -34)
 
-		expected := map[string]int64{"MetricName": -29}
-		assert.Equal(t, map[string]float64{}, storage.gauge)
-		assert.Equal(t, expected, storage.counter)
+		value := int64(-29)
+		expected := MemStorage{
+			"MetricName": {
+				ID:    "MetricName",
+				MType: model.Counter,
+				Delta: &value,
+			},
+		}
+
+		storagesEqual(t, expected, storage)
 	})
 
 	t.Run("not empty storage", func(t *testing.T) {
+		oldGaugeValue := -34.4441
+		oldCounterValue := int64(-36)
 		storage := MemStorage{
-			counter: map[string]int64{"MetricName": -36},
-			gauge:   map[string]float64{"MetricName": -34.4441},
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &oldGaugeValue,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &oldCounterValue,
+			},
 		}
-		storage.UpdateCounter("MetricName", 10)
-		storage.UpdateCounter("MetricName", 10)
+		storage.UpdateCounter("MetricNameCounter", 10)
+		storage.UpdateCounter("MetricNameCounter", 10)
 
-		expected := map[string]int64{"MetricName": -16}
-		assert.Equal(t, map[string]float64{"MetricName": -34.4441}, storage.gauge)
-		assert.Equal(t, expected, storage.counter)
+		value := int64(-16)
+		expected := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &oldGaugeValue,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &value,
+			},
+		}
+
+		storagesEqual(t, expected, storage)
 	})
 }
 
 // Проверяет получение значения метрики датчика из хранилища
 func TestMemStorage_GetGauge(t *testing.T) {
-	t.Run("empty storage", func(t *testing.T) {
-		storage := NewMemStorage()
-		_, ok := storage.GetGauge("MetricName")
-
-		assert.Equal(t, false, ok)
-	})
-
-	t.Run("found", func(t *testing.T) {
-		storage := MemStorage{
-			counter: map[string]int64{"MetricName": -36},
-			gauge:   map[string]float64{"MetricName": -34.4441},
-		}
-		value, ok := storage.GetGauge("MetricName")
-
-		assert.Equal(t, true, ok)
-		assert.Equal(t, -34.4441, value)
-	})
-
 	t.Run("not found", func(t *testing.T) {
-		storage := MemStorage{
-			counter: map[string]int64{"MetricName": -36},
-			gauge:   map[string]float64{"MetricName": -34.4441},
-		}
-		_, ok := storage.GetGauge("UnknownMetricName")
+		storage := NewMemStorage()
+		_, err := storage.GetGauge("MetricName")
 
-		assert.Equal(t, false, ok)
+		require.ErrorIs(t, err, ErrNotFound)
+	})
+	t.Run("not found", func(t *testing.T) {
+		gaugeValue := -34.4441
+		counterValue := int64(-36)
+		storage := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &gaugeValue,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &counterValue,
+			},
+		}
+		_, err := storage.GetGauge("UnknownMetricName")
+
+		require.ErrorIs(t, err, ErrNotFound)
+	})
+	t.Run("found", func(t *testing.T) {
+		gaugeValue := -34.4441
+		counterValue := int64(-36)
+		storage := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &gaugeValue,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &counterValue,
+			},
+		}
+
+		value, err := storage.GetGauge("MetricNameGauge")
+
+		assert.NoError(t, err)
+		float64Equal(t, -34.4441, value)
+	})
+	t.Run("incorrect type", func(t *testing.T) {
+		counterValue := int64(-36)
+		storage := MemStorage{
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &counterValue,
+			},
+		}
+
+		// Поиск Gauge метрики с id = MetricNameCounter
+		_, err := storage.GetGauge("MetricNameCounter")
+
+		require.ErrorIs(t, err, ErrIncorrectGaugeMetricType)
 	})
 }
 
 // Проверяет получение значения метрики счетчика из хранилища
 func TestMemStorage_GetCounter(t *testing.T) {
-	t.Run("empty storage", func(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
 		storage := NewMemStorage()
-		_, ok := storage.GetCounter("MetricName")
+		_, err := storage.GetCounter("MetricName")
 
-		assert.Equal(t, false, ok)
+		require.ErrorIs(t, err, ErrNotFound)
 	})
-
-	t.Run("found", func(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
+		gaugeValue := -34.4441
+		counterValue := int64(-36)
 		storage := MemStorage{
-			counter: map[string]int64{"MetricName": -36},
-			gauge:   map[string]float64{"MetricName": -34.4441},
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &gaugeValue,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &counterValue,
+			},
 		}
-		value, ok := storage.GetCounter("MetricName")
+		_, err := storage.GetGauge("UnknownMetricName")
 
-		assert.Equal(t, true, ok)
+		require.ErrorIs(t, err, ErrNotFound)
+	})
+	t.Run("found", func(t *testing.T) {
+		gaugeValue := -34.4441
+		counterValue := int64(-36)
+		storage := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &gaugeValue,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &counterValue,
+			},
+		}
+		value, err := storage.GetCounter("MetricNameCounter")
+
+		assert.NoError(t, err)
 		assert.Equal(t, int64(-36), value)
 	})
-
-	t.Run("not found", func(t *testing.T) {
+	t.Run("incorrect type", func(t *testing.T) {
+		gaugeValue := -34.4441
 		storage := MemStorage{
-			counter: map[string]int64{"MetricName": -36},
-			gauge:   map[string]float64{"MetricName": -34.4441},
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &gaugeValue,
+			},
 		}
-		_, ok := storage.GetGauge("UnknownMetricName")
 
-		assert.Equal(t, false, ok)
+		// Поиск counter метрики с id = MetricNameGauge
+		_, err := storage.GetCounter("MetricNameGauge")
+
+		require.ErrorIs(t, err, ErrIncorrectCounterMetricType)
 	})
 }
 
-// Проверяет получение значений метрик датчиков из хранилища
-func TestMemStorage_GetGauges(t *testing.T) {
-	t.Run("empty storage", func(t *testing.T) {
+// Проверяет получение значений всех метрик из хранилища
+func TestMemStorage_GetMetrics(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
 		storage := NewMemStorage()
-		gauges := storage.GetGauges()
+		metrics := storage.GetMetrics()
 
-		assert.Equal(t, map[string]float64{}, gauges)
+		storagesEqual(t, MemStorage{}, metrics)
 	})
-
 	t.Run("get all", func(t *testing.T) {
+		oldGaugeValue := -34.4441
+		oldGaugeValue1 := 0.1
+		oldCounterValue := int64(-36)
 		storage := MemStorage{
-			counter: map[string]int64{"MetricName": -36},
-			gauge:   map[string]float64{"MetricName": -34.4441, "MetricName1": 0.1},
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &oldGaugeValue,
+			},
+			"MetricNameGauge1": {
+				ID:    "MetricNameGauge1",
+				MType: model.Gauge,
+				Value: &oldGaugeValue1,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &oldCounterValue,
+			},
 		}
-		gauges := storage.GetGauges()
 
-		assert.Equal(t, storage.gauge, gauges)
-	})
-}
+		metrics := storage.GetMetrics()
 
-// Проверяет получение значений метрик счетчиков из хранилища
-func TestMemStorage_GetCounters(t *testing.T) {
-	t.Run("empty storage", func(t *testing.T) {
-		storage := NewMemStorage()
-		counters := storage.GetCounters()
-
-		assert.Equal(t, map[string]int64{}, counters)
-	})
-
-	t.Run("get all", func(t *testing.T) {
-		storage := MemStorage{
-			counter: map[string]int64{"MetricName": -36, "MetricName1": 9999},
-			gauge:   map[string]float64{"MetricName": -34.4441, "MetricName1": 0.1},
-		}
-		counters := storage.GetCounters()
-
-		assert.Equal(t, storage.counter, counters)
+		assert.Equal(t, storage, MemStorage(metrics))
 	})
 }

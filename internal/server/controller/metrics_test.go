@@ -13,7 +13,7 @@ import (
 )
 
 // Проверяет работу обработчика обновления метрики
-func TestCreateUpdateHandler(t *testing.T) {
+func TestMetricsController_Update(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -107,7 +107,7 @@ func TestCreateUpdateHandler(t *testing.T) {
 }
 
 // Проверяет работу обработчика получения конкретной метрики
-func TestCreateGetValueHandler(t *testing.T) {
+func TestMetricsController_GetValue(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -167,6 +167,16 @@ func TestCreateGetValueHandler(t *testing.T) {
 				body:        "4312",
 			},
 		},
+		{
+			testName:       "incorrect metric type",
+			counterMetrics: map[string]int64{"MetricName": 4312},
+			requestURL:     "/value/gauge/MetricName",
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "storage: incorrect metric type, expected \"gauge\"\n",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
@@ -199,7 +209,7 @@ func TestCreateGetValueHandler(t *testing.T) {
 }
 
 // Проверяет работу обработчика получения всех метрик
-func TestCreateGetAllValuesHandler(t *testing.T) {
+func TestMetricsController_GetAllMetrics(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -222,7 +232,7 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 		},
 		{
 			testName:       "many metrics",
-			gaugeMetrics:   map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
 			counterMetrics: map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
 			requestURL:     "/",
 			want: want{
@@ -256,6 +266,7 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 
 			assert.Equal(t, tt.want.status, resp.StatusCode())
 			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+			assert.False(t, len(resp.Body()) == 0, string(resp.Body()))
 		})
 	}
 }
