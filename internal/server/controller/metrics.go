@@ -280,7 +280,13 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 
 	switch metric.MType {
 	case model.Gauge:
-		gaugeValue := value.(float64)
+		gaugeValue, ok := value.(float64)
+		if !ok {
+			http.Error(resp, "Error converting to float64", http.StatusInternalServerError)
+			logger.LogS.DPanicw("Error converting to float64:", "value", value)
+			return
+		}
+
 		metricJSON, err := json.MarshalIndent(model.Metrics{
 			ID:    metric.ID,
 			MType: metric.MType,
@@ -294,7 +300,13 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 		resp.Header().Set("Content-Type", "application/json")
 		resp.Write(metricJSON)
 	case model.Counter:
-		counterValue := value.(int64)
+		counterValue, ok := value.(int64)
+		if !ok {
+			http.Error(resp, "Error converting to int64", http.StatusInternalServerError)
+			logger.LogS.DPanicw("Error converting to int64:", "value", value)
+			return
+		}
+
 		metricJSON, err := json.MarshalIndent(model.Metrics{
 			ID:    metric.ID,
 			MType: metric.MType,
