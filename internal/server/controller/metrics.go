@@ -205,7 +205,7 @@ func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request
 	case errors.Is(err, storage.ErrNotFound):
 		resp.WriteHeader(http.StatusNotFound)
 	case errors.Is(err, storage.ErrIncorrectCounterMetricType) || errors.Is(err, storage.ErrIncorrectGaugeMetricType):
-		http.Error(resp, err.Error(), http.StatusBadRequest)
+		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		return
 	default:
 		logger.LogS.Errorw("controller: unknown error while accessing the storage",

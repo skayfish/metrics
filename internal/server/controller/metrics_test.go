@@ -196,7 +196,7 @@ func TestMetricsController_GetValue(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "storage: incorrect metric type, expected \"gauge\"\n",
+				body:        "incorrect metric type, expected \"gauge\"\n",
 			},
 		},
 	}
