@@ -105,7 +105,7 @@ func (ms *MemStorage) UpdateGauge(id string, value float64) error {
 	return nil
 }
 
-// Обновляет данные счетчика.
+// Обновляет данные счетчика
 //
 //	@param name  идентификатор счетчика
 //	@param value данные метрики счетчика

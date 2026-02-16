@@ -178,7 +178,8 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 	)
 }
 
-// Возвращает значение запрошенной метрики
+// Возвращает значение запрошенной метрики.
+// Данные для поиска в хранилище берутся из запроса в URL
 //
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
@@ -225,7 +226,8 @@ func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.
 	}
 }
 
-// Возвращает данные запрошенной метрики в формате JSON
+// Возвращает данные запрошенной метрики в формате JSON.
+// Данные для поиска в хранилище берутся из запроса в формате JSON
 //
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
