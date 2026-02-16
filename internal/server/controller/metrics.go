@@ -109,7 +109,7 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 	mName := chi.URLParam(req, "name")
 	mValue := chi.URLParam(req, "value")
 
-	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL (before)",
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL: before",
 		"metrics", c.storage.GetMetrics(),
 	)
 
@@ -143,7 +143,7 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 		return
 	}
 
-	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL (after)",
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL: after",
 		"metrics", c.storage.GetMetrics(),
 	)
 }
@@ -153,13 +153,17 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
 func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.Request) {
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
+	}
+
 	metric := model.Metrics{}
 	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
 		http.Error(resp, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL (before)",
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromJSON: before",
 		"metrics", c.storage.GetMetrics(),
 	)
 
@@ -168,7 +172,7 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 		return
 	}
 
-	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL (after)",
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromJSON: after",
 		"metrics", c.storage.GetMetrics(),
 	)
 }
@@ -177,11 +181,11 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 //
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
-func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request) {
+func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.Request) {
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
 
-	logger.LogS.Debugw("controller: MetricsController.GetValue",
+	logger.LogS.Debugw("controller: MetricsController.GetValueFromURL",
 		"metrics", c.storage.GetMetrics(),
 	)
 
@@ -204,11 +208,12 @@ func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request
 		fmt.Fprint(resp, value)
 	case errors.Is(err, storage.ErrNotFound):
 		resp.WriteHeader(http.StatusNotFound)
+		return
 	case errors.Is(err, storage.ErrIncorrectCounterMetricType) || errors.Is(err, storage.ErrIncorrectGaugeMetricType):
 		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		return
 	default:
-		logger.LogS.Errorw("controller: unknown error while accessing the storage",
+		logger.LogS.Errorw("controller: MetricsController.GetValueFromURL: unknown error while accessing the storage",
 			"err", err,
 			"metric type", mType,
 			"metric name", mName,
@@ -218,8 +223,90 @@ func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request
 	}
 }
 
+// SF TODO
+func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http.Request) {
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
+	}
+
+	metric := model.Metrics{}
+	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
+		http.Error(resp, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	logger.LogS.Debugw("controller: MetricsController.GetValueFromJSON",
+		"metrics", c.storage.GetMetrics(),
+	)
+
+	var value interface{}
+	var err error
+	switch metric.MType {
+	case model.Gauge:
+		value, err = c.storage.GetGauge(metric.ID)
+	case model.Counter:
+		value, err = c.storage.GetCounter(metric.ID)
+	default:
+		http.Error(resp,
+			fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", metric.MType),
+			http.StatusBadRequest)
+		return
+	}
+
+	switch {
+	case err == nil:
+		break
+	case errors.Is(err, storage.ErrNotFound):
+		resp.WriteHeader(http.StatusNotFound)
+		return
+	case errors.Is(err, storage.ErrIncorrectCounterMetricType) || errors.Is(err, storage.ErrIncorrectGaugeMetricType):
+		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		return
+	default:
+		logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: unknown error while accessing the storage",
+			"err", err,
+			"metric type", metric.MType,
+			"metric name", metric.ID,
+		)
+		http.Error(resp, fmt.Sprint("Unknown error while accessing the storage: ", err), http.StatusInternalServerError)
+		return
+	}
+
+	switch metric.MType {
+	case model.Gauge:
+		gaugeValue := value.(float64)
+		metricJSON, err := json.MarshalIndent(model.Metrics{
+			ID:    metric.ID,
+			MType: metric.MType,
+			Value: &gaugeValue,
+		}, "", "    ")
+		if err != nil {
+			logger.LogS.Errorw("controller: GetValueFromJSON: Failed marshal gauge metric response", "error", err)
+			http.Error(resp, "Failed marshal gauge metric response", http.StatusInternalServerError)
+		}
+
+		resp.Header().Set("Content-Type", "application/json")
+		resp.Write(metricJSON)
+	case model.Counter:
+		counterValue := value.(int64)
+		metricJSON, err := json.MarshalIndent(model.Metrics{
+			ID:    metric.ID,
+			MType: metric.MType,
+			Delta: &counterValue,
+		}, "", "    ")
+		if err != nil {
+			logger.LogS.Errorw("controller: GetValueFromJSON: Failed marshal counter metric response", "error", err)
+			http.Error(resp, "Failed marshal counter metric response", http.StatusInternalServerError)
+		}
+
+		resp.Header().Set("Content-Type", "application/json")
+		resp.Write(metricJSON)
+	}
+
+}
+
 // Ошибка обработки запроса на получение данных всех метрик
-const getAllMetricsError = "controller: an error occurred while retrieving all metrics"
+const getAllMetricsError = "controller: MetricsController.GetAllMetrics: an error occurred while retrieving all metrics"
 
 // Структура метрики для HTML таблицы
 type metricHTML struct {

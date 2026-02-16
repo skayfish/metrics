@@ -128,8 +128,8 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 	}
 }
 
-// Проверяет работу обработчика получения конкретной метрики
-func TestMetricsController_GetValue(t *testing.T) {
+// Проверяет работу обработчика получения конкретной метрики по URL
+func TestMetricsController_GetValueFromURL(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -215,7 +215,7 @@ func TestMetricsController_GetValue(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Get("/value/{type}/{name}", controller.GetValue)
+			router.Get("/value/{type}/{name}", controller.GetValueFromURL)
 			server := httptest.NewServer(router)
 			defer server.Close()
 

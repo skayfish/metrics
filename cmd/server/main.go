@@ -20,7 +20,8 @@ func getRouter(controller *controller.MetricsController) chi.Router {
 	router.Use(server.LoggingMiddleware)
 	router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
 	router.Post("/update", controller.UpdateFromJSON)
-	router.Get("/value/{type}/{name}", controller.GetValue)
+	router.Get("/value/{type}/{name}", controller.GetValueFromURL)
+	router.Post("/value", controller.GetValueFromJSON)
 	router.Get("/", controller.GetAllMetrics)
 
 	return router
