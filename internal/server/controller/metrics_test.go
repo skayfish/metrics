@@ -12,8 +12,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Проверяет работу обработчика обновления метрики
-func TestMetricsController_Update(t *testing.T) {
+// Проверяет работу обработчика обновления метрики через URL
+func TestMetricsController_UpdateFromURL(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -55,9 +55,9 @@ func TestMetricsController_Update(t *testing.T) {
 		},
 		{
 			testName:       "update gauge metric",
-			gaugeMetrics:   map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
-			counterMetrics: map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
-			requestURL:     "/update/gauge/MetricName/0.233000024133",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/update/gauge/GaugeMetricName/0.233000024133",
 			want: want{
 				status:      http.StatusOK,
 				contentType: "",
@@ -66,13 +66,35 @@ func TestMetricsController_Update(t *testing.T) {
 		},
 		{
 			testName:       "update counter metric",
-			gaugeMetrics:   map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
-			counterMetrics: map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
-			requestURL:     "/update/counter/MetricName/11",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/update/counter/CounterMetricName/11",
 			want: want{
 				status:      http.StatusOK,
 				contentType: "",
 				body:        "",
+			},
+		},
+		{
+			testName:       "incorrect gauge metric",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/update/gauge/CounterMetricName/0.233000024133",
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "incorrect metric type, expected \"gauge\"\n",
+			},
+		},
+		{
+			testName:       "incorrect counter metric",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/update/counter/GaugeMetricName/11",
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "incorrect metric type, expected \"counter\"\n",
 			},
 		},
 	}
@@ -91,7 +113,7 @@ func TestMetricsController_Update(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Post("/update/{type}/{name}/{value}", controller.Update)
+			router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
 			server := httptest.NewServer(router)
 			defer server.Close()
 

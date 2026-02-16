@@ -2,6 +2,7 @@ package controller
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"html/template"
@@ -99,16 +100,16 @@ func NewMetricsController(storage *storage.MemStorage) (*MetricsController, erro
 	return &MetricsController{storage: storage, tableHTMLTemplate: tmpl}, nil
 }
 
-// Обновляет/добавляет метрику в хранилище
+// Обновляет/добавляет метрику в хранилище. Берёт данные из URL
 //
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
-func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) {
+func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Request) {
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
 	mValue := chi.URLParam(req, "value")
 
-	logger.LogS.Debugw("controller: MetricsController.Update (before)",
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL (before)",
 		"metrics", c.storage.GetMetrics(),
 	)
 
@@ -120,7 +121,10 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 			return
 		}
 
-		c.storage.UpdateGauge(mName, value)
+		if err = c.storage.UpdateGauge(mName, value); err != nil {
+			http.Error(resp, err.Error(), http.StatusBadRequest)
+			return
+		}
 	case model.Counter:
 		value, err := strconv.ParseInt(mValue, 10, 64)
 		if err != nil {
@@ -128,7 +132,10 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 			return
 		}
 
-		c.storage.UpdateCounter(mName, value)
+		if err = c.storage.UpdateCounter(mName, value); err != nil {
+			http.Error(resp, err.Error(), http.StatusBadRequest)
+			return
+		}
 	default:
 		http.Error(resp,
 			fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", mType),
@@ -136,7 +143,32 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	logger.LogS.Debugw("controller: MetricsController.Update (after)",
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL (after)",
+		"metrics", c.storage.GetMetrics(),
+	)
+}
+
+// Обновляет/добавляет метрику в хранилище. Берёт данные из тела в формате JSON
+//
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
+func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.Request) {
+	metric := model.Metrics{}
+	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
+		http.Error(resp, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL (before)",
+		"metrics", c.storage.GetMetrics(),
+	)
+
+	if err := c.storage.Update(metric); err != nil {
+		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		return
+	}
+
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL (after)",
 		"metrics", c.storage.GetMetrics(),
 	)
 }

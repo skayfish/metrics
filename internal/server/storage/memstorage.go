@@ -20,14 +20,61 @@ func NewMemStorage() MemStorage {
 
 var (
 	// SF TODO
-	ErrIncorrectGaugeMetricType = errors.New(`storage: incorrect metric type, expected "gauge"`)
+	ErrIncorrectGaugeMetricType = errors.New(`incorrect metric type, expected "gauge"`)
 
 	// SF TODO
-	ErrIncorrectCounterMetricType = errors.New(`storage: incorrect metric type, expected "counter"`)
+	ErrIncorrectCounterMetricType = errors.New(`incorrect metric type, expected "counter"`)
+
+	// SF TODO
+	ErrUnrecognizedMetricType = errors.New(`unrecognized metric type. Supported types: "gauge", "counter"`)
+)
+
+var (
+	// SF TODO
+	ErrValueIsEmpty = errors.New(`gauge metric value is empty`)
+
+	// SF TODO
+	ErrDeltaIsEmpty = errors.New(`counter metric delta is empty`)
 )
 
 // SF TODO
-var ErrNotFound = errors.New(`storage: metric not found`)
+var ErrNotFound = errors.New(`metric not found`)
+
+// SF TODO
+func (ms *MemStorage) Update(metric model.Metrics) error {
+	switch metric.MType {
+	case model.Gauge:
+		if metric.Value == nil {
+			return fmt.Errorf("storage: Update: %w", ErrValueIsEmpty)
+		}
+	case model.Counter:
+		if metric.Delta == nil {
+			return fmt.Errorf("storage: Update: %w", ErrDeltaIsEmpty)
+		}
+	default:
+		return fmt.Errorf("storage: Update: %w", ErrUnrecognizedMetricType)
+	}
+
+	foundMetric, found := (*ms)[metric.ID]
+	if found {
+		switch metric.MType {
+		case model.Gauge:
+			if foundMetric.MType != model.Gauge {
+				return fmt.Errorf("storage: Update: %w", ErrIncorrectGaugeMetricType)
+			}
+		case model.Counter:
+			if foundMetric.MType != model.Counter {
+				return fmt.Errorf("storage: Update: %w", ErrIncorrectCounterMetricType)
+			}
+
+			*metric.Delta += *foundMetric.Delta
+		}
+	}
+
+	(*ms)[metric.ID] = metric
+
+	return nil
+}
 
 // Обновляет данные датчика
 //
@@ -95,11 +142,11 @@ func (ms *MemStorage) UpdateCounter(id string, value int64) error {
 func (ms MemStorage) GetGauge(id string) (float64, error) {
 	metric, found := ms[id]
 	if !found {
-		return math.MaxFloat64, fmt.Errorf("%w (id: %s)", ErrNotFound, id)
+		return math.MaxFloat64, fmt.Errorf("storage: GetGauge: %w", ErrNotFound)
 	}
 
 	if metric.MType != model.Gauge {
-		return math.MaxFloat64, ErrIncorrectGaugeMetricType
+		return math.MaxFloat64, fmt.Errorf("storage: GetGauge: %w", ErrIncorrectGaugeMetricType)
 	}
 
 	return *metric.Value, nil
@@ -117,11 +164,11 @@ func (ms MemStorage) GetGauge(id string) (float64, error) {
 func (ms MemStorage) GetCounter(id string) (int64, error) {
 	metric, found := ms[id]
 	if !found {
-		return math.MaxInt64, fmt.Errorf("%w (id: %s)", ErrNotFound, id)
+		return math.MaxInt64, fmt.Errorf("storage: GetCounter: %w", ErrNotFound)
 	}
 
 	if metric.MType != model.Counter {
-		return math.MaxInt64, ErrIncorrectCounterMetricType
+		return math.MaxInt64, fmt.Errorf("storage: GetCounter: %w", ErrIncorrectCounterMetricType)
 	}
 
 	return *metric.Delta, nil
