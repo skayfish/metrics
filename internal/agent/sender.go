@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
@@ -178,13 +179,24 @@ func (obj *sender) send(gaugeMetrics map[string]float64) error {
 //	@param value значение метрики
 //	@returns ошибку отправки метрики датчика на сервер
 func (obj *sender) sendGaugeMetric(name string, value float64) error {
-	url := fmt.Sprintf("%s://%s:%d/update/%s/%s/%f",
-		obj.config.getConnectionType(), obj.config.Host, obj.config.Port, model.Gauge, name, value)
-	_, err := obj.client.R().
-		SetHeader("Content-Type", "text/plain").
+	metric := model.Metrics{
+		ID:    name,
+		MType: model.Gauge,
+		Value: &value,
+	}
+
+	metricJSON, err := json.MarshalIndent(metric, "", "    ")
+	if err != nil {
+		return fmt.Errorf("agent: sender.sendGaugeMetric: failed to marshal gauge metric %q with value %f: %w", name, value, err)
+	}
+
+	url := fmt.Sprintf("%s://%s:%d/update", obj.config.getConnectionType(), obj.config.Host, obj.config.Port)
+	_, err = obj.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(metricJSON).
 		Post(url)
 	if err != nil {
-		return fmt.Errorf("failed to send gauge metric %q with value %f: %w", name, value, err)
+		return fmt.Errorf("agent: sender.sendGaugeMetric: failed to send gauge metric %q with value %f: %w", name, value, err)
 	}
 
 	return nil
@@ -196,13 +208,12 @@ func (obj *sender) sendGaugeMetric(name string, value float64) error {
 //	@returns ошибку отправки метрик датчиков на сервер
 func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 	for name, value := range metrics {
-		err := obj.sendGaugeMetric(name, value)
-		if err != nil {
+		if err := obj.sendGaugeMetric(name, value); err != nil {
 			return err
 		}
 	}
 
-	logger.LogS.Debugw("Data sent successfully",
+	logger.LogS.Debugw("agent: sender.sendGaugeMetrics: data sent successfully",
 		"gauge metrics", metrics,
 	)
 
@@ -215,13 +226,24 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 //	@param value значение метрики
 //	@returns ошибку отправления метрики счетчика на сервер
 func (obj *sender) sendCounterMetric(name string, value int64) error {
-	url := fmt.Sprintf("%s://%s:%d/update/%s/%s/%d",
-		obj.config.getConnectionType(), obj.config.Host, obj.config.Port, model.Counter, name, value)
-	_, err := obj.client.R().
-		SetHeader("Content-Type", "text/plain").
+	metric := model.Metrics{
+		ID:    name,
+		MType: model.Counter,
+		Delta: &value,
+	}
+
+	metricJSON, err := json.MarshalIndent(metric, "", "    ")
+	if err != nil {
+		return fmt.Errorf("agent: sender.sendCounterMetric: failed to marshal counter metric %q with value %d: %w", name, value, err)
+	}
+
+	url := fmt.Sprintf("%s://%s:%d/update", obj.config.getConnectionType(), obj.config.Host, obj.config.Port)
+	_, err = obj.client.R().
+		SetHeader("Content-Type", "application/json").
+		SetBody(metricJSON).
 		Post(url)
 	if err != nil {
-		return fmt.Errorf("failed to send counter metric %q with value %d: %w", name, value, err)
+		return fmt.Errorf("agent: sender.sendCounterMetric: failed to send counter metric %q with value %d: %w", name, value, err)
 	}
 
 	return nil
@@ -231,11 +253,13 @@ func (obj *sender) sendCounterMetric(name string, value int64) error {
 //
 //	@returns ошибку отправления метрик счетчиков на сервер
 func (obj *sender) sendCounterMetrics() error {
-	err := obj.sendCounterMetric("PollCount", obj.pollCount)
+	if err := obj.sendCounterMetric("PollCount", obj.pollCount); err != nil {
+		return err
+	}
 
-	logger.LogS.Debugw("Data sent successfully",
+	logger.LogS.Debugw("agent: sender.sendGaugeMetrics: data sent successfully",
 		"counter metrics", map[string]interface{}{"PollCount": obj.pollCount},
 	)
 
-	return err
+	return nil
 }

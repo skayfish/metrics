@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -291,6 +292,7 @@ func Test_sender_Run(t *testing.T) {
 	t.Run("correct poll counting", func(t *testing.T) {
 		router := chi.NewRouter()
 		handlerCounter := 0
+		gaugeCounter := 0
 		router.Post("/update/{type}/{name}/{value}", func(resp http.ResponseWriter, req *http.Request) {
 			mType := chi.URLParam(req, "type")
 			mName := chi.URLParam(req, "name")
@@ -311,6 +313,32 @@ func Test_sender_Run(t *testing.T) {
 				}
 
 				handlerCounter++
+			} else if mType == model.Gauge {
+				gaugeCounter++
+			}
+		})
+		router.Post("/update", func(resp http.ResponseWriter, req *http.Request) {
+			require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+
+			metric := model.Metrics{}
+			require.NoError(t, json.NewDecoder(req.Body).Decode(&metric))
+
+			if metric.MType == model.Counter && metric.ID == "PollCount" {
+				require.NotNil(t, metric.Delta)
+				switch {
+				case handlerCounter == 0:
+					assert.Equal(t, int64(1), *metric.Delta)
+					fmt.Print("Handler count 0 succeed\n")
+				case handlerCounter < 3:
+					assert.Equal(t, int64(5), *metric.Delta)
+					fmt.Printf("Handler count %d succeed\n", handlerCounter)
+				default:
+					t.Errorf("expected handler call count = 3, actual = %d", handlerCounter+1)
+				}
+
+				handlerCounter++
+			} else if metric.MType == model.Gauge {
+				gaugeCounter++
 			}
 
 		})
@@ -340,5 +368,6 @@ func Test_sender_Run(t *testing.T) {
 		err = sender.Run(ctx)
 		require.Equal(t, context.DeadlineExceeded, errors.Unwrap(err))
 		assert.Equal(t, 3, handlerCounter)
+		assert.Equal(t, 28*handlerCounter, gaugeCounter)
 	})
 }
