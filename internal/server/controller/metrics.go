@@ -209,7 +209,7 @@ func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.
 	case errors.Is(err, storage.ErrNotFound):
 		resp.WriteHeader(http.StatusNotFound)
 		return
-	case errors.Is(err, storage.ErrIncorrectCounterMetricType) || errors.Is(err, storage.ErrIncorrectGaugeMetricType):
+	case errors.Is(err, storage.ErrFoundNotGaugeMetricType) || errors.Is(err, storage.ErrFoundNotCounterMetricType):
 		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		return
 	default:
@@ -259,7 +259,7 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 	case errors.Is(err, storage.ErrNotFound):
 		resp.WriteHeader(http.StatusNotFound)
 		return
-	case errors.Is(err, storage.ErrIncorrectCounterMetricType) || errors.Is(err, storage.ErrIncorrectGaugeMetricType):
+	case errors.Is(err, storage.ErrFoundNotGaugeMetricType) || errors.Is(err, storage.ErrFoundNotCounterMetricType):
 		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		return
 	default:

@@ -83,7 +83,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "incorrect metric type, expected \"gauge\"\n",
+				body:        "found not \"gauge\" metric type\n",
 			},
 		},
 		{
@@ -94,7 +94,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "incorrect metric type, expected \"counter\"\n",
+				body:        "found not \"counter\" metric type\n",
 			},
 		},
 	}
@@ -196,7 +196,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "incorrect metric type, expected \"gauge\"\n",
+				body:        "found not \"gauge\" metric type\n",
 			},
 		},
 	}
