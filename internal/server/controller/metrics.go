@@ -155,6 +155,7 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.Request) {
 	if req.Header.Get("Content-Type") != "application/json" {
 		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
+		return
 	}
 
 	metric := model.Metrics{}
@@ -207,7 +208,8 @@ func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.
 	case err == nil:
 		fmt.Fprint(resp, value)
 	case errors.Is(err, storage.ErrNotFound):
-		resp.WriteHeader(http.StatusNotFound)
+		http.Error(resp, fmt.Sprintf("Metric with id %q, type %q not found", mName, mType),
+			http.StatusNotFound)
 		return
 	case errors.Is(err, storage.ErrFoundNotGaugeMetricType) || errors.Is(err, storage.ErrFoundNotCounterMetricType):
 		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
@@ -257,7 +259,8 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 	case err == nil:
 		break
 	case errors.Is(err, storage.ErrNotFound):
-		resp.WriteHeader(http.StatusNotFound)
+		http.Error(resp, fmt.Sprintf("Metric with id %q, type %q not found", metric.ID, metric.MType),
+			http.StatusNotFound)
 		return
 	case errors.Is(err, storage.ErrFoundNotGaugeMetricType) || errors.Is(err, storage.ErrFoundNotCounterMetricType):
 		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
