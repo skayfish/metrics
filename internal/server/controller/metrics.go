@@ -122,7 +122,7 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 		}
 
 		if err = c.storage.UpdateGauge(mName, value); err != nil {
-			http.Error(resp, err.Error(), http.StatusBadRequest)
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 			return
 		}
 	case model.Counter:
@@ -133,7 +133,7 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 		}
 
 		if err = c.storage.UpdateCounter(mName, value); err != nil {
-			http.Error(resp, err.Error(), http.StatusBadRequest)
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 			return
 		}
 	default:
@@ -178,7 +178,7 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 	)
 }
 
-// Возвращает в ответе значение запрошенной метрики
+// Возвращает значение запрошенной метрики
 //
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
@@ -225,7 +225,10 @@ func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.
 	}
 }
 
-// SF TODO
+// Возвращает данные запрошенной метрики в формате JSON
+//
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
 func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http.Request) {
 	if req.Header.Get("Content-Type") != "application/json" {
 		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
@@ -305,7 +308,6 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 		resp.Header().Set("Content-Type", "application/json")
 		resp.Write(metricJSON)
 	}
-
 }
 
 // Ошибка обработки запроса на получение данных всех метрик

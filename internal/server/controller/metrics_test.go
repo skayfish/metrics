@@ -79,7 +79,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			},
 		},
 		{
-			testName:       "incorrect gauge metric",
+			testName:       "found not gauge metric type",
 			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
 			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
 			requestURL:     "/update/gauge/CounterMetricName/0.233000024133",
@@ -90,7 +90,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			},
 		},
 		{
-			testName:       "incorrect counter metric",
+			testName:       "found not counter metric type",
 			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
 			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
 			requestURL:     "/update/counter/GaugeMetricName/11",
@@ -131,7 +131,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 	}
 }
 
-// Проверяет работу обработчика получения конкретной метрики по URL
+// Проверяет работу обработчика получения конкретной метрики через URL
 func TestMetricsController_GetValueFromURL(t *testing.T) {
 	type want struct {
 		status      int
@@ -243,7 +243,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет работу обработчика получения конкретной метрики через JSON
 func TestMetricsController_GetValueFromJSON(t *testing.T) {
 	type want struct {
 		status      int

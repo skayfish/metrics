@@ -17,11 +17,15 @@ func TestNewMemStorage(t *testing.T) {
 	assert.Equal(t, want, storage)
 }
 
+// Сравнивает два вещественных числа на равенство
+//
+//	@param t        экземпляр теста
+//	@param expected ожидаемое значение
+//	@param num      реальное значение
 func float64Equal(t *testing.T, expected, num float64) {
 	assert.Truef(t, math.Abs(expected-num) <= 1e-10, "expected(%f) != num(%f)", expected, num)
 }
 
-// SF TODO
 func metricsEqual(t *testing.T, expected, metrics model.Metrics) {
 	require.Equal(t, reflect.TypeFor[model.Metrics]().NumField(), 5)
 
@@ -42,7 +46,11 @@ func metricsEqual(t *testing.T, expected, metrics model.Metrics) {
 	}
 }
 
-// SF TODO
+// Сравнивает в глубину два хранилища метрик
+//
+//	@param t        экземпляр теста
+//	@param expected ожидаемое значение
+//	@param storage  реальное значение
 func storagesEqual(t *testing.T, expected, storage MemStorage) {
 	if len(expected) != len(storage) {
 		t.Errorf("Mismatched storage sizes: len(expected)=%d vs len(RHS)=%d", len(expected), len(storage))
@@ -58,7 +66,7 @@ func storagesEqual(t *testing.T, expected, storage MemStorage) {
 	}
 }
 
-// SF TODO
+// Проверяет обновление/добавление метрик в хранилище
 func TestMemStorage_Update(t *testing.T) {
 	t.Run("value is empty", func(t *testing.T) {
 		storage := NewMemStorage()
@@ -224,7 +232,7 @@ func TestMemStorage_Update(t *testing.T) {
 	})
 }
 
-// Проверяет обновление метрики датчика
+// Проверяет обновление/добавление метрики датчика
 func TestMemStorage_UpdateGauge(t *testing.T) {
 	t.Run("add new", func(t *testing.T) {
 		storage := NewMemStorage()
@@ -328,7 +336,7 @@ func TestMemStorage_UpdateGauge(t *testing.T) {
 	})
 }
 
-// Проверяет обновление метрики счетчика
+// Проверяет обновление/добавление метрики счетчика
 func TestMemStorage_UpdateCounter(t *testing.T) {
 	t.Run("add new", func(t *testing.T) {
 		storage := NewMemStorage()

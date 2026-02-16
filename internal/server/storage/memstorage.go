@@ -19,28 +19,31 @@ func NewMemStorage() MemStorage {
 }
 
 var (
-	// SF TODO
+	// Ошибка: найден не gauge тип метрики в хранилище
 	ErrFoundNotGaugeMetricType = errors.New(`found not "gauge" metric type`)
 
-	// SF TODO
+	// Ошибка: найден не counter тип метрики в хранилище
 	ErrFoundNotCounterMetricType = errors.New(`found not "counter" metric type`)
 
-	// SF TODO
+	// Ошибка: неизвестный тип метрики
 	ErrUnrecognizedMetricType = errors.New(`unrecognized metric type. Supported types: "gauge", "counter"`)
 )
 
 var (
-	// SF TODO
+	// Ошибка: значение метрики типа gauge - пустое
 	ErrValueIsEmpty = errors.New(`gauge metric value is empty`)
 
-	// SF TODO
+	// Ошибка: значение метрики типа counter - пустое
 	ErrDeltaIsEmpty = errors.New(`counter metric delta is empty`)
 )
 
-// SF TODO
+// Ошибка: метрика не найдена в хранилище
 var ErrNotFound = errors.New(`metric not found`)
 
-// SF TODO
+// Обновляет/добавляет метрику в хранилище
+//
+//	@param metric метрика для добавления/обновления
+//	@returns возможную ошибку
 func (ms *MemStorage) Update(metric model.Metrics) error {
 	switch metric.MType {
 	case model.Gauge:
@@ -76,12 +79,11 @@ func (ms *MemStorage) Update(metric model.Metrics) error {
 	return nil
 }
 
-// Обновляет данные датчика
+// Обновляет/добавляет датчик в хранилище
 //
-//	@param name  название метрики датчика
+//	@param id    идентификатор датчика
 //	@param value данные метрики датчика
-//
-// SF TODO
+//	@returns возможную ошибку
 func (ms *MemStorage) UpdateGauge(id string, value float64) error {
 	metric, found := (*ms)[id]
 	if !found {
@@ -95,7 +97,7 @@ func (ms *MemStorage) UpdateGauge(id string, value float64) error {
 	}
 
 	if metric.MType != model.Gauge {
-		return ErrFoundNotGaugeMetricType
+		return fmt.Errorf("storage: MemStorage.UpdateGauge: %w", ErrFoundNotGaugeMetricType)
 	}
 
 	*(*ms)[id].Value = value
@@ -103,12 +105,11 @@ func (ms *MemStorage) UpdateGauge(id string, value float64) error {
 	return nil
 }
 
-// Обновляет данные счетчика
+// Обновляет данные счетчика.
 //
-//	@param name  название метрики счетчика
+//	@param name  идентификатор счетчика
 //	@param value данные метрики счетчика
-//
-// SF TODO
+//	@returns возможную ошибку
 func (ms *MemStorage) UpdateCounter(id string, value int64) error {
 	metric, found := (*ms)[id]
 	if !found {
@@ -122,7 +123,7 @@ func (ms *MemStorage) UpdateCounter(id string, value int64) error {
 	}
 
 	if metric.MType != model.Counter {
-		return ErrFoundNotCounterMetricType
+		return fmt.Errorf("storage: MemStorage.UpdateCounter: %w", ErrFoundNotCounterMetricType)
 	}
 
 	*(*ms)[id].Delta += value
@@ -132,13 +133,9 @@ func (ms *MemStorage) UpdateCounter(id string, value int64) error {
 
 // Возвращает значение конкретной метрики датчика
 //
-//	@param name название метрики датчика
-//	@returns value значение метрики датчика
-//	@returns
-//		- true - если значение нашлось,
-//		- false - в ином случае
-//
-// SF TODO
+//	@param id идентификатор датчика
+//	@returns float64 значение метрики датчика, в случае успеха
+//	@returns error ошибку в иных случаях
 func (ms MemStorage) GetGauge(id string) (float64, error) {
 	metric, found := ms[id]
 	if !found {
@@ -154,13 +151,9 @@ func (ms MemStorage) GetGauge(id string) (float64, error) {
 
 // Возвращает значение конкретной метрики счетчика
 //
-//	@param name название метрики счетчика
-//	@returns value значение метрики счетчика
-//	@returns
-//		true - если значение нашлось,
-//		false - в ином случае
-//
-// SF TODO
+//	@param id идентификатор счетчика
+//	@returns float64 значение метрики счетчика, в случае успеха
+//	@returns error ошибку в иных случаях
 func (ms MemStorage) GetCounter(id string) (int64, error) {
 	metric, found := ms[id]
 	if !found {
@@ -177,10 +170,8 @@ func (ms MemStorage) GetCounter(id string) (int64, error) {
 // Возвращает все метрики датчиков
 //
 //	@returns все метрики датчиков:
-//		- ключ - название метрики датчика,
-//		- значение - значение метрики датчика
-//
-// SF TODO
+//		- ключ     - идентификатор метрики,
+//		- значение - данные метрики
 func (ms MemStorage) GetMetrics() map[string]model.Metrics {
 	return ms
 }
