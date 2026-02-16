@@ -156,8 +156,8 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			requestURL: "/value/gauge/MetricName",
 			want: want{
 				status:      http.StatusNotFound,
-				contentType: "",
-				body:        "",
+				contentType: "text/plain; charset=utf-8",
+				body:        "Metric with id \"MetricName\", type \"gauge\" not found\n",
 			},
 		},
 		{
@@ -165,8 +165,8 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			requestURL: "/value/counter/MetricName",
 			want: want{
 				status:      http.StatusNotFound,
-				contentType: "",
-				body:        "",
+				contentType: "text/plain; charset=utf-8",
+				body:        "Metric with id \"MetricName\", type \"counter\" not found\n",
 			},
 		},
 		{
