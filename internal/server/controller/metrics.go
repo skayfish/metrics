@@ -283,7 +283,7 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 		gaugeValue, ok := value.(float64)
 		if !ok {
 			http.Error(resp, "Error converting to float64", http.StatusInternalServerError)
-			logger.LogS.DPanicw("Error converting to float64:", "value", value)
+			logger.LogS.DPanicw("controller: MetricsController.GetValueFromJSON: error converting to float64:", "value", value)
 			return
 		}
 
@@ -293,7 +293,7 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 			Value: &gaugeValue,
 		}, "", "    ")
 		if err != nil {
-			logger.LogS.Errorw("controller: GetValueFromJSON: Failed marshal gauge metric response", "error", err)
+			logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: failed marshal gauge metric response", "error", err)
 			http.Error(resp, "Failed marshal gauge metric response", http.StatusInternalServerError)
 		}
 
@@ -303,7 +303,7 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 		counterValue, ok := value.(int64)
 		if !ok {
 			http.Error(resp, "Error converting to int64", http.StatusInternalServerError)
-			logger.LogS.DPanicw("Error converting to int64:", "value", value)
+			logger.LogS.DPanicw("controller: MetricsController.GetValueFromJSON: error converting to int64:", "value", value)
 			return
 		}
 
@@ -313,7 +313,7 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 			Delta: &counterValue,
 		}, "", "    ")
 		if err != nil {
-			logger.LogS.Errorw("controller: GetValueFromJSON: Failed marshal counter metric response", "error", err)
+			logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: failed marshal counter metric response", "error", err)
 			http.Error(resp, "Failed marshal counter metric response", http.StatusInternalServerError)
 		}
 
@@ -348,7 +348,7 @@ func (c *MetricsController) GetAllMetrics(resp http.ResponseWriter, req *http.Re
 		case model.Gauge:
 			metrics = append(metrics, metricHTML{ID: id, Value: *metric.Value})
 		default:
-			logger.LogS.Warnw("Unknown metric type", "type", metric.MType)
+			logger.LogS.Warnw("controller: MetricsController.GetAllMetrics: unknown metric type", "type", metric.MType)
 		}
 	}
 
