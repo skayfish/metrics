@@ -232,6 +232,7 @@ func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.
 func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http.Request) {
 	if req.Header.Get("Content-Type") != "application/json" {
 		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
+		return
 	}
 
 	metric := model.Metrics{}
@@ -295,6 +296,7 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 		if err != nil {
 			logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: failed marshal gauge metric response", "error", err)
 			http.Error(resp, "Failed marshal gauge metric response", http.StatusInternalServerError)
+			return
 		}
 
 		resp.Header().Set("Content-Type", "application/json")
@@ -315,6 +317,7 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 		if err != nil {
 			logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: failed marshal counter metric response", "error", err)
 			http.Error(resp, "Failed marshal counter metric response", http.StatusInternalServerError)
+			return
 		}
 
 		resp.Header().Set("Content-Type", "application/json")

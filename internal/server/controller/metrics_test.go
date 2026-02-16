@@ -251,17 +251,30 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 		body        string
 	}
 	tests := []struct {
-		testName       string
-		gaugeMetrics   map[string]float64
-		counterMetrics map[string]int64
-		requestURL     string
-		requestBody    string
-		want           want
+		testName           string
+		gaugeMetrics       map[string]float64
+		counterMetrics     map[string]int64
+		requestURL         string
+		requestBody        string
+		requestContentType string
+		want               want
 	}{
 		{
-			testName:    "unknown type",
-			requestURL:  "/value/",
-			requestBody: `{"id":"MetricName", "type":"unknown"}`,
+			testName:           "expected json in request",
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"unknown"}`,
+			requestContentType: `text/plain`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Expected application/json content type\n",
+			},
+		},
+		{
+			testName:           "unknown type",
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"unknown"}`,
+			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
@@ -269,9 +282,10 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			},
 		},
 		{
-			testName:    "not found gauge metric",
-			requestURL:  "/value/",
-			requestBody: `{"id":"MetricName", "type":"gauge"}`,
+			testName:           "not found gauge metric",
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"gauge"}`,
+			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
@@ -279,9 +293,10 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			},
 		},
 		{
-			testName:    "not found counter metric",
-			requestURL:  "/value/",
-			requestBody: `{"id":"MetricName", "type":"counter"}`,
+			testName:           "not found counter metric",
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"counter"}`,
+			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
@@ -289,10 +304,11 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			},
 		},
 		{
-			testName:     "found gauge metric",
-			gaugeMetrics: map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
-			requestURL:   "/value/",
-			requestBody:  `{"id":"MetricName", "type":"gauge"}`,
+			testName:           "found gauge metric",
+			gaugeMetrics:       map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"gauge"}`,
+			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusOK,
 				contentType: "application/json",
@@ -300,10 +316,11 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			},
 		},
 		{
-			testName:       "found counter metric",
-			counterMetrics: map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
-			requestURL:     "/value/",
-			requestBody:    `{"id":"MetricName", "type":"counter"}`,
+			testName:           "found counter metric",
+			counterMetrics:     map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"counter"}`,
+			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusOK,
 				contentType: "application/json",
@@ -311,10 +328,11 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			},
 		},
 		{
-			testName:       "found not gauge metric type",
-			counterMetrics: map[string]int64{"MetricName": 4312},
-			requestURL:     "/value/",
-			requestBody:    `{"id":"MetricName", "type":"gauge"}`,
+			testName:           "found not gauge metric type",
+			counterMetrics:     map[string]int64{"MetricName": 4312},
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"gauge"}`,
+			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
@@ -322,10 +340,11 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			},
 		},
 		{
-			testName:     "found not counter metric type",
-			gaugeMetrics: map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
-			requestURL:   "/value/",
-			requestBody:  `{"id":"MetricName", "type":"counter"}`,
+			testName:           "found not counter metric type",
+			gaugeMetrics:       map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"counter"}`,
+			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
@@ -355,7 +374,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 
 			resp, err := resty.New().R().
 				SetBody(tt.requestBody).
-				SetHeader("Content-Type", "application/json").
+				SetHeader("Content-Type", tt.requestContentType).
 				SetHeader("Accept", "application/json").
 				Post(server.URL + tt.requestURL)
 			require.NoError(t, err)
