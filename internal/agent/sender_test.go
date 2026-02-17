@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"errors"
@@ -320,8 +322,16 @@ func Test_sender_Run(t *testing.T) {
 		router.Post("/update", func(resp http.ResponseWriter, req *http.Request) {
 			require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 
+			decompressor, err := gzip.NewReader(req.Body)
+			require.NoError(t, err)
+			defer decompressor.Close()
+
+			var buf bytes.Buffer
+			_, err = buf.ReadFrom(decompressor)
+			require.NoError(t, err)
+
 			metric := model.Metrics{}
-			require.NoError(t, json.NewDecoder(req.Body).Decode(&metric))
+			require.NoError(t, json.NewDecoder(&buf).Decode(&metric))
 
 			if metric.MType == model.Counter && metric.ID == "PollCount" {
 				require.NotNil(t, metric.Delta)
