@@ -265,7 +265,7 @@ func (s *sender) sendGaugeMetric(name string, value float64) error {
 	)
 
 	if response.StatusCode() >= 400 {
-		return fmt.Errorf("agent: sender.sendGaugeMetric: server returned status failed: %d (body: %s)", response.StatusCode(), responseBody)
+		return fmt.Errorf("agent: sender.sendGaugeMetric: server returned status failed: %d (body: %s)", response.StatusCode(), *responseBody)
 	}
 
 	return nil
@@ -336,7 +336,7 @@ func (s *sender) sendCounterMetric(name string, value int64) error {
 	)
 
 	if response.StatusCode() >= 400 {
-		return fmt.Errorf("agent: sender.sendCounterMetric: server returned status failed: %d (body: %s)", response.StatusCode(), responseBody)
+		return fmt.Errorf("agent: sender.sendCounterMetric: server returned status failed: %d (body: %s)", response.StatusCode(), *responseBody)
 	}
 
 	return nil
