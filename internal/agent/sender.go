@@ -197,7 +197,7 @@ func compress(data []byte) (*bytes.Buffer, error) {
 // SF TODO
 func getResponseBody(response *resty.Response) (*string, error) {
 	responseBody := response.String()
-	if strings.Contains(response.Header().Get("Content-Encoding"), "gzip") == false {
+	if !strings.Contains(response.Header().Get("Content-Encoding"), "gzip") {
 		return &responseBody, nil
 	}
 
