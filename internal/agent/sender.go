@@ -1,12 +1,15 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -45,7 +48,7 @@ func NewSender(config Config) sender {
 // Получает метрики из системы
 //
 //	@returns метрики из системы
-func (*sender) getMetrics() (res runtime.MemStats) {
+func (sender) getMetrics() (res runtime.MemStats) {
 	runtime.ReadMemStats(&res)
 	return
 }
@@ -53,7 +56,7 @@ func (*sender) getMetrics() (res runtime.MemStats) {
 // Генерирует случайное вещественное число
 //
 //	@returns случайное вещественное число
-func (*sender) generateFloat64() float64 {
+func (sender) generateFloat64() float64 {
 	min := -math.MaxFloat32
 	max := math.MaxFloat32
 
@@ -67,7 +70,7 @@ func (*sender) generateFloat64() float64 {
 //
 //	@param metrics метрики системы
 //	@returns отфильтрованные метрики системы
-func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
+func (sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 	res = make(map[string]float64)
 
 	res["Alloc"] = float64(metrics.Alloc)
@@ -105,25 +108,25 @@ func (obj *sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 //
 //	@param ctx контекст для завершения работы функции
 //	@returns ошибку работы менеджера отправки метрик
-func (obj *sender) Run(ctx context.Context) error {
+func (s *sender) Run(ctx context.Context) error {
 	var metrics runtime.MemStats
 
 	updateMetrics := func() {
-		metrics = obj.getMetrics()
-		obj.pollCount++
+		metrics = s.getMetrics()
+		s.pollCount++
 	}
 	reportMetrics := func() error {
 		// Фильтрация метрик, полученных из системы
-		filteredMetrics := obj.filtrate(metrics)
+		filteredMetrics := s.filtrate(metrics)
 		// Добавление дополнительных gauge метрик
-		filteredMetrics["RandomValue"] = obj.generateFloat64()
+		filteredMetrics["RandomValue"] = s.generateFloat64()
 		// Отправка метрик серверу
-		err := obj.send(filteredMetrics)
+		err := s.send(filteredMetrics)
 		if err != nil {
 			return err
 		}
 
-		obj.pollCount = 0
+		s.pollCount = 0
 
 		return nil
 	}
@@ -135,13 +138,13 @@ func (obj *sender) Run(ctx context.Context) error {
 	}
 
 	// Ожидание интервалов
-	pollTicker := time.NewTicker(obj.config.PollInterval)
-	reportTicker := time.NewTicker(obj.config.ReportInterval)
+	pollTicker := time.NewTicker(s.config.PollInterval)
+	reportTicker := time.NewTicker(s.config.ReportInterval)
 	defer pollTicker.Stop()
 	defer reportTicker.Stop()
 	for {
 		if ctx != nil && ctx.Err() != nil {
-			return fmt.Errorf("metrics sending manager operation terminated: %w", ctx.Err())
+			return fmt.Errorf("agent: sender.Run: metrics sending manager operation terminated: %w", ctx.Err())
 		}
 
 		select {
@@ -159,13 +162,13 @@ func (obj *sender) Run(ctx context.Context) error {
 //
 //	@param gaugeMetrics метрики датчиков
 //	@returns ошибку отправки метрик серверу
-func (obj *sender) send(gaugeMetrics map[string]float64) error {
-	err := obj.sendCounterMetrics()
+func (s *sender) send(gaugeMetrics map[string]float64) error {
+	err := s.sendCounterMetrics()
 	if err != nil {
 		return err
 	}
 
-	err = obj.sendGaugeMetrics(gaugeMetrics)
+	err = s.sendGaugeMetrics(gaugeMetrics)
 	if err != nil {
 		return err
 	}
@@ -173,12 +176,54 @@ func (obj *sender) send(gaugeMetrics map[string]float64) error {
 	return nil
 }
 
+// SF TODO
+func compress(data []byte) (*bytes.Buffer, error) {
+	result := new(bytes.Buffer)
+	compressor, err := gzip.NewWriterLevel(result, gzip.BestSpeed)
+	if err != nil {
+		return nil, fmt.Errorf("error creating gzip compression object: %w", err)
+	}
+
+	defer compressor.Close()
+
+	_, err = compressor.Write(data)
+	if err != nil {
+		return nil, fmt.Errorf("failed compress data %q: %w", data, err)
+	}
+
+	return result, nil
+}
+
+// SF TODO
+func getResponseBody(response *resty.Response) (*string, error) {
+	responseBody := response.String()
+	if strings.Contains(response.Header().Get("Content-Encoding"), "gzip") == false {
+		return &responseBody, nil
+	}
+
+	decompressor, err := gzip.NewReader(bytes.NewReader(response.Body()))
+	if err != nil {
+		return nil, fmt.Errorf("error creating gzip decompression object: %w", err)
+	}
+
+	defer decompressor.Close()
+
+	var buf bytes.Buffer
+	_, err = buf.ReadFrom(decompressor)
+	if err != nil {
+		return nil, fmt.Errorf("failed decompress data %q: %v", responseBody, err)
+	}
+
+	responseBody = buf.String()
+	return &responseBody, nil
+}
+
 // Отправляет метрику датчика на сервер
 //
 //	@param name  имя метрики
 //	@param value значение метрики
 //	@returns ошибку отправки метрики датчика на сервер
-func (obj *sender) sendGaugeMetric(name string, value float64) error {
+func (s *sender) sendGaugeMetric(name string, value float64) error {
 	metric := model.Metrics{
 		ID:    name,
 		MType: model.Gauge,
@@ -190,13 +235,37 @@ func (obj *sender) sendGaugeMetric(name string, value float64) error {
 		return fmt.Errorf("agent: sender.sendGaugeMetric: failed to marshal gauge metric %q with value %f: %w", name, value, err)
 	}
 
-	url := fmt.Sprintf("%s://%s:%d/update", obj.config.getConnectionType(), obj.config.Host, obj.config.Port)
-	_, err = obj.client.R().
+	compressedMetricJSON, err := compress(metricJSON)
+	if err != nil {
+		return fmt.Errorf("agent: sender.sendGaugeMetric: %s", err)
+	}
+
+	url := fmt.Sprintf("%s://%s:%d/update", s.config.getConnectionType(), s.config.Host, s.config.Port)
+	request := s.client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(metricJSON).
-		Post(url)
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(compressedMetricJSON)
+
+	response, err := request.Post(url)
 	if err != nil {
 		return fmt.Errorf("agent: sender.sendGaugeMetric: failed to send gauge metric %q with value %f: %w", name, value, err)
+	}
+
+	responseBody, err := getResponseBody(response)
+	if err != nil {
+		return fmt.Errorf("agent: sender.sendGaugeMetric: %s", err)
+	}
+
+	logger.LogS.Infow("HTTP Response (send gauge metric)",
+		"METHOD", "POST",
+		"URL", url,
+		"HEADER", response.Header(),
+		"STATUS_CODE", response.StatusCode(),
+		"BODY", *responseBody,
+	)
+
+	if response.StatusCode() >= 400 {
+		return fmt.Errorf("agent: sender.sendGaugeMetric: server returned status failed: %d (body: %s)", response.StatusCode(), responseBody)
 	}
 
 	return nil
@@ -206,9 +275,9 @@ func (obj *sender) sendGaugeMetric(name string, value float64) error {
 //
 //	@param metrics метрики датчиков
 //	@returns ошибку отправки метрик датчиков на сервер
-func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
+func (s *sender) sendGaugeMetrics(metrics map[string]float64) error {
 	for name, value := range metrics {
-		if err := obj.sendGaugeMetric(name, value); err != nil {
+		if err := s.sendGaugeMetric(name, value); err != nil {
 			return err
 		}
 	}
@@ -225,7 +294,7 @@ func (obj *sender) sendGaugeMetrics(metrics map[string]float64) error {
 //	@param name  имя метрики
 //	@param value значение метрики
 //	@returns ошибку отправления метрики счетчика на сервер
-func (obj *sender) sendCounterMetric(name string, value int64) error {
+func (s *sender) sendCounterMetric(name string, value int64) error {
 	metric := model.Metrics{
 		ID:    name,
 		MType: model.Counter,
@@ -237,13 +306,37 @@ func (obj *sender) sendCounterMetric(name string, value int64) error {
 		return fmt.Errorf("agent: sender.sendCounterMetric: failed to marshal counter metric %q with value %d: %w", name, value, err)
 	}
 
-	url := fmt.Sprintf("%s://%s:%d/update", obj.config.getConnectionType(), obj.config.Host, obj.config.Port)
-	_, err = obj.client.R().
+	compressedMetricJSON, err := compress(metricJSON)
+	if err != nil {
+		return fmt.Errorf("agent: sender.sendCounterMetric: %s", err)
+	}
+
+	url := fmt.Sprintf("%s://%s:%d/update", s.config.getConnectionType(), s.config.Host, s.config.Port)
+	request := s.client.R().
 		SetHeader("Content-Type", "application/json").
-		SetBody(metricJSON).
-		Post(url)
+		SetHeader("Content-Encoding", "gzip").
+		SetBody(compressedMetricJSON)
+
+	response, err := request.Post(url)
 	if err != nil {
 		return fmt.Errorf("agent: sender.sendCounterMetric: failed to send counter metric %q with value %d: %w", name, value, err)
+	}
+
+	responseBody, err := getResponseBody(response)
+	if err != nil {
+		return fmt.Errorf("agent: sender.sendCounterMetric: %s", err)
+	}
+
+	logger.LogS.Infow("HTTP Response (send counter metric)",
+		"METHOD", "POST",
+		"URL", url,
+		"HEADER", response.Header(),
+		"STATUS_CODE", response.StatusCode(),
+		"BODY", *responseBody,
+	)
+
+	if response.StatusCode() >= 400 {
+		return fmt.Errorf("agent: sender.sendCounterMetric: server returned status failed: %d (body: %s)", response.StatusCode(), responseBody)
 	}
 
 	return nil
@@ -252,13 +345,13 @@ func (obj *sender) sendCounterMetric(name string, value int64) error {
 // Отправляет метрики счетчиков на сервер
 //
 //	@returns ошибку отправления метрик счетчиков на сервер
-func (obj *sender) sendCounterMetrics() error {
-	if err := obj.sendCounterMetric("PollCount", obj.pollCount); err != nil {
+func (s *sender) sendCounterMetrics() error {
+	if err := s.sendCounterMetric("PollCount", s.pollCount); err != nil {
 		return err
 	}
 
-	logger.LogS.Debugw("agent: sender.sendGaugeMetrics: data sent successfully",
-		"counter metrics", map[string]interface{}{"PollCount": obj.pollCount},
+	logger.LogS.Debugw("agent: sender.sendCounterMetrics: data sent successfully",
+		"counter metrics", map[string]interface{}{"PollCount": s.pollCount},
 	)
 
 	return nil

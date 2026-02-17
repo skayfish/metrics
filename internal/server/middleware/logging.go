@@ -71,12 +71,12 @@ func LoggingMiddleware(handler http.Handler) http.Handler {
 		duration := time.Since(start)
 
 		logger.LogS.Infow("HTTP Response",
-			"method", req.Method,
-			"url", req.URL,
-			"header", loggingResp.Header(),
-			"status", loggingResp.responseData.status,
-			"size", loggingResp.responseData.size,
-			"duration", duration,
+			"METHOD", req.Method,
+			"URL", req.URL,
+			"HEADER", loggingResp.Header(),
+			"DURATION", duration,
+			"STATUS_CODE", loggingResp.responseData.status,
+			"SIZE", loggingResp.responseData.size,
 		)
 	}
 	return http.HandlerFunc(fn)
