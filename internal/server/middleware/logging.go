@@ -1,4 +1,4 @@
-package server
+package middleware
 
 import (
 	"net/http"
@@ -51,10 +51,11 @@ func (l *loggingResponseWriter) WriteHeader(statusCode int) {
 //	@param handler обработчик запроса
 //	@returns http.Handler обёртку над обработчиком запроса
 func LoggingMiddleware(handler http.Handler) http.Handler {
-	logfn := func(resp http.ResponseWriter, req *http.Request) {
+	fn := func(resp http.ResponseWriter, req *http.Request) {
 		logger.LogS.Infow("HTTP Request",
 			"method", req.Method,
 			"url", req.URL,
+			"header", req.Header,
 		)
 
 		start := time.Now()
@@ -72,10 +73,11 @@ func LoggingMiddleware(handler http.Handler) http.Handler {
 		logger.LogS.Infow("HTTP Response",
 			"method", req.Method,
 			"url", req.URL,
+			"header", loggingResp.Header(),
 			"status", loggingResp.responseData.status,
 			"size", loggingResp.responseData.size,
 			"duration", duration,
 		)
 	}
-	return http.HandlerFunc(logfn)
+	return http.HandlerFunc(fn)
 }

@@ -1,4 +1,4 @@
-package server
+package middleware
 
 import (
 	"net/http"
@@ -115,7 +115,6 @@ func TestLoggingMiddleware(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-
 			req, err := http.NewRequest("post", "http://localhost:8080/", strings.NewReader(""))
 			require.NoError(t, err)
 			middleware := func() { LoggingMiddleware(tt.handler).ServeHTTP(&ResponseMockWriter{}, req) }

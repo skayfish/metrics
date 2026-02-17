@@ -6,8 +6,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/skayfish/metrics/internal/logger"
-	"github.com/skayfish/metrics/internal/server"
 	"github.com/skayfish/metrics/internal/server/controller"
+	"github.com/skayfish/metrics/internal/server/middleware"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
 
@@ -17,7 +17,7 @@ import (
 //	@returns маршрутизатор запросов в случае успеха
 func getRouter(controller *controller.MetricsController) chi.Router {
 	router := chi.NewRouter()
-	router.Use(server.LoggingMiddleware)
+	router.Use(middleware.LoggingMiddleware, middleware.CompressingMiddleware)
 	router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
 	router.Post("/update", controller.UpdateFromJSON)
 	router.Post("/update/", controller.UpdateFromJSON)
