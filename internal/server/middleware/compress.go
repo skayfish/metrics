@@ -95,7 +95,7 @@ func CompressingMiddleware(handler http.Handler) http.Handler {
 		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
 			compressor, err := newCompressWriter(resp)
 			if err != nil {
-				logger.LogS.Error("middleware: CompressingMiddleware: error creating gzip compression object")
+				logger.LogS.Error("middleware: CompressingMiddleware: error creating gzip compression object: %s", err)
 				resp.WriteHeader(http.StatusInternalServerError)
 				return
 			}
@@ -107,7 +107,7 @@ func CompressingMiddleware(handler http.Handler) http.Handler {
 		if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") {
 			decompressor, err := newCompressReader(req.Body)
 			if err != nil {
-				logger.LogS.Error("middleware: CompressingMiddleware: error creating gzip decompression object")
+				logger.LogS.Errorf("middleware: CompressingMiddleware: error creating gzip decompression object: %s", err)
 				resp.WriteHeader(http.StatusInternalServerError)
 				return
 			}

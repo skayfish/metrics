@@ -1,6 +1,8 @@
 package middleware
 
 import (
+	"bytes"
+	"io"
 	"net/http"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 type responseData struct {
 	status int    // Статус ответа
 	size   uint64 // Размер данных ответа
+	body   string // SF TODO
 }
 
 // Обёртка над ответом запроса, с данными ответа
@@ -34,6 +37,7 @@ func (l loggingResponseWriter) Header() http.Header {
 func (l *loggingResponseWriter) Write(data []byte) (int, error) {
 	size, err := l.responseWriter.Write(data)
 	l.responseData.size += uint64(size)
+	l.responseData.body += string(data)
 	return size, err
 }
 
@@ -52,10 +56,21 @@ func (l *loggingResponseWriter) WriteHeader(statusCode int) {
 //	@returns http.Handler обёртку над обработчиком запроса
 func LoggingMiddleware(handler http.Handler) http.Handler {
 	fn := func(resp http.ResponseWriter, req *http.Request) {
+		bodyBytes, err := io.ReadAll(req.Body)
+		if err != nil {
+			http.Error(resp, "middleware: LoggingMiddleware: failed to read body", http.StatusInternalServerError)
+			return
+		}
+
+		defer req.Body.Close()
+
+		req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
 		logger.LogS.Infow("HTTP Request",
-			"method", req.Method,
-			"url", req.URL,
-			"header", req.Header,
+			"METHOD", req.Method,
+			"URL", req.URL,
+			"HEADER", req.Header,
+			"BODY", bodyBytes,
 		)
 
 		start := time.Now()
@@ -77,6 +92,7 @@ func LoggingMiddleware(handler http.Handler) http.Handler {
 			"DURATION", duration,
 			"STATUS_CODE", loggingResp.responseData.status,
 			"SIZE", loggingResp.responseData.size,
+			"BODY", loggingResp.responseData.body, // SF LOGIC debug
 		)
 	}
 	return http.HandlerFunc(fn)
