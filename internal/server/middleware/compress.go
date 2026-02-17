@@ -36,8 +36,8 @@ func (cw *compressWriter) Header() http.Header {
 // SF TODO
 func (cw *compressWriter) Write(data []byte) (int, error) {
 	contentType := cw.response.Header().Get("Content-Type")
-	switch {
-	case contentType == "application/json" || strings.HasPrefix(contentType, "text/plain"):
+	if contentType == "application/json" || strings.HasPrefix(contentType, "text/html") {
+		cw.response.Header().Add("Content-Encoding", "gzip")
 		return cw.compressor.Write(data)
 	}
 
@@ -46,10 +46,6 @@ func (cw *compressWriter) Write(data []byte) (int, error) {
 
 // SF TODO
 func (cw *compressWriter) WriteHeader(statusCode int) {
-	if statusCode >= 200 && statusCode < 300 {
-		cw.response.Header().Add("Encoding-Type", "gzip")
-	}
-
 	cw.response.WriteHeader(statusCode)
 }
 
