@@ -70,7 +70,7 @@ func LoggingMiddleware(handler http.Handler) http.Handler {
 			"METHOD", req.Method,
 			"URL", req.URL,
 			"HEADER", req.Header,
-			"BODY", bodyBytes,
+			"BODY", string(bodyBytes),
 		)
 
 		start := time.Now()

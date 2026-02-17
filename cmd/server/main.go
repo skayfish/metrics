@@ -17,7 +17,7 @@ import (
 //	@returns маршрутизатор запросов в случае успеха
 func getRouter(controller *controller.MetricsController) chi.Router {
 	router := chi.NewRouter()
-	router.Use(middleware.LoggingMiddleware, middleware.CompressingMiddleware)
+	router.Use(middleware.CompressingMiddleware, middleware.LoggingMiddleware)
 	router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
 	router.Post("/update", controller.UpdateFromJSON)
 	router.Post("/update/", controller.UpdateFromJSON)

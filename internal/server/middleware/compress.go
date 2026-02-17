@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"compress/gzip"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
@@ -104,10 +105,21 @@ func CompressingMiddleware(handler http.Handler) http.Handler {
 			defer compressor.Close()
 		}
 
-		if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") {
+		if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") && req.ContentLength != 0 {
 			decompressor, err := newCompressReader(req.Body)
 			if err != nil {
-				logger.LogS.Errorf("middleware: CompressingMiddleware: error creating gzip decompression object: %s", err)
+				bodyBytes, readErr := io.ReadAll(req.Body)
+				if readErr != nil {
+					http.Error(resp, "middleware: CompressingMiddleware: failed to read body", http.StatusInternalServerError)
+					return
+				}
+
+				defer req.Body.Close()
+
+				logger.LogS.Errorw(fmt.Sprintf("middleware: CompressingMiddleware: error creating gzip decompression object: %s", err), "METHOD", req.Method,
+					"URL", req.URL,
+					"HEADER", req.Header,
+					"BODY", string(bodyBytes))
 				resp.WriteHeader(http.StatusInternalServerError)
 				return
 			}
