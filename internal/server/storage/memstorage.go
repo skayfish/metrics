@@ -43,19 +43,20 @@ var ErrNotFound = errors.New(`metric not found`)
 // Обновляет/добавляет метрику в хранилище
 //
 //	@param metric метрика для добавления/обновления
-//	@returns возможную ошибку
-func (ms *MemStorage) Update(metric model.Metrics) error {
+//	@returns *model.Metrics обновленную метрику, в случае успеха
+//	@returns error возможную ошибку
+func (ms *MemStorage) Update(metric model.Metrics) (*model.Metrics, error) {
 	switch metric.MType {
 	case model.Gauge:
 		if metric.Value == nil {
-			return fmt.Errorf("storage: MemStorage.Update: %w", ErrValueIsEmpty)
+			return nil, fmt.Errorf("storage: MemStorage.Update: %w", ErrValueIsEmpty)
 		}
 	case model.Counter:
 		if metric.Delta == nil {
-			return fmt.Errorf("storage: MemStorage.Update: %w", ErrDeltaIsEmpty)
+			return nil, fmt.Errorf("storage: MemStorage.Update: %w", ErrDeltaIsEmpty)
 		}
 	default:
-		return fmt.Errorf("storage: MemStorage.Update: %w", ErrUnrecognizedMetricType)
+		return nil, fmt.Errorf("storage: MemStorage.Update: %w", ErrUnrecognizedMetricType)
 	}
 
 	foundMetric, found := (*ms)[metric.ID]
@@ -63,11 +64,11 @@ func (ms *MemStorage) Update(metric model.Metrics) error {
 		switch metric.MType {
 		case model.Gauge:
 			if foundMetric.MType != model.Gauge {
-				return fmt.Errorf("storage: MemStorage.Update: %w", ErrFoundNotGaugeMetricType)
+				return nil, fmt.Errorf("storage: MemStorage.Update: %w", ErrFoundNotGaugeMetricType)
 			}
 		case model.Counter:
 			if foundMetric.MType != model.Counter {
-				return fmt.Errorf("storage: MemStorage.Update: %w", ErrFoundNotCounterMetricType)
+				return nil, fmt.Errorf("storage: MemStorage.Update: %w", ErrFoundNotCounterMetricType)
 			}
 
 			*metric.Delta += *foundMetric.Delta
@@ -76,7 +77,7 @@ func (ms *MemStorage) Update(metric model.Metrics) error {
 
 	(*ms)[metric.ID] = metric
 
-	return nil
+	return &metric, nil
 }
 
 // Обновляет/добавляет датчик в хранилище

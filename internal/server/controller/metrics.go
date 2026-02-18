@@ -168,14 +168,28 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 		"metrics", c.storage.GetMetrics(),
 	)
 
-	if err := c.storage.Update(metric); err != nil {
+	updatedMetric, err := c.storage.Update(metric)
+	if err != nil {
 		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		return
 	}
 
 	logger.LogS.Debugw("controller: MetricsController.UpdateFromJSON: after",
 		"metrics", c.storage.GetMetrics(),
+		"updated metric", updatedMetric,
 	)
+
+	updatedMetricJSON, err := json.Marshal(updatedMetric)
+	if err != nil {
+		logger.LogS.Errorw("controller: MetricsController.UpdateFromJSON",
+			"error", http.StatusText(http.StatusInternalServerError),
+		)
+		http.Error(resp, errors.Unwrap(err).Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(updatedMetricJSON)
 }
 
 // Возвращает значение запрошенной метрики.

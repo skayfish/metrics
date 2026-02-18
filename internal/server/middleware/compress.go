@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"bytes"
 	"compress/gzip"
 	"fmt"
 	"io"
@@ -46,6 +47,8 @@ func (cw *compressWriter) Write(data []byte) (int, error) {
 		cw.response.Header().Add("Content-Encoding", "gzip")
 		return cw.compressor.Write(data)
 	}
+
+	cw.compressor.Reset(bytes.NewBuffer(nil))
 
 	return cw.response.Write(data)
 }
@@ -99,7 +102,11 @@ func CompressingMiddleware(handler http.Handler) http.Handler {
 		responseWriter := resp
 		compressorUsed := false
 
-		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
+		for _, contentType := range req.Header.Values("Accept-Encoding") {
+			if !strings.HasPrefix(contentType, "gzip") {
+				continue
+			}
+
 			compressor, err := newCompressWriter(resp)
 			if err != nil {
 				logger.LogS.Error("middleware: CompressingMiddleware: error creating gzip compression object: %s", err)
@@ -110,30 +117,38 @@ func CompressingMiddleware(handler http.Handler) http.Handler {
 			responseWriter = compressor
 			compressorUsed = true
 			defer compressor.Close()
+			break
 		}
 
-		if strings.Contains(req.Header.Get("Content-Encoding"), "gzip") && req.ContentLength != 0 {
-			decompressor, err := newCompressReader(req.Body)
-			if err != nil {
-				bodyBytes, readErr := io.ReadAll(req.Body)
-				if readErr != nil {
-					http.Error(resp, "middleware: CompressingMiddleware: failed to read body", http.StatusInternalServerError)
+		if req.ContentLength != 0 {
+			for _, contentEncoding := range req.Header.Values("Content-Encoding") {
+				if !strings.HasPrefix(contentEncoding, "gzip") {
+					continue
+				}
+
+				decompressor, err := newCompressReader(req.Body)
+				if err != nil {
+					bodyBytes, readErr := io.ReadAll(req.Body)
+					if readErr != nil {
+						http.Error(resp, "middleware: CompressingMiddleware: failed to read body", http.StatusInternalServerError)
+						return
+					}
+
+					defer req.Body.Close()
+
+					logger.LogS.Errorw(fmt.Sprintf("middleware: CompressingMiddleware: error creating gzip decompression object: %s", err),
+						"METHOD", req.Method,
+						"URL", req.URL,
+						"HEADER", req.Header,
+						"BODY", string(bodyBytes))
+					resp.WriteHeader(http.StatusInternalServerError)
 					return
 				}
 
-				defer req.Body.Close()
-
-				logger.LogS.Errorw(fmt.Sprintf("middleware: CompressingMiddleware: error creating gzip decompression object: %s", err),
-					"METHOD", req.Method,
-					"URL", req.URL,
-					"HEADER", req.Header,
-					"BODY", string(bodyBytes))
-				resp.WriteHeader(http.StatusInternalServerError)
-				return
+				req.Body = decompressor
+				defer decompressor.Close()
+				break
 			}
-
-			req.Body = decompressor
-			defer decompressor.Close()
 		}
 
 		handler.ServeHTTP(responseWriter, req)

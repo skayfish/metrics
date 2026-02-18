@@ -70,27 +70,30 @@ func storagesEqual(t *testing.T, expected, storage MemStorage) {
 func TestMemStorage_Update(t *testing.T) {
 	t.Run("value is empty", func(t *testing.T) {
 		storage := NewMemStorage()
-		err := storage.Update(model.Metrics{
+		metric, err := storage.Update(model.Metrics{
 			ID:    "ID",
 			MType: model.Gauge,
 		})
 		require.ErrorIs(t, err, ErrValueIsEmpty)
+		assert.Nil(t, metric)
 	})
 	t.Run("delta is empty", func(t *testing.T) {
 		storage := NewMemStorage()
-		err := storage.Update(model.Metrics{
+		metric, err := storage.Update(model.Metrics{
 			ID:    "ID",
 			MType: model.Counter,
 		})
 		require.ErrorIs(t, err, ErrDeltaIsEmpty)
+		assert.Nil(t, metric)
 	})
 	t.Run("unrecognized metric type", func(t *testing.T) {
 		storage := NewMemStorage()
-		err := storage.Update(model.Metrics{
+		metric, err := storage.Update(model.Metrics{
 			ID:    "ID",
 			MType: "invalid",
 		})
 		require.ErrorIs(t, err, ErrUnrecognizedMetricType)
+		assert.Nil(t, metric)
 	})
 	t.Run("found not gauge metric type", func(t *testing.T) {
 		storage := NewMemStorage()
@@ -102,12 +105,13 @@ func TestMemStorage_Update(t *testing.T) {
 		}
 
 		value := 0.15
-		err := storage.Update(model.Metrics{
+		metric, err := storage.Update(model.Metrics{
 			ID:    "ID",
 			MType: model.Gauge,
 			Value: &value,
 		})
 		require.ErrorIs(t, err, ErrFoundNotGaugeMetricType)
+		assert.Nil(t, metric)
 	})
 	t.Run("found not counter metric type", func(t *testing.T) {
 		storage := NewMemStorage()
@@ -119,53 +123,58 @@ func TestMemStorage_Update(t *testing.T) {
 		}
 
 		delta := int64(5)
-		err := storage.Update(model.Metrics{
+		metric, err := storage.Update(model.Metrics{
 			ID:    "ID",
 			MType: model.Counter,
 			Delta: &delta,
 		})
 		require.ErrorIs(t, err, ErrFoundNotCounterMetricType)
+		assert.Nil(t, metric)
 	})
 	t.Run("add counter", func(t *testing.T) {
 		storage := NewMemStorage()
-
 		delta := int64(5)
 		expected := model.Metrics{
 			ID:    "counterID",
 			MType: model.Counter,
 			Delta: &delta,
 		}
-		err := storage.Update(expected)
+
+		metric, err := storage.Update(expected)
 		require.NoError(t, err)
 
 		storagesEqual(t, MemStorage{"counterID": expected}, storage)
+		metricsEqual(t, expected, *metric)
 
-		err = storage.Update(expected)
+		metric, err = storage.Update(expected)
 		require.NoError(t, err)
 
 		*expected.Delta += delta
 		storagesEqual(t, MemStorage{"counterID": expected}, storage)
+		metricsEqual(t, expected, *metric)
 	})
 	t.Run("add gauge", func(t *testing.T) {
 		storage := NewMemStorage()
-
 		value := 0.15
 		expected := model.Metrics{
 			ID:    "gaugeID",
 			MType: model.Gauge,
 			Value: &value,
 		}
-		err := storage.Update(expected)
+
+		metric, err := storage.Update(expected)
 		require.NoError(t, err)
 
 		storagesEqual(t, MemStorage{"gaugeID": expected}, storage)
+		metricsEqual(t, expected, *metric)
 
 		value = 4.0023
-		err = storage.Update(expected)
+		metric, err = storage.Update(expected)
 		require.NoError(t, err)
 
 		*expected.Value = value
 		storagesEqual(t, MemStorage{"gaugeID": expected}, storage)
+		metricsEqual(t, expected, *metric)
 	})
 	t.Run("update old counter", func(t *testing.T) {
 		delta := int64(5)
@@ -186,18 +195,20 @@ func TestMemStorage_Update(t *testing.T) {
 		storage[expectedCounter.ID] = expectedCounter
 		storage[expectedGauge.ID] = expectedGauge
 
-		err := storage.Update(expectedCounter)
+		metric, err := storage.Update(expectedCounter)
 		require.NoError(t, err)
 
 		*expectedCounter.Delta += delta
 		storagesEqual(t, MemStorage{expectedGauge.ID: expectedGauge, expectedCounter.ID: expectedCounter}, storage)
+		metricsEqual(t, expectedCounter, *metric)
 
 		delta = int64(10)
-		err = storage.Update(expectedCounter)
+		metric, err = storage.Update(expectedCounter)
 		require.NoError(t, err)
 
 		*expectedCounter.Delta += delta
 		storagesEqual(t, MemStorage{expectedGauge.ID: expectedGauge, expectedCounter.ID: expectedCounter}, storage)
+		metricsEqual(t, expectedCounter, *metric)
 	})
 	t.Run("update old gauge", func(t *testing.T) {
 		delta := int64(5)
@@ -218,17 +229,19 @@ func TestMemStorage_Update(t *testing.T) {
 		storage[expectedCounter.ID] = expectedCounter
 		storage[expectedGauge.ID] = expectedGauge
 
-		err := storage.Update(expectedGauge)
+		metric, err := storage.Update(expectedGauge)
 		require.NoError(t, err)
 
 		storagesEqual(t, MemStorage{expectedGauge.ID: expectedGauge, expectedCounter.ID: expectedCounter}, storage)
+		metricsEqual(t, expectedGauge, *metric)
 
 		value = -0.43441
-		err = storage.Update(expectedGauge)
+		metric, err = storage.Update(expectedGauge)
 		require.NoError(t, err)
 
 		*expectedGauge.Value = value
 		storagesEqual(t, MemStorage{expectedGauge.ID: expectedGauge, expectedCounter.ID: expectedCounter}, storage)
+		metricsEqual(t, expectedGauge, *metric)
 	})
 }
 

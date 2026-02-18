@@ -9,35 +9,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type ResponseMockWriter struct {
+type MockResponseWriter struct {
 	header http.Header
+	status int
 }
 
-func (r ResponseMockWriter) Header() http.Header        { return r.header }
-func (r *ResponseMockWriter) Write([]byte) (int, error) { return 50, nil }
-func (r *ResponseMockWriter) WriteHeader(int)           {}
+func (r MockResponseWriter) Header() http.Header        { return r.header }
+func (r *MockResponseWriter) Write([]byte) (int, error) { return 50, nil }
+func (r *MockResponseWriter) WriteHeader(status int)    { r.status = status }
 
 // Проверяет, что обёртка с логированием над ответом запроса возвращает правильные настройки ответа
 func Test_loggingResponseWriter_Header(t *testing.T) {
 	tests := []struct {
-		testName   string
-		headerData map[string][]string
+		testName string
+		want     http.Header
 	}{
 		{
-			testName:   "not empty header",
-			headerData: map[string][]string{"Content-Type": {"text/plain"}},
+			testName: "not empty header",
+			want:     http.Header{"Content-Type": {"text/plain"}},
 		},
 		{
-			testName:   "empty header",
-			headerData: map[string][]string{},
+			testName: "empty header",
+			want:     http.Header{},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
-			resp := loggingResponseWriter{
-				responseWriter: &ResponseMockWriter{header: http.Header(tt.headerData)},
-			}
-			assert.Equal(t, http.Header(tt.headerData), resp.Header())
+			resp := loggingResponseWriter{responseWriter: &MockResponseWriter{header: tt.want}}
+			assert.Equal(t, tt.want, resp.Header())
 		})
 	}
 }
@@ -45,7 +44,7 @@ func Test_loggingResponseWriter_Header(t *testing.T) {
 // Проверяет, что обёртка с логированием над ответом запроса правильно записывает размер данных ответа
 func Test_loggingResponseWriter_Write(t *testing.T) {
 	resp := loggingResponseWriter{
-		responseWriter: &ResponseMockWriter{},
+		responseWriter: &MockResponseWriter{},
 	}
 
 	size, err := resp.Write([]byte("first"))
@@ -86,7 +85,7 @@ func Test_loggingResponseWriter_WriteHeader(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			resp := loggingResponseWriter{
-				responseWriter: &ResponseMockWriter{},
+				responseWriter: &MockResponseWriter{},
 			}
 			resp.WriteHeader(tt.status)
 			assert.Equal(t, tt.status, resp.responseData.status)
@@ -117,7 +116,7 @@ func TestLoggingMiddleware(t *testing.T) {
 		t.Run(tt.testName, func(t *testing.T) {
 			req, err := http.NewRequest("post", "http://localhost:8080/", strings.NewReader(""))
 			require.NoError(t, err)
-			middleware := func() { LoggingMiddleware(tt.handler).ServeHTTP(&ResponseMockWriter{}, req) }
+			middleware := func() { LoggingMiddleware(tt.handler).ServeHTTP(&MockResponseWriter{}, req) }
 			if tt.panic {
 				require.Panics(t, middleware)
 			} else {

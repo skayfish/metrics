@@ -9,7 +9,6 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
-	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -194,31 +193,6 @@ func compress(data []byte) (*bytes.Buffer, error) {
 	return result, nil
 }
 
-// SF TODO
-func getResponseBody(response *resty.Response) (*string, error) {
-	responseBody := response.String()
-	if !strings.EqualFold(response.Header().Get("Content-Encoding"), "gzip") {
-		return &responseBody, nil
-	}
-
-	decompressor, err := gzip.NewReader(response.RawBody())
-	if err != nil {
-		return nil, fmt.Errorf("error creating gzip decompression object: %w", err)
-	}
-
-	defer response.RawBody().Close()
-	defer decompressor.Close()
-
-	var buf bytes.Buffer
-	_, err = buf.ReadFrom(decompressor)
-	if err != nil {
-		return nil, fmt.Errorf("failed decompress data %q: %v", responseBody, err)
-	}
-
-	responseBody = buf.String()
-	return &responseBody, nil
-}
-
 // Отправляет метрику датчика на сервер
 //
 //	@param name  имя метрики
@@ -243,13 +217,10 @@ func (s *sender) sendGaugeMetric(name string, value float64) error {
 
 	url := fmt.Sprintf("%s://%s:%d/update", s.config.getConnectionType(), s.config.Host, s.config.Port)
 	request := s.client.R().
-		SetDoNotParseResponse(true).
 		SetBody(compressedMetricJSON.Bytes()).
 		SetHeaders(map[string]string{
 			"Content-Type":     "application/json",
 			"Content-Encoding": "gzip",
-			"Accept":           "application/json",
-			"Accept-Encoding":  "",
 		})
 
 	response, err := request.Post(url)
@@ -257,17 +228,12 @@ func (s *sender) sendGaugeMetric(name string, value float64) error {
 		return fmt.Errorf("agent: sender.sendGaugeMetric: failed to send gauge metric %q with value %f: %w", name, value, err)
 	}
 
-	responseBody, err := getResponseBody(response)
-	if err != nil {
-		return fmt.Errorf("agent: sender.sendGaugeMetric: %s", err)
-	}
-
 	logger.LogS.Infow("HTTP Response (send gauge metric)",
 		"METHOD", "POST",
 		"URL", url,
 		"HEADER", response.Header(),
 		"STATUS_CODE", response.StatusCode(),
-		"BODY", *responseBody,
+		"BODY", response.String(),
 	)
 
 	return nil
@@ -315,13 +281,10 @@ func (s *sender) sendCounterMetric(name string, value int64) error {
 
 	url := fmt.Sprintf("%s://%s:%d/update", s.config.getConnectionType(), s.config.Host, s.config.Port)
 	request := s.client.R().
-		SetDoNotParseResponse(true).
 		SetBody(compressedMetricJSON.Bytes()).
 		SetHeaders(map[string]string{
 			"Content-Type":     "application/json",
 			"Content-Encoding": "gzip",
-			"Accept":           "application/json",
-			"Accept-Encoding":  "",
 		})
 
 	response, err := request.Post(url)
@@ -329,17 +292,12 @@ func (s *sender) sendCounterMetric(name string, value int64) error {
 		return fmt.Errorf("agent: sender.sendCounterMetric: failed to send counter metric %q with value %d: %w", name, value, err)
 	}
 
-	responseBody, err := getResponseBody(response)
-	if err != nil {
-		return fmt.Errorf("agent: sender.sendCounterMetric: %s", err)
-	}
-
 	logger.LogS.Infow("HTTP Response (send counter metric)",
 		"METHOD", "POST",
 		"URL", url,
 		"HEADER", response.Header(),
 		"STATUS_CODE", response.StatusCode(),
-		"BODY", *responseBody,
+		"BODY", response.String(),
 	)
 
 	return nil
