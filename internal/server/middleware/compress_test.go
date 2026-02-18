@@ -278,6 +278,7 @@ func Test_compressWriter_Close(t *testing.T) {
 			assert.Equal(t, len(data), num)
 
 			decompressedData, err := writer.decompress()
+			require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 			assert.Empty(t, decompressedData)
 
 			require.NoError(t, compressor.Close())
