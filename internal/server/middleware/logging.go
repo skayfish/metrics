@@ -92,7 +92,7 @@ func LoggingMiddleware(handler http.Handler) http.Handler {
 			"DURATION", duration,
 			"STATUS_CODE", loggingResp.responseData.status,
 			"SIZE", loggingResp.responseData.size,
-			"BODY", loggingResp.responseData.body, // SF LOGIC debug
+			"BODY", loggingResp.responseData.body,
 		)
 	}
 	return http.HandlerFunc(fn)

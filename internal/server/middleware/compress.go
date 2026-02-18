@@ -17,6 +17,9 @@ type compressWriter struct {
 
 	// SF TODO
 	compressor *gzip.Writer
+
+	//SF TODO
+	body string
 }
 
 // SF TODO
@@ -36,6 +39,8 @@ func (cw *compressWriter) Header() http.Header {
 
 // SF TODO
 func (cw *compressWriter) Write(data []byte) (int, error) {
+	cw.body += string(data)
+
 	contentType := cw.response.Header().Get("Content-Type")
 	if contentType == "application/json" || strings.HasPrefix(contentType, "text/html") {
 		cw.response.Header().Add("Content-Encoding", "gzip")
@@ -92,6 +97,7 @@ func (cr *compressReader) Read(data []byte) (n int, err error) {
 func CompressingMiddleware(handler http.Handler) http.Handler {
 	fn := func(resp http.ResponseWriter, req *http.Request) {
 		responseWriter := resp
+		compressorUsed := false
 
 		if strings.Contains(req.Header.Get("Accept-Encoding"), "gzip") {
 			compressor, err := newCompressWriter(resp)
@@ -102,6 +108,7 @@ func CompressingMiddleware(handler http.Handler) http.Handler {
 			}
 
 			responseWriter = compressor
+			compressorUsed = true
 			defer compressor.Close()
 		}
 
@@ -116,7 +123,8 @@ func CompressingMiddleware(handler http.Handler) http.Handler {
 
 				defer req.Body.Close()
 
-				logger.LogS.Errorw(fmt.Sprintf("middleware: CompressingMiddleware: error creating gzip decompression object: %s", err), "METHOD", req.Method,
+				logger.LogS.Errorw(fmt.Sprintf("middleware: CompressingMiddleware: error creating gzip decompression object: %s", err),
+					"METHOD", req.Method,
 					"URL", req.URL,
 					"HEADER", req.Header,
 					"BODY", string(bodyBytes))
@@ -129,6 +137,14 @@ func CompressingMiddleware(handler http.Handler) http.Handler {
 		}
 
 		handler.ServeHTTP(responseWriter, req)
+
+		if compressorUsed {
+			logger.LogS.Debugw("HTTP Response after compressing",
+				"METHOD", req.Method,
+				"URL", req.URL,
+				"HEADER", responseWriter.(*compressWriter).Header(),
+				"BODY", responseWriter.(*compressWriter).body)
+		}
 	}
 
 	return http.HandlerFunc(fn)

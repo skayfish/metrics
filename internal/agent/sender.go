@@ -197,15 +197,16 @@ func compress(data []byte) (*bytes.Buffer, error) {
 // SF TODO
 func getResponseBody(response *resty.Response) (*string, error) {
 	responseBody := response.String()
-	if !strings.Contains(response.Header().Get("Content-Encoding"), "gzip") {
+	if !strings.EqualFold(response.Header().Get("Content-Encoding"), "gzip") {
 		return &responseBody, nil
 	}
 
-	decompressor, err := gzip.NewReader(bytes.NewReader(response.Body()))
+	decompressor, err := gzip.NewReader(response.RawBody())
 	if err != nil {
 		return nil, fmt.Errorf("error creating gzip decompression object: %w", err)
 	}
 
+	defer response.RawBody().Close()
 	defer decompressor.Close()
 
 	var buf bytes.Buffer
@@ -242,9 +243,14 @@ func (s *sender) sendGaugeMetric(name string, value float64) error {
 
 	url := fmt.Sprintf("%s://%s:%d/update", s.config.getConnectionType(), s.config.Host, s.config.Port)
 	request := s.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(compressedMetricJSON)
+		SetDoNotParseResponse(true).
+		SetBody(compressedMetricJSON.Bytes()).
+		SetHeaders(map[string]string{
+			"Content-Type":     "application/json",
+			"Content-Encoding": "gzip",
+			"Accept":           "application/json",
+			"Accept-Encoding":  "",
+		})
 
 	response, err := request.Post(url)
 	if err != nil {
@@ -309,9 +315,14 @@ func (s *sender) sendCounterMetric(name string, value int64) error {
 
 	url := fmt.Sprintf("%s://%s:%d/update", s.config.getConnectionType(), s.config.Host, s.config.Port)
 	request := s.client.R().
-		SetHeader("Content-Type", "application/json").
-		SetHeader("Content-Encoding", "gzip").
-		SetBody(compressedMetricJSON)
+		SetDoNotParseResponse(true).
+		SetBody(compressedMetricJSON.Bytes()).
+		SetHeaders(map[string]string{
+			"Content-Type":     "application/json",
+			"Content-Encoding": "gzip",
+			"Accept":           "application/json",
+			"Accept-Encoding":  "",
+		})
 
 	response, err := request.Post(url)
 	if err != nil {
