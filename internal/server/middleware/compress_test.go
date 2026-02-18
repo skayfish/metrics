@@ -166,6 +166,7 @@ func Test_compressWriter_Write(t *testing.T) {
 			require.True(t, reflect.DeepEqual(expectedHeader, writer.header))
 
 			decompressedData, err := writer.decompress()
+			require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 			assert.Equal(t, data, decompressedData)
 
 			// second try
@@ -179,6 +180,7 @@ func Test_compressWriter_Write(t *testing.T) {
 			require.True(t, reflect.DeepEqual(expectedHeader, writer.header))
 
 			decompressedData, err = writer.decompress()
+			require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 			assert.Equal(t, []byte(string(data)+string(newData)), decompressedData)
 		})
 	}
@@ -262,6 +264,7 @@ func Test_compressWriter_Close(t *testing.T) {
 			require.Error(t, err)
 
 			decompressedData, err := writer.decompress()
+			require.NoError(t, err)
 			assert.Empty(t, decompressedData)
 		})
 		t.Run("success compress: after write", func(t *testing.T) {
@@ -279,6 +282,7 @@ func Test_compressWriter_Close(t *testing.T) {
 			require.NoError(t, compressor.Close())
 
 			decompressedData, err = writer.decompress()
+			require.NoError(t, err)
 			assert.Equal(t, data, decompressedData)
 		})
 	}
@@ -293,6 +297,7 @@ func Test_compressWriter_Close(t *testing.T) {
 		require.NoError(t, err)
 
 		decompressedData, err := writer.decompress()
+		require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 		assert.Empty(t, decompressedData)
 	})
 	t.Run("no compress: after write", func(t *testing.T) {
@@ -305,6 +310,7 @@ func Test_compressWriter_Close(t *testing.T) {
 		assert.Equal(t, len(data), num)
 
 		decompressedData, err := writer.decompress()
+		require.ErrorIs(t, err, io.ErrUnexpectedEOF)
 		assert.Empty(t, decompressedData)
 
 		require.NoError(t, compressor.Close())
