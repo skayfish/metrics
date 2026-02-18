@@ -84,6 +84,7 @@ func Test_compressWriter_Header(t *testing.T) {
 type CompressResponseWriter struct {
 	compressedData string
 	header         http.Header
+	status         int
 }
 
 func (c *CompressResponseWriter) Header() http.Header { return c.header }
@@ -92,7 +93,7 @@ func (c *CompressResponseWriter) Write(data []byte) (int, error) {
 	c.compressedData += dataStr
 	return len(dataStr), nil
 }
-func (*CompressResponseWriter) WriteHeader(int) {}
+func (c *CompressResponseWriter) WriteHeader(status int) { c.status = status }
 func (c *CompressResponseWriter) decompress() ([]byte, error) {
 	data := []byte(c.compressedData)
 	reader, err := gzip.NewReader(bytes.NewReader(data))
@@ -591,4 +592,20 @@ func TestCompressingMiddleware(t *testing.T) {
 			assert.Equal(t, "some text", response.compressedData)
 		})
 	}
+
+	t.Run("failed create decompressor", func(t *testing.T) {
+		req, err := http.NewRequest("", "", bytes.NewReader([]byte("some data")))
+		require.NoError(t, err)
+
+		header := http.Header{"Content-Encoding": {"gzip"}, "Accept-Encoding": {"gzip"}}
+		for tag, values := range header {
+			for _, value := range values {
+				req.Header.Add(tag, value)
+			}
+		}
+
+		response := CompressResponseWriter{header: http.Header{}}
+		CompressingMiddleware(handlerJSON).ServeHTTP(&response, req)
+		assert.Equal(t, http.StatusInternalServerError, response.status)
+	})
 }
