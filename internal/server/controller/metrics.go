@@ -160,7 +160,7 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 
 	metric := model.Metrics{}
 	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
-		http.Error(resp, err.Error(), http.StatusBadRequest)
+		http.Error(resp, fmt.Sprintf("Failed unmarshall json: %s", err), http.StatusBadRequest)
 		return
 	}
 
