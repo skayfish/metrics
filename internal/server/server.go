@@ -55,7 +55,7 @@ func getRouter(storage *storage.MemStorage) (chi.Router, error) {
 }
 
 // SF TODO
-func createStorageFromFile(filePath string) (*storage.MemStorage, error) {
+func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed read from file %q: %w", filePath, err)
@@ -78,12 +78,24 @@ func createStorageFromFile(filePath string) (*storage.MemStorage, error) {
 func NewServer(config *Config) (*Server, error) {
 	var metricsStorage storage.MemStorage
 	if config.ToRestore {
-		storage, err := createStorageFromFile(config.FileStoragePath)
-		if err != nil {
-			return nil, fmt.Errorf("server: NewServer: failed fill storage from file: %v", err)
-		}
+		if config.FileStoragePath == "" {
+			file, err := os.CreateTemp(os.TempDir(), "storage*.json")
+			if err != nil {
+				return nil, fmt.Errorf("server: NewServer: failed create temporary file for storage: %v", err)
+			}
 
-		metricsStorage = *storage
+			logger.LogS.Warnf("File storage path: %q", file.Name())
+			config.FileStoragePath = file.Name()
+
+			metricsStorage = storage.NewMemStorage()
+		} else {
+			storage, err := createStorageFromJSON(config.FileStoragePath)
+			if err != nil {
+				return nil, fmt.Errorf("server: NewServer: failed fill storage from file: %v", err)
+			}
+
+			metricsStorage = *storage
+		}
 	} else {
 		metricsStorage = storage.NewMemStorage()
 	}
@@ -134,7 +146,7 @@ func (s *Server) Listen() error {
 		for {
 			select {
 			case <-ctx.Done():
-				logger.LogS.Debug("Data‑saving goroutine (file output) has successfully terminated")
+				logger.LogS.Debug("Data-saving goroutine (file output) has successfully terminated")
 				return
 			case <-saveStorageTicker.C:
 				if err := s.saveStorageToFile(); err != nil {

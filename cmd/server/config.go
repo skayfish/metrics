@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/caarlos0/env/v6"
@@ -32,11 +31,6 @@ type environments struct {
 //	@returns *server.Config конфигурацию сервера в случае успеха
 //	@returns error ошибку, в противном случае
 func parseConfig() (*server.Config, error) {
-	binaryDir, err := os.Getwd()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get binary directory: %v", err)
-	}
-
 	// Парсинг флагов
 	addr := flags.NetAddress{Host: "localhost", Port: 8080}
 	pflag.VarP(&addr, "address", "a", "Server listening address in host:port format")
@@ -44,7 +38,7 @@ func parseConfig() (*server.Config, error) {
 	pflag.VarP(&logLevel, "log-level", "l", "Logging level")
 	storeInterval := pflag.UintP("store-interval", "i", 300,
 		"Number of seconds before current storage data is written to the \"--file-storage-path\" location")
-	fileStoragePath := pflag.StringP("file-storage-path", "f", binaryDir+"/storage.json",
+	fileStoragePath := pflag.StringP("file-storage-path", "f", "",
 		"File system path to which current storage data is persisted")
 	toRestore := pflag.BoolP("restore", "r", false,
 		"Read saved values from the \"--file-storage-path\" file when the server starts (default false)")
@@ -53,7 +47,7 @@ func parseConfig() (*server.Config, error) {
 
 	// Парсинг переменных окружения
 	var envs environments
-	err = env.Parse(&envs)
+	err := env.Parse(&envs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse environment variables: %v", err)
 	}
