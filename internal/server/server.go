@@ -2,12 +2,15 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/skayfish/metrics/internal/logger"
+	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/controller"
 	"github.com/skayfish/metrics/internal/server/middleware"
 	"github.com/skayfish/metrics/internal/server/storage"
@@ -23,9 +26,6 @@ type Server struct {
 
 	// SF TODO
 	router *chi.Router
-
-	// SF TODO
-	saveStorageTicker *time.Ticker
 }
 
 // Возвращает маршрутизатор запросов
@@ -62,17 +62,30 @@ func NewServer(config *Config) (*Server, error) {
 		return nil, fmt.Errorf("server: NewServer: failed create router: %v", err)
 	}
 
-	var saveStorageTicker *time.Ticker
-	if config.StoreInterval != 0 {
-		saveStorageTicker = time.NewTicker(config.StoreInterval)
+	return &Server{
+		config:  config,
+		storage: &storage,
+		router:  &router,
+	}, nil
+}
+
+// SF TODO
+func (s *Server) saveStorageToFile() error {
+	metrics := make([]model.Metrics, 0, len(*s.storage))
+	for _, metric := range *s.storage {
+		metrics = append(metrics, metric)
 	}
 
-	return &Server{
-		config:            config,
-		storage:           &storage,
-		router:            &router,
-		saveStorageTicker: saveStorageTicker,
-	}, nil
+	metricsJSON, err := json.MarshalIndent(metrics, "", "    ")
+	if err != nil {
+		return fmt.Errorf("failed marshal metrics: %w", err)
+	}
+
+	if err = os.WriteFile(s.config.FileStoragePath, metricsJSON, 0644); err != nil {
+		return fmt.Errorf("failed write to file %q: %w", s.config.FileStoragePath, err)
+	}
+
+	return nil
 }
 
 // SF TODO
@@ -80,17 +93,23 @@ func (s *Server) Listen() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
-		if s.saveStorageTicker == nil {
+		if s.config.StoreInterval == 0 {
 			return
 		}
+
+		saveStorageTicker := time.NewTicker(s.config.StoreInterval)
+		defer saveStorageTicker.Stop()
 
 		for {
 			select {
 			case <-ctx.Done():
 				logger.LogS.Debug("Data‑saving goroutine (file output) has successfully terminated")
 				return
-			case <-s.saveStorageTicker.C:
-				// SF LOGIC
+			case <-saveStorageTicker.C:
+				if err := s.saveStorageToFile(); err != nil {
+					logger.LogS.Errorf("Failed save storage to file: %v", err)
+					return
+				}
 			}
 		}
 	}()
