@@ -178,23 +178,26 @@ func (s *sender) send(gaugeMetrics map[string]float64) error {
 // Сжимает переданные данные с помощью gzip
 //
 //	@param data данные, которые нужно сжать
-//	@returns *bytes.Buffer сжатые данные, в случае успеха
+//	@returns []byte сжатые данные, в случае успеха
 //	@returns error ошибку в ином случае
-func compress(data []byte) (*bytes.Buffer, error) {
+func compress(data []byte) ([]byte, error) {
 	result := new(bytes.Buffer)
 	compressor, err := gzip.NewWriterLevel(result, gzip.BestSpeed)
 	if err != nil {
 		return nil, fmt.Errorf("error creating gzip compression object: %w", err)
 	}
 
-	defer compressor.Close()
-
 	_, err = compressor.Write(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed compress data %q: %w", data, err)
 	}
 
-	return result, nil
+	err = compressor.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed close compressor: %v", err)
+	}
+
+	return result.Bytes(), nil
 }
 
 // Отправляет метрику датчика на сервер
