@@ -83,7 +83,7 @@ const templateHTML = `
 `
 
 // Ошибка во время создания контроллера метрик
-const newMetricsControllerError = "controller: metrics controller creation failed"
+var ErrCreateMetricsController = errors.New("controller: metrics controller creation failed")
 
 // Создаёт новый контроллер метрик
 //
@@ -94,7 +94,7 @@ func NewMetricsController(storage *storage.MemStorage) (*MetricsController, erro
 	// Парсинг шаблона html
 	tmpl, err := template.New("metrics-table").Parse(templateHTML)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s", newMetricsControllerError, err)
+		return nil, fmt.Errorf("%w: %s", ErrCreateMetricsController, err)
 	}
 
 	return &MetricsController{storage: storage, tableHTMLTemplate: tmpl}, nil

@@ -15,6 +15,7 @@ var LogS *zap.SugaredLogger = Log.Sugar()
 
 // Инициализирует менеджер логирования
 //
+//	@warning вызов defer logger.Log.Sync() после инициализации - обязателен!
 //	@param level уровень логирования
 //	@returns error ошибку, если не удалось создать менеджеры логирования
 func Init(level Level) error {
