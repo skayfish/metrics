@@ -55,16 +55,47 @@ func getRouter(storage *storage.MemStorage) (chi.Router, error) {
 }
 
 // SF TODO
+func createStorageFromFile(filePath string) (*storage.MemStorage, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, fmt.Errorf("failed read from file %q: %w", filePath, err)
+	}
+
+	var metrics []model.Metrics
+	if err = json.Unmarshal(data, &metrics); err != nil {
+		return nil, fmt.Errorf("failed unmarshal metrics from file %q: %w", filePath, err)
+	}
+
+	storage := make(storage.MemStorage, len(metrics))
+	for _, metric := range metrics {
+		storage[metric.ID] = metric
+	}
+
+	return &storage, nil
+}
+
+// SF TODO
 func NewServer(config *Config) (*Server, error) {
-	storage := storage.NewMemStorage()
-	router, err := getRouter(&storage)
+	var metricsStorage storage.MemStorage
+	if config.ToRestore {
+		storage, err := createStorageFromFile(config.FileStoragePath)
+		if err != nil {
+			return nil, fmt.Errorf("server: NewServer: failed fill storage from file: %v", err)
+		}
+
+		metricsStorage = *storage
+	} else {
+		metricsStorage = storage.NewMemStorage()
+	}
+
+	router, err := getRouter(&metricsStorage)
 	if err != nil {
 		return nil, fmt.Errorf("server: NewServer: failed create router: %v", err)
 	}
 
 	return &Server{
 		config:  config,
-		storage: &storage,
+		storage: &metricsStorage,
 		router:  &router,
 	}, nil
 }

@@ -26,10 +26,10 @@ func main() {
 	// Запуск сервера
 	server, err := server.NewServer(config)
 	if err != nil {
-		log.Fatal(err)
+		logger.LogS.Fatal(err)
 	}
 
 	if err = server.Listen(); err != nil {
-		log.Fatal(err)
+		logger.LogS.Fatal(err)
 	}
 }
