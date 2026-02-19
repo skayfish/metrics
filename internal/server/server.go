@@ -26,6 +26,9 @@ type Server struct {
 
 	// SF TODO
 	router *chi.Router
+
+	// SF TODO
+	saveStorageChan chan struct{}
 }
 
 // Возвращает маршрутизатор запросов
@@ -34,7 +37,7 @@ type Server struct {
 //	@returns маршрутизатор запросов в случае успеха
 //
 // SF TODO
-func getRouter(storage *storage.MemStorage) (chi.Router, error) {
+func getRouter(storage *storage.MemStorage, saveStorageChan chan struct{}) (chi.Router, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.CompressingMiddleware, middleware.LoggingMiddleware)
 
@@ -43,9 +46,16 @@ func getRouter(storage *storage.MemStorage) (chi.Router, error) {
 		return nil, fmt.Errorf("failed create metric controller: %w", err)
 	}
 
-	router.Post("/update/{type}/{name}/{value}", metricsController.UpdateFromURL)
-	router.Post("/update", metricsController.UpdateFromJSON)
-	router.Post("/update/", metricsController.UpdateFromJSON)
+	saveStorageMiddleware := func(handler http.HandlerFunc) http.HandlerFunc {
+		return func(resp http.ResponseWriter, req *http.Request) {
+			handler(resp, req)
+			saveStorageChan <- struct{}{}
+		}
+	}
+
+	router.Post("/update/{type}/{name}/{value}", saveStorageMiddleware(metricsController.UpdateFromURL))
+	router.Post("/update", saveStorageMiddleware(metricsController.UpdateFromJSON))
+	router.Post("/update/", saveStorageMiddleware(metricsController.UpdateFromJSON))
 	router.Get("/value/{type}/{name}", metricsController.GetValueFromURL)
 	router.Post("/value", metricsController.GetValueFromJSON)
 	router.Post("/value/", metricsController.GetValueFromJSON)
@@ -100,20 +110,24 @@ func NewServer(config *Config) (*Server, error) {
 		metricsStorage = storage.NewMemStorage()
 	}
 
-	router, err := getRouter(&metricsStorage)
+	saveStorageChan := make(chan struct{})
+	router, err := getRouter(&metricsStorage, saveStorageChan)
 	if err != nil {
 		return nil, fmt.Errorf("server: NewServer: failed create router: %v", err)
 	}
 
 	return &Server{
-		config:  config,
-		storage: &metricsStorage,
-		router:  &router,
+		config:          config,
+		storage:         &metricsStorage,
+		router:          &router,
+		saveStorageChan: saveStorageChan,
 	}, nil
 }
 
 // SF TODO
 func (s *Server) saveStorageToFile() error {
+	logger.LogS.Debugw("Save metrics storage to file", "file", s.config.FileStoragePath, "metrics storage", s.storage)
+
 	metrics := make([]model.Metrics, 0, len(*s.storage))
 	for _, metric := range *s.storage {
 		metrics = append(metrics, metric)
@@ -133,11 +147,24 @@ func (s *Server) saveStorageToFile() error {
 
 // SF TODO
 func (s *Server) Listen() error {
+	defer close(s.saveStorageChan)
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
 		if s.config.StoreInterval == 0 {
-			return
+			for {
+				select {
+				case <-ctx.Done():
+					logger.LogS.Debug("Data-saving goroutine (file output) has successfully terminated")
+					return
+				case <-s.saveStorageChan:
+					if err := s.saveStorageToFile(); err != nil {
+						logger.LogS.Errorf("Failed save storage to file: %v", err)
+						return
+					}
+				}
+			}
 		}
 
 		saveStorageTicker := time.NewTicker(s.config.StoreInterval)
