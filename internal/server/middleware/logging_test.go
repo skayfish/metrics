@@ -18,7 +18,7 @@ func (r MockResponseWriter) Header() http.Header        { return r.header }
 func (r *MockResponseWriter) Write([]byte) (int, error) { return 50, nil }
 func (r *MockResponseWriter) WriteHeader(status int)    { r.status = status }
 
-// Проверяет, что обёртка с логированием над ответом запроса возвращает правильные настройки ответа
+// Проверяет, что обёртка с логированием над ответом запроса возвращает правильные заголовки ответа
 func Test_loggingResponseWriter_Header(t *testing.T) {
 	tests := []struct {
 		testName string

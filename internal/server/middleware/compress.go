@@ -11,19 +11,23 @@ import (
 	"github.com/skayfish/metrics/internal/logger"
 )
 
-// SF TODO
+// Компрессор для сжатия ответа запроса
 type compressWriter struct {
-	// SF TODO
+	// Ответ запроса
 	response http.ResponseWriter
 
-	// SF TODO
+	// Компрессор для сжатия в gzip формат
 	compressor *gzip.Writer
 
-	//SF TODO
+	// Полученные несжатые данные ответа
 	body string
 }
 
-// SF TODO
+// Создаёт новый компрессор, для сжатия данных ответа на запрос
+//
+//	@param response объект записи ответа на запрос
+//	@returns *compressWriter компрессор, в случае успеха
+//	@returns error ошибку, в ином случае
 func newCompressWriter(response http.ResponseWriter) (*compressWriter, error) {
 	compressor, err := gzip.NewWriterLevel(response, gzip.BestSpeed)
 	if err != nil {
@@ -33,12 +37,19 @@ func newCompressWriter(response http.ResponseWriter) (*compressWriter, error) {
 	return &compressWriter{response: response, compressor: compressor}, nil
 }
 
-// SF TODO
+// Возвращает заголовки ответа
+//
+//	@returns http.Header заголовки ответа
 func (cw *compressWriter) Header() http.Header {
 	return cw.response.Header()
 }
 
-// SF TODO
+// Записывает gzip сжатые данные в ответ для типов данных: application/json и text/html.
+// Добавляет заголовок Content-Encoding.
+//
+//	@param data данные для записи
+//	@returns int размер записанных данных, в случае успеха
+//	@returns error ошибку в ином случае
 func (cw *compressWriter) Write(data []byte) (int, error) {
 	cw.body += string(data)
 
@@ -53,26 +64,34 @@ func (cw *compressWriter) Write(data []byte) (int, error) {
 	return cw.response.Write(data)
 }
 
-// SF TODO
+// Записывает статус ответа и сохраняет заголовки ответа
+//
+//	@param statusCode статус ответа
 func (cw *compressWriter) WriteHeader(statusCode int) {
 	cw.response.WriteHeader(statusCode)
 }
 
-// SF TODO
+// Завершает работу компрессора.
+//
+//	@returns error ошибку в случае неудачи
 func (cw *compressWriter) Close() error {
 	return cw.compressor.Close()
 }
 
-// SF TODO
+// Декомпрессор данных запроса
 type compressReader struct {
-	// SF TODO
+	// Тело запроса
 	requestBody io.ReadCloser
 
-	// SF TODO
+	// Декомпрессор gzip сжатых данных
 	decompressor *gzip.Reader
 }
 
-// SF TODO
+// Создаёт новый декомпрессор данных запроса
+//
+//	@param requestBody тело запроса
+//	@returns *compressReader декомпрессор, в случае успеха
+//	@returns error ошибку в ином случае
 func newCompressReader(requestBody io.ReadCloser) (*compressReader, error) {
 	decompressor, err := gzip.NewReader(requestBody)
 	if err != nil {
@@ -82,7 +101,9 @@ func newCompressReader(requestBody io.ReadCloser) (*compressReader, error) {
 	return &compressReader{requestBody: requestBody, decompressor: decompressor}, nil
 }
 
-// SF TODO
+// Закрывает чтение из тела запроса и закрывает чтение декомпрессора
+//
+//	@returns error ошибку в случае неудачи
 func (cr *compressReader) Close() error {
 	if err := cr.requestBody.Close(); err != nil {
 		return err
@@ -91,12 +112,20 @@ func (cr *compressReader) Close() error {
 	return cr.decompressor.Close()
 }
 
-// SF TODO
+// Считывает данные запроса через декомпрессор, разжимая данные в формате gzip
+//
+//	@param data данные запроса
+//	@returns n размер считанных данных, в случае успеха
+//	@returns err ошибку в ином случае
 func (cr *compressReader) Read(data []byte) (n int, err error) {
 	return cr.decompressor.Read(data)
 }
 
-// SF TODO
+// Middleware-обёртка, которая сжимает данные ответа на запрос при необходимости,
+// и разжимает данные запроса, если они сжаты. Работает со данными, сжатыми в формате gzip
+//
+//	@param handler обработчик, который нужно обернуть
+//	@returns http.Handler middleware-обёртку
 func CompressingMiddleware(handler http.Handler) http.Handler {
 	fn := func(resp http.ResponseWriter, req *http.Request) {
 		responseWriter := resp

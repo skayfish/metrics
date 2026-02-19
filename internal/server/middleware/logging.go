@@ -13,7 +13,7 @@ import (
 type responseData struct {
 	status int    // Статус ответа
 	size   uint64 // Размер данных ответа
-	body   string // SF TODO
+	body   string // Данные тела ответа
 }
 
 // Обёртка над ответом запроса, с данными ответа

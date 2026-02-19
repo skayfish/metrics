@@ -24,7 +24,7 @@ func (*WriteErrorResponseWriter) Write(p []byte) (n int, err error) {
 }
 func (*WriteErrorResponseWriter) WriteHeader(int) {}
 
-// SF TODO
+// Проверяет создание нового компрессора для сжатия данных ответа
 func Test_newCompressWriter(t *testing.T) {
 	errorWriter := WriteErrorResponseWriter{}
 	mockWriter := MockResponseWriter{}
@@ -56,7 +56,7 @@ func Test_newCompressWriter(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет, что компрессор для сжатия данных ответа правильно возвращает заголовки ответа на запрос
 func Test_compressWriter_Header(t *testing.T) {
 	tests := []struct {
 		testName string
@@ -81,6 +81,7 @@ func Test_compressWriter_Header(t *testing.T) {
 	}
 }
 
+// Заглушка ответа на запрос
 type CompressResponseWriter struct {
 	compressedData string
 	header         http.Header
@@ -94,6 +95,8 @@ func (c *CompressResponseWriter) Write(data []byte) (int, error) {
 	return len(dataStr), nil
 }
 func (c *CompressResponseWriter) WriteHeader(status int) { c.status = status }
+
+// Разжимает данные, которые хранит CompressResponseWriter
 func (c *CompressResponseWriter) decompress() ([]byte, error) {
 	data := []byte(c.compressedData)
 	reader, err := gzip.NewReader(bytes.NewReader(data))
@@ -104,7 +107,7 @@ func (c *CompressResponseWriter) decompress() ([]byte, error) {
 	return io.ReadAll(reader)
 }
 
-// SF TODO
+// Проверяет правильную работу записи данных с использованием компрессора
 func Test_compressWriter_Write(t *testing.T) {
 	tests := []struct {
 		header http.Header
@@ -204,7 +207,7 @@ func Test_compressWriter_Write(t *testing.T) {
 	})
 }
 
-// SF TODO
+// Проверяет правильную запись статуса ответа на запрос
 func Test_compressWriter_WriteHeader(t *testing.T) {
 	tests := []struct {
 		testName string
@@ -246,7 +249,7 @@ func Test_compressWriter_WriteHeader(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет правильное закрытие компрессора
 func Test_compressWriter_Close(t *testing.T) {
 	tests := []struct {
 		header http.Header
@@ -344,7 +347,7 @@ func compress(data []byte) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// SF TODO
+// Проверяет создание нового декомпрессора данных ответа на запрос
 func Test_newCompressReader(t *testing.T) {
 	tests := []struct {
 		testName    string
@@ -386,7 +389,7 @@ func Test_newCompressReader(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет правильное закрытие декомпрессора
 func Test_compressReader_Close(t *testing.T) {
 	tests := []struct {
 		requestBody string
@@ -411,7 +414,8 @@ func Test_compressReader_Close(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет работу middleware-обёртки, которая сжимает данные ответа на запрос при необходимости,
+// и разжимает данные запроса, если они сжаты. Работает со сжатием gzip
 func TestCompressingMiddleware(t *testing.T) {
 	validRequestBody := "{\"valid\": \"json\"}"
 

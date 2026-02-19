@@ -175,7 +175,11 @@ func (s *sender) send(gaugeMetrics map[string]float64) error {
 	return nil
 }
 
-// SF TODO
+// Сжимает переданные данные с помощью gzip
+//
+//	@param data данные, которые нужно сжать
+//	@returns *bytes.Buffer сжатые данные, в случае успеха
+//	@returns error ошибку в ином случае
 func compress(data []byte) (*bytes.Buffer, error) {
 	result := new(bytes.Buffer)
 	compressor, err := gzip.NewWriterLevel(result, gzip.BestSpeed)
@@ -217,7 +221,7 @@ func (s *sender) sendGaugeMetric(name string, value float64) error {
 
 	url := fmt.Sprintf("%s://%s:%d/update", s.config.getConnectionType(), s.config.Host, s.config.Port)
 	request := s.client.R().
-		SetBody(compressedMetricJSON.Bytes()).
+		SetBody(compressedMetricJSON).
 		SetHeaders(map[string]string{
 			"Content-Type":     "application/json",
 			"Content-Encoding": "gzip",
@@ -281,7 +285,7 @@ func (s *sender) sendCounterMetric(name string, value int64) error {
 
 	url := fmt.Sprintf("%s://%s:%d/update", s.config.getConnectionType(), s.config.Host, s.config.Port)
 	request := s.client.R().
-		SetBody(compressedMetricJSON.Bytes()).
+		SetBody(compressedMetricJSON).
 		SetHeaders(map[string]string{
 			"Content-Type":     "application/json",
 			"Content-Encoding": "gzip",

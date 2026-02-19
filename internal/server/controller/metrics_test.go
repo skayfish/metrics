@@ -131,7 +131,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет работу обработчика запроса на обновление метрики, переданной в формате JSON
 func TestMetricsController_UpdateFromJSON(t *testing.T) {
 	type want struct {
 		status      int
