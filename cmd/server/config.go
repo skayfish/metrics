@@ -44,7 +44,7 @@ func parseConfig() (*server.Config, error) {
 	pflag.VarP(&logLevel, "log-level", "l", "Logging level")
 	storeInterval := pflag.UintP("store-interval", "i", 300,
 		"Number of seconds before current storage data is written to the \"--file-storage-path\" location")
-	fileStoragePath := pflag.StringP("file-storage-path", "f", binaryDir+"\\storage.json",
+	fileStoragePath := pflag.StringP("file-storage-path", "f", binaryDir+"/storage.json",
 		"File system path to which current storage data is persisted")
 	toRestore := pflag.BoolP("restore", "r", false,
 		"Read saved values from the \"--file-storage-path\" file when the server starts (default false)")
