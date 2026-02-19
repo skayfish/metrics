@@ -99,12 +99,14 @@ func NewServer(config *Config) (*Server, error) {
 
 			metricsStorage = storage.NewMemStorage()
 		} else {
-			storage, err := createStorageFromJSON(config.FileStoragePath)
+			storageFromFile, err := createStorageFromJSON(config.FileStoragePath)
 			if err != nil {
-				return nil, fmt.Errorf("server: NewServer: failed fill storage from file: %v", err)
+				tmp := storage.NewMemStorage()
+				storageFromFile = &tmp
+				logger.LogS.Warnf("Failed fill storage from file: %s", err)
 			}
 
-			metricsStorage = *storage
+			metricsStorage = *storageFromFile
 		}
 	} else {
 		metricsStorage = storage.NewMemStorage()
@@ -185,7 +187,7 @@ func (s *Server) Listen() error {
 		}
 	}()
 
-	logger.LogS.Info(fmt.Sprint("Server launch successful on ", s.config.Address))
+	logger.LogS.Info(fmt.Sprint("Server launch successful on http://", s.config.Address))
 	if err := http.ListenAndServe(s.config.Address.String(), *s.router); err != http.ErrServerClosed {
 		return fmt.Errorf("server: server.Listen: %v", err)
 	}
