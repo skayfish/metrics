@@ -180,6 +180,7 @@ func (s *Server) Listen() error {
 					logger.LogS.Errorf("Failed save storage to file: %v", err)
 					return
 				}
+			case <-s.saveStorageChan:
 			}
 		}
 	}()
