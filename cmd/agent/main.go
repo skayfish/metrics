@@ -23,7 +23,6 @@ func main() {
 	}
 
 	defer logger.Log.Sync()
-
 	logger.LogS.Debugw("Agent configuration", "config", config)
 
 	// Инициализация и запуск менеджера отправки данных серверу

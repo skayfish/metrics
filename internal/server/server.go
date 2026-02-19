@@ -1,8 +1,10 @@
 package server
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/skayfish/metrics/internal/logger"
@@ -21,46 +23,78 @@ type Server struct {
 
 	// SF TODO
 	router *chi.Router
+
+	// SF TODO
+	saveStorageTicker *time.Ticker
 }
 
 // Возвращает маршрутизатор запросов
 //
 //	@param storage хранилище метрик
 //	@returns маршрутизатор запросов в случае успеха
-func getRouter(controller *controller.MetricsController) chi.Router {
+//
+// SF TODO
+func getRouter(storage *storage.MemStorage) (chi.Router, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.CompressingMiddleware, middleware.LoggingMiddleware)
-	router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
-	router.Post("/update", controller.UpdateFromJSON)
-	router.Post("/update/", controller.UpdateFromJSON)
-	router.Get("/value/{type}/{name}", controller.GetValueFromURL)
-	router.Post("/value", controller.GetValueFromJSON)
-	router.Post("/value/", controller.GetValueFromJSON)
-	router.Get("/", controller.GetAllMetrics)
 
-	return router
+	metricsController, err := controller.NewMetricsController(storage)
+	if err != nil {
+		return nil, fmt.Errorf("failed create metric controller: %w", err)
+	}
+
+	router.Post("/update/{type}/{name}/{value}", metricsController.UpdateFromURL)
+	router.Post("/update", metricsController.UpdateFromJSON)
+	router.Post("/update/", metricsController.UpdateFromJSON)
+	router.Get("/value/{type}/{name}", metricsController.GetValueFromURL)
+	router.Post("/value", metricsController.GetValueFromJSON)
+	router.Post("/value/", metricsController.GetValueFromJSON)
+	router.Get("/", metricsController.GetAllMetrics)
+
+	return router, nil
 }
 
 // SF TODO
 func NewServer(config *Config) (*Server, error) {
 	storage := storage.NewMemStorage()
-	metricsController, err := controller.NewMetricsController(&storage)
+	router, err := getRouter(&storage)
 	if err != nil {
-		return nil, fmt.Errorf("server: NewServer: %v", err)
+		return nil, fmt.Errorf("server: NewServer: failed create router: %v", err)
 	}
 
-	// Настройка маршрутизации запросов
-	router := getRouter(metricsController)
+	var saveStorageTicker *time.Ticker
+	if config.StoreInterval != 0 {
+		saveStorageTicker = time.NewTicker(config.StoreInterval)
+	}
 
 	return &Server{
-		config:  config,
-		storage: &storage,
-		router:  &router,
+		config:            config,
+		storage:           &storage,
+		router:            &router,
+		saveStorageTicker: saveStorageTicker,
 	}, nil
 }
 
 // SF TODO
 func (s *Server) Listen() error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func() {
+		if s.saveStorageTicker == nil {
+			return
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debug("Data‑saving goroutine (file output) has successfully terminated")
+				return
+			case <-s.saveStorageTicker.C:
+				// SF LOGIC
+			}
+		}
+	}()
+
 	logger.LogS.Info(fmt.Sprint("Server launch successful on ", s.config.Address))
 	if err := http.ListenAndServe(s.config.Address.String(), *s.router); err != http.ErrServerClosed {
 		return fmt.Errorf("server: server.Listen: %v", err)
