@@ -1,6 +1,8 @@
 package server
 
 import (
+	"time"
+
 	"github.com/skayfish/metrics/internal/flags"
 	"github.com/skayfish/metrics/internal/logger"
 )
@@ -12,4 +14,13 @@ type Config struct {
 
 	// Уровень логирования
 	LogLevel logger.Level
+
+	// SF TODO
+	StoreInterval time.Duration
+
+	// SF TODO
+	FileStoragePath string
+
+	// SF TODO
+	ToRestore bool
 }
