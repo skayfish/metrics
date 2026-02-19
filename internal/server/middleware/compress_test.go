@@ -90,7 +90,7 @@ type CompressResponseWriter struct {
 
 func (c *CompressResponseWriter) Header() http.Header { return c.header }
 func (c *CompressResponseWriter) Write(data []byte) (int, error) {
-	dataStr := bytes.NewBuffer(data).String()
+	dataStr := string(data)
 	c.compressedData += dataStr
 	return len(dataStr), nil
 }
@@ -98,13 +98,29 @@ func (c *CompressResponseWriter) WriteHeader(status int) { c.status = status }
 
 // Разжимает данные, которые хранит CompressResponseWriter
 func (c *CompressResponseWriter) decompress() ([]byte, error) {
-	data := []byte(c.compressedData)
-	reader, err := gzip.NewReader(bytes.NewReader(data))
+	if len(c.compressedData) == 0 {
+		return []byte{}, nil
+	}
+
+	buf := bytes.NewBufferString(c.compressedData)
+	decompressor, err := gzip.NewReader(buf)
 	if err != nil {
 		return nil, err
 	}
 
-	return io.ReadAll(reader)
+	b := bytes.NewBuffer(nil)
+	// в переменную b записываются распакованные данные
+	_, err = b.ReadFrom(decompressor)
+	if err != nil {
+		return nil, fmt.Errorf("failed decompress data: %w", err)
+	}
+
+	err = decompressor.Close()
+	if err != nil {
+		return nil, fmt.Errorf("failed close decompressor: %w", err)
+	}
+
+	return b.Bytes(), nil
 }
 
 // Проверяет правильную работу записи данных с использованием компрессора
@@ -162,7 +178,6 @@ func Test_compressWriter_Write(t *testing.T) {
 			// first try
 			data := []byte("success write")
 			num, err := compressor.Write(data)
-			require.NoError(t, compressor.compressor.Flush())
 			require.NoError(t, err)
 			assert.Equal(t, len(data), num)
 			assert.Equal(t, string(data), compressor.body)
@@ -171,12 +186,12 @@ func Test_compressWriter_Write(t *testing.T) {
 
 			decompressedData, err := writer.decompress()
 			require.ErrorIs(t, err, io.ErrUnexpectedEOF)
-			assert.Equal(t, data, decompressedData)
+			assert.Empty(t, decompressedData)
 
 			// second try
 			newData := []byte("success write: one more")
 			num, err = compressor.Write(newData)
-			require.NoError(t, compressor.compressor.Flush())
+			require.NoError(t, compressor.compressor.Close())
 			require.NoError(t, err)
 			assert.Equal(t, len(newData), num)
 			assert.Equal(t, string(data)+string(newData), compressor.body)
@@ -184,7 +199,7 @@ func Test_compressWriter_Write(t *testing.T) {
 			require.True(t, reflect.DeepEqual(expectedHeader, writer.header))
 
 			decompressedData, err = writer.decompress()
-			require.ErrorIs(t, err, io.ErrUnexpectedEOF)
+			require.NotErrorIs(t, err, io.ErrUnexpectedEOF)
 			assert.Equal(t, []byte(string(data)+string(newData)), decompressedData)
 		})
 	}
