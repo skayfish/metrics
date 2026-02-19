@@ -41,21 +41,22 @@ func getRouter(storage *storage.MemStorage, saveStorageChan chan struct{}) (chi.
 	router := chi.NewRouter()
 	router.Use(middleware.CompressingMiddleware, middleware.LoggingMiddleware)
 
-	metricsController, err := controller.NewMetricsController(storage)
-	if err != nil {
-		return nil, fmt.Errorf("failed create metric controller: %w", err)
-	}
-
-	saveStorageMiddleware := func(handler http.HandlerFunc) http.HandlerFunc {
+	// SF TODO
+	saveMiddleware := func(handler http.HandlerFunc) http.HandlerFunc {
 		return func(resp http.ResponseWriter, req *http.Request) {
 			handler(resp, req)
 			saveStorageChan <- struct{}{}
 		}
 	}
 
-	router.Post("/update/{type}/{name}/{value}", saveStorageMiddleware(metricsController.UpdateFromURL))
-	router.Post("/update", saveStorageMiddleware(metricsController.UpdateFromJSON))
-	router.Post("/update/", saveStorageMiddleware(metricsController.UpdateFromJSON))
+	metricsController, err := controller.NewMetricsController(storage)
+	if err != nil {
+		return nil, fmt.Errorf("failed create metric controller: %w", err)
+	}
+
+	router.Post("/update/{type}/{name}/{value}", saveMiddleware(metricsController.UpdateFromURL))
+	router.Post("/update", saveMiddleware(metricsController.UpdateFromJSON))
+	router.Post("/update/", saveMiddleware(metricsController.UpdateFromJSON))
 	router.Get("/value/{type}/{name}", metricsController.GetValueFromURL)
 	router.Post("/value", metricsController.GetValueFromJSON)
 	router.Post("/value/", metricsController.GetValueFromJSON)
