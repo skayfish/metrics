@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -29,6 +30,21 @@ type Server struct {
 
 	// SF TODO
 	saveStorageChan chan struct{}
+
+	// SF TODO
+	doSaveStorage atomic.Bool
+}
+
+// SF TODO
+func (s *Server) getSaveMiddleware() func(http.HandlerFunc) http.HandlerFunc {
+	return func(handler http.HandlerFunc) http.HandlerFunc {
+		return func(resp http.ResponseWriter, req *http.Request) {
+			handler(resp, req)
+			if s.doSaveStorage.Load() {
+				s.saveStorageChan <- struct{}{}
+			}
+		}
+	}
 }
 
 // Возвращает маршрутизатор запросов
@@ -37,17 +53,12 @@ type Server struct {
 //	@returns маршрутизатор запросов в случае успеха
 //
 // SF TODO
-func getRouter(storage *storage.MemStorage, saveStorageChan chan struct{}) (chi.Router, error) {
+func getRouter(
+	storage *storage.MemStorage,
+	saveMiddleware func(http.HandlerFunc) http.HandlerFunc,
+) (chi.Router, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.CompressingMiddleware, middleware.LoggingMiddleware)
-
-	// SF TODO
-	saveMiddleware := func(handler http.HandlerFunc) http.HandlerFunc {
-		return func(resp http.ResponseWriter, req *http.Request) {
-			handler(resp, req)
-			saveStorageChan <- struct{}{}
-		}
-	}
 
 	metricsController, err := controller.NewMetricsController(storage)
 	if err != nil {
@@ -113,18 +124,19 @@ func NewServer(config *Config) (*Server, error) {
 		metricsStorage = storage.NewMemStorage()
 	}
 
-	saveStorageChan := make(chan struct{})
-	router, err := getRouter(&metricsStorage, saveStorageChan)
+	result := Server{
+		config:          config,
+		storage:         &metricsStorage,
+		saveStorageChan: make(chan struct{}),
+	}
+	router, err := getRouter(&metricsStorage, result.getSaveMiddleware())
 	if err != nil {
 		return nil, fmt.Errorf("server: NewServer: failed create router: %v", err)
 	}
 
-	return &Server{
-		config:          config,
-		storage:         &metricsStorage,
-		router:          &router,
-		saveStorageChan: saveStorageChan,
-	}, nil
+	result.router = &router
+
+	return &result, nil
 }
 
 // SF TODO
@@ -151,7 +163,6 @@ func (s *Server) saveStorageToFile() error {
 // SF TODO
 func (s *Server) Listen() error {
 	defer close(s.saveStorageChan)
-
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
@@ -164,6 +175,8 @@ func (s *Server) Listen() error {
 				case <-s.saveStorageChan:
 					if err := s.saveStorageToFile(); err != nil {
 						logger.LogS.Errorf("Failed save storage to file: %v", err)
+						close(s.saveStorageChan)
+						s.doSaveStorage.Swap(false)
 						return
 					}
 				}

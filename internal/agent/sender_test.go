@@ -366,14 +366,14 @@ func Test_sender_Run(t *testing.T) {
 				Port:             port,
 				RetryMaxWaitTime: retryMaxWaitTime,
 				RetryWaitTime:    retryWaitTime,
-				PollInterval:     10 * time.Millisecond,
-				ReportInterval:   50 * time.Millisecond,
+				PollInterval:     100 * time.Millisecond,
+				ReportInterval:   500 * time.Millisecond,
 			},
 			pollCount: 0,
 			client:    resty.New(),
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
 		defer cancel()
 		err = sender.Run(ctx)
 		require.Equal(t, context.DeadlineExceeded, errors.Unwrap(err))
