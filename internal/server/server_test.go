@@ -241,12 +241,11 @@ func TestServer_saveStorageToFile(t *testing.T) {
 	}
 
 	t.Run("failed write to file", func(t *testing.T) {
-		t.Skip()
 		s := Server{
 			storage: &notEmptyStorage,
 			config:  &Config{},
 		}
-		s.config.FileStoragePath = "./testdata/readonly.json"
+		s.config.FileStoragePath = "./unknown directory/unknown.json"
 		err := s.saveStorageToFile()
 		require.Error(t, err)
 		require.True(t, strings.HasPrefix(err.Error(),
@@ -412,7 +411,7 @@ func TestServer_Listen(t *testing.T) {
 	t.Run("failed sync save storage", func(t *testing.T) {
 		notEmptyStorage := newSuccessMemStorage()
 
-		s := createServer(t, true, "./testdata/readonly.json", 0)
+		s := createServer(t, true, "./unknown directory/unknown.json", 0)
 		s.storage = &notEmptyStorage
 
 		// Инициализация роутера
@@ -443,8 +442,6 @@ func TestServer_Listen(t *testing.T) {
 
 		// Проверка файла с данными хранилища
 		data, err := os.ReadFile(s.config.FileStoragePath)
-		require.NoError(t, err)
-		err = json.Unmarshal(data, &model.Metrics{})
 		require.Error(t, err)
 
 		// Замена на корректный файл
