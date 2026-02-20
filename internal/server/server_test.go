@@ -41,40 +41,29 @@ func Test_getRouter(t *testing.T) {
 	})
 }
 
+// SF TODO
 func newSuccessMemStorage() storage.MemStorage {
 	var delta1 int64 = 1298476200
 	var value1 float64 = 131072
 	var value2 float64 = 15288
 
-	tmp := struct {
-		delta1  int64
-		value1  float64
-		value2  float64
-		storage storage.MemStorage
-	}{
-		delta1: delta1,
-		value1: value1,
-		value2: value2,
-		storage: storage.MemStorage{
-			"GetSet92": model.Metrics{
-				ID:    "GetSet92",
-				MType: model.Counter,
-				Delta: &delta1,
-			},
-			"StackInuse": model.Metrics{
-				ID:    "StackInuse",
-				MType: model.Gauge,
-				Value: &value1,
-			},
-			"MCacheSys": model.Metrics{
-				ID:    "MCacheSys",
-				MType: model.Gauge,
-				Value: &value2,
-			},
+	return storage.MemStorage{
+		"GetSet92": model.Metrics{
+			ID:    "GetSet92",
+			MType: model.Counter,
+			Delta: &delta1,
+		},
+		"StackInuse": model.Metrics{
+			ID:    "StackInuse",
+			MType: model.Gauge,
+			Value: &value1,
+		},
+		"MCacheSys": model.Metrics{
+			ID:    "MCacheSys",
+			MType: model.Gauge,
+			Value: &value2,
 		},
 	}
-
-	return tmp.storage.GetMetrics()
 }
 
 // SF TODO
@@ -441,7 +430,7 @@ func TestServer_Listen(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		// Проверка файла с данными хранилища
-		data, err := os.ReadFile(s.config.FileStoragePath)
+		_, err = os.ReadFile(s.config.FileStoragePath)
 		require.Error(t, err)
 
 		// Замена на корректный файл
@@ -461,7 +450,7 @@ func TestServer_Listen(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 
 		// Проверка файла с данными хранилища
-		data, err = os.ReadFile(s.config.FileStoragePath)
+		data, err := os.ReadFile(s.config.FileStoragePath)
 		require.NoError(t, err)
 		require.Empty(t, data)
 

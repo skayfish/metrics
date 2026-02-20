@@ -99,18 +99,19 @@ func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 // SF TODO
 func NewServer(config *Config) (*Server, error) {
 	var metricsStorage storage.MemStorage
-	if config.ToRestore {
-		if config.FileStoragePath == "" {
-			file, err := os.CreateTemp(os.TempDir(), "storage*.json")
-			if err != nil {
-				return nil, fmt.Errorf("server: NewServer: failed create temporary file for storage: %v", err)
-			}
 
-			logger.LogS.Warnf("File storage path: %q", file.Name())
-			config.FileStoragePath = file.Name()
+	if config.FileStoragePath == "" {
+		file, err := os.CreateTemp(os.TempDir(), "storage*.json")
+		if err != nil {
+			return nil, fmt.Errorf("server: NewServer: failed create temporary file for storage: %v", err)
+		}
 
-			metricsStorage = storage.NewMemStorage()
-		} else {
+		logger.LogS.Warnf("File storage path: %q", file.Name())
+		config.FileStoragePath = file.Name()
+
+		metricsStorage = storage.NewMemStorage()
+	} else {
+		if config.ToRestore {
 			storageFromFile, err := createStorageFromJSON(config.FileStoragePath)
 			if err != nil {
 				tmp := storage.NewMemStorage()
@@ -119,17 +120,20 @@ func NewServer(config *Config) (*Server, error) {
 			}
 
 			metricsStorage = *storageFromFile
+		} else {
+			metricsStorage = storage.NewMemStorage()
 		}
-	} else {
-		metricsStorage = storage.NewMemStorage()
 	}
 
 	result := Server{
-		config:          config,
-		storage:         &metricsStorage,
-		saveStorageChan: make(chan struct{}),
+		config:  config,
+		storage: &metricsStorage,
 	}
-	result.doSaveStorage.Store(true)
+
+	if config.StoreInterval == 0 {
+		result.doSaveStorage.Store(true)
+		result.saveStorageChan = make(chan struct{})
+	}
 
 	router, err := getRouter(&metricsStorage, result.getSaveMiddleware())
 	if err != nil {
@@ -164,7 +168,6 @@ func (s *Server) saveStorageToFile() error {
 
 // SF TODO
 func (s *Server) Listen() error {
-	defer close(s.saveStorageChan)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
@@ -198,7 +201,6 @@ func (s *Server) Listen() error {
 					logger.LogS.Errorf("Failed save storage to file: %v", err)
 					return
 				}
-			case <-s.saveStorageChan:
 			}
 		}
 	}()
