@@ -129,6 +129,8 @@ func NewServer(config *Config) (*Server, error) {
 		storage:         &metricsStorage,
 		saveStorageChan: make(chan struct{}),
 	}
+	result.doSaveStorage.Store(true)
+
 	router, err := getRouter(&metricsStorage, result.getSaveMiddleware())
 	if err != nil {
 		return nil, fmt.Errorf("server: NewServer: failed create router: %v", err)
