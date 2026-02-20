@@ -202,7 +202,8 @@ func TestServer_saveStorageToFile(t *testing.T) {
 			expectedStorage: notEmptyStorage,
 		},
 	}
-	for _, tt := range tests {
+	for i := range tests {
+		tt := &tests[i]
 		t.Run(tt.test, func(t *testing.T) {
 			file, err := os.CreateTemp(os.TempDir(), "storage*.json")
 			require.NoError(t, err)
