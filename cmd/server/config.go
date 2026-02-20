@@ -16,13 +16,13 @@ type environments struct {
 	// Сетевой адрес
 	Address *flags.NetAddress `env:"ADDRESS" example:"localhost:8080"`
 
-	// SF TODO
+	// Интервал времени в секундах, по истечении которого текущие данные хранилища метрик сохраняются на диск
 	StoreInterval *uint `env:"STORE_INTERVAL" example:"5"`
 
-	// SF TODO
+	// Путь до файла, куда сохраняются данные хранилища метрик. По умолчанию во временный файл
 	FileStoragePath *string `env:"FILE_STORAGE_PATH" example:"/home/user/server"`
 
-	// SF TODO
+	// Булево значение (true/false), определяющее, следует ли загружать ранее сохранённые значения из указанного файла при старте сервера
 	ToRestore *bool `env:"RESTORE" example:"true"`
 }
 

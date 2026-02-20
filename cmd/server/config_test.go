@@ -12,7 +12,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// SF TODO
+// Проверяет парс флагов, указанных при запуске программы
 func Test_parseConfig(t *testing.T) {
 	t.Run("default values", func(t *testing.T) {
 		config, err := parseConfig()

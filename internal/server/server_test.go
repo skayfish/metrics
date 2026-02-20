@@ -19,29 +19,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
-
-func getEmptySaveMiddleware() func(http.HandlerFunc) http.HandlerFunc {
+// Возвращает пустую middleware-обёртку
+func getEmptyMiddleware() func(http.HandlerFunc) http.HandlerFunc {
 	return func(handler http.HandlerFunc) http.HandlerFunc {
-		return func(resp http.ResponseWriter, req *http.Request) {
-		}
+		return func(resp http.ResponseWriter, req *http.Request) {}
 	}
 }
 
-// SF TODO
+// Проверяет настройку маршрутизатора запросов
 func Test_getRouter(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		s := storage.NewMemStorage()
-		_, err := getRouter(&s, getEmptySaveMiddleware())
+		_, err := getRouter(&s, getEmptyMiddleware())
 		assert.NoError(t, err)
 	})
 	t.Run("success", func(t *testing.T) {
-		_, err := getRouter(nil, getEmptySaveMiddleware())
+		_, err := getRouter(nil, getEmptyMiddleware())
 		assert.NoError(t, err)
 	})
 }
 
-// SF TODO
+// Возвращает непустое хранилище с валидными данными
 func newSuccessMemStorage() storage.MemStorage {
 	var delta1 int64 = 1298476200
 	var value1 float64 = 131072
@@ -66,7 +64,7 @@ func newSuccessMemStorage() storage.MemStorage {
 	}
 }
 
-// SF TODO
+// Проверяет создание хранилища метрик из json файла
 func Test_createStorageFromJSON(t *testing.T) {
 	tests := []struct {
 		test        string
@@ -108,7 +106,7 @@ func Test_createStorageFromJSON(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет создание сервера по переданной конфигурации
 func TestNewServer(t *testing.T) {
 	tests := []struct {
 		test   string
@@ -174,7 +172,7 @@ func TestNewServer(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет сохранение в файл данных хранилища метрик
 func TestServer_saveStorageToFile(t *testing.T) {
 	emptyStorage := storage.NewMemStorage()
 	notEmptyStorage := newSuccessMemStorage()
@@ -243,7 +241,7 @@ func TestServer_saveStorageToFile(t *testing.T) {
 	})
 }
 
-// SF TODO
+// Возвращает свободный порт на устройстве
 func getFreePort() (int, error) {
 	// Слушаем на порту :0 — система выделит любой свободный
 	listener, err := net.Listen("tcp", ":0")
@@ -261,7 +259,7 @@ func getFreePort() (int, error) {
 	return port, nil
 }
 
-// SF TODO
+// Создаёт корректный сервер с переданной конфигурацией
 func createServer(t *testing.T, restore bool, fileStoragePath string, storeInterval time.Duration) *Server {
 	port, err := getFreePort()
 	require.NoError(t, err)
@@ -277,8 +275,8 @@ func createServer(t *testing.T, restore bool, fileStoragePath string, storeInter
 	return s
 }
 
-// SF TODO
-func listenServer(t *testing.T, s *Server) chan error {
+// Запускает сервер в отдельной горутине
+func listenServer(s *Server) chan error {
 	errChan := make(chan error)
 	go func() {
 		err := s.Listen()
@@ -287,7 +285,7 @@ func listenServer(t *testing.T, s *Server) chan error {
 	return errChan
 }
 
-// SF TODO
+// Проверяет запуск сервера с различными настройками сохранения данных хранилища метрик
 func TestServer_Listen(t *testing.T) {
 	t.Run("success launch", func(t *testing.T) {
 		s := createServer(t, false, "", 0)
@@ -302,7 +300,7 @@ func TestServer_Listen(t *testing.T) {
 		s.router = &router
 
 		// Запуск сервера
-		errChan := listenServer(t, s)
+		errChan := listenServer(s)
 		defer close(errChan)
 		time.Sleep(100 * time.Millisecond)
 
@@ -341,7 +339,7 @@ func TestServer_Listen(t *testing.T) {
 		s.router = &router
 
 		// Запуск сервера
-		errChan := listenServer(t, s)
+		errChan := listenServer(s)
 		defer close(errChan)
 		time.Sleep(100 * time.Millisecond)
 
@@ -413,7 +411,7 @@ func TestServer_Listen(t *testing.T) {
 		s.router = &router
 
 		// Запуск сервера
-		errChan := listenServer(t, s)
+		errChan := listenServer(s)
 		defer close(errChan)
 		time.Sleep(100 * time.Millisecond)
 
@@ -480,7 +478,7 @@ func TestServer_Listen(t *testing.T) {
 		s.router = &router
 
 		// Запуск сервера
-		errChan := listenServer(t, s)
+		errChan := listenServer(s)
 		defer close(errChan)
 		time.Sleep(100 * time.Millisecond)
 

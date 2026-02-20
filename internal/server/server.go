@@ -17,26 +17,30 @@ import (
 	"github.com/skayfish/metrics/internal/server/storage"
 )
 
-// SF TODO
+// Сервер для принятия запросов по HTTP
 type Server struct {
-	// SF TODO
+	// Конфигурация сервере
 	config *Config
 
-	// SF TODO
+	// Хранилище метрик
 	storage *storage.MemStorage
 
-	// SF TODO
+	// Маршрутизатор запросов
 	router *chi.Router
 
-	// SF TODO
+	// Канал для отправки сигнала на сохранение данных хранилища в файл
 	saveStorageChan chan struct{}
 
-	// SF TODO
+	// Определяет, нужно ли сохранять данные хранилища метрик в файл.
+	// Используется для корректной работы канала.
 	doSaveStorage atomic.Bool
 }
 
-// SF TODO
-func (s *Server) getSaveMiddleware() func(http.HandlerFunc) http.HandlerFunc {
+// Возвращает middleware-обёртку.
+// Обёртка корректно отправляет сигнал на сохранение данных хранилища в файл после работы handler
+//
+//	@returns middleware-обёртку
+func (s *Server) getSaveMiddleware() func(handler http.HandlerFunc) http.HandlerFunc {
 	return func(handler http.HandlerFunc) http.HandlerFunc {
 		return func(resp http.ResponseWriter, req *http.Request) {
 			handler(resp, req)
@@ -49,10 +53,10 @@ func (s *Server) getSaveMiddleware() func(http.HandlerFunc) http.HandlerFunc {
 
 // Возвращает маршрутизатор запросов
 //
-//	@param storage хранилище метрик
-//	@returns маршрутизатор запросов в случае успеха
-//
-// SF TODO
+//	@param storage        хранилище метрик
+//	@param saveMiddleware middleware-обёртка для отправки сигнала на сохранение данных хранилища метрик в файл
+//	@returns chi.Router маршрутизатор запросов в случае успеха
+//	@returns error ошибку в ином случае
 func getRouter(
 	storage *storage.MemStorage,
 	saveMiddleware func(http.HandlerFunc) http.HandlerFunc,
@@ -76,7 +80,11 @@ func getRouter(
 	return router, nil
 }
 
-// SF TODO
+// Считывает данные метрик из json файла и создаёт из них хранилище метрик
+//
+//	@param filePath путь к json файлу с данными метрик
+//	@returns *storage.MemStorage хранилище метрик в случае успеха
+//	@returns error ошибку в ином случае
 func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
@@ -96,7 +104,11 @@ func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 	return &storage, nil
 }
 
-// SF TODO
+// Создаёт новый сервер по переданной конфигурации
+//
+//	@param config конфигурация сервера
+//	@returns *Server сервер в случае успеха
+//	@returns error ошибку в ином случае
 func NewServer(config *Config) (*Server, error) {
 	var metricsStorage storage.MemStorage
 
@@ -145,7 +157,9 @@ func NewServer(config *Config) (*Server, error) {
 	return &result, nil
 }
 
-// SF TODO
+// Сохраняет данные хранилища метрик в json файл, который указан в конфигурации сервера
+//
+//	@returns error ошибку в случае неудачи
 func (s *Server) saveStorageToFile() error {
 	logger.LogS.Debugw("Save metrics storage to file", "file", s.config.FileStoragePath, "metrics storage", s.storage)
 
@@ -166,12 +180,15 @@ func (s *Server) saveStorageToFile() error {
 	return nil
 }
 
-// SF TODO
+// Запускает сервер на ожидание запросов. Блокирует дальнейшую работу программы
+//
+//	@returns error ошибку в случае неудачи
 func (s *Server) Listen() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
 		if s.config.StoreInterval == 0 {
+			// Сохранение данных хранилища метрик в файл синхронно (по получению сигнала)
 			for {
 				select {
 				case <-ctx.Done():
@@ -188,6 +205,7 @@ func (s *Server) Listen() error {
 			}
 		}
 
+		// Сохранение данных хранилища метрик в файл асинхронно (каждые N секунд, задаётся в конфигурации сервера)
 		saveStorageTicker := time.NewTicker(s.config.StoreInterval)
 		defer saveStorageTicker.Stop()
 
@@ -205,6 +223,7 @@ func (s *Server) Listen() error {
 		}
 	}()
 
+	// Запуск сервера
 	logger.LogS.Info(fmt.Sprint("Server launch successful on http://", s.config.Address))
 	if err := http.ListenAndServe(s.config.Address.String(), *s.router); err != http.ErrServerClosed {
 		return fmt.Errorf("server: server.Listen: %v", err)
