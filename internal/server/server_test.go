@@ -462,4 +462,84 @@ func TestServer_Listen(t *testing.T) {
 			fmt.Println("Server forced shutdown")
 		}
 	})
+
+	t.Run("not sync save storage", func(t *testing.T) {
+		notEmptyStorage := newSuccessMemStorage()
+
+		s := createServer(t, true, "", 500*time.Millisecond)
+		s.storage = &notEmptyStorage
+
+		// Инициализация роутера
+		handler := func(resp http.ResponseWriter, req *http.Request) {}
+		handlerSave := s.getSaveMiddleware()(handler)
+
+		router := chi.Router(chi.NewRouter())
+		router.Post("/nosave", handler)
+		router.Post("/save", handlerSave)
+		s.router = &router
+
+		// Запуск сервера
+		errChan := listenServer(t, s)
+		defer close(errChan)
+		time.Sleep(100 * time.Millisecond)
+
+		// Делаем запрос к серверу
+		client := resty.New()
+		url := "http://" + s.config.Address.String()
+
+		resp, err := client.R().Post(url + "/nosave")
+		require.NoError(t, err)
+
+		assert.Empty(t, resp.String())
+		assert.Equal(t, http.StatusOK, resp.StatusCode())
+
+		// Ожидаем запись в файл (но её быть не должно)
+		time.Sleep(100 * time.Millisecond)
+
+		// Проверка файла с данными хранилища
+		data, err := os.ReadFile(s.config.FileStoragePath)
+		require.NoError(t, err)
+		assert.Empty(t, data)
+
+		// Второй запрос, который не должен сохранить
+		resp, err = client.R().Post(url + "/save")
+		require.NoError(t, err)
+
+		assert.Empty(t, resp.String())
+		assert.Equal(t, http.StatusOK, resp.StatusCode())
+
+		// Ожидаем запись в файл (но её быть не должно)
+		time.Sleep(100 * time.Millisecond)
+
+		// Проверка файла с данными хранилища
+		data, err = os.ReadFile(s.config.FileStoragePath)
+		require.NoError(t, err)
+		assert.Empty(t, data)
+
+		// Ждём ещё время, чтобы прошло пол секунды в сумме (~300 миллисекунд прошло)
+		time.Sleep(400 * time.Millisecond) // ~700 миллисекунд
+
+		// Проверка файла с данными хранилища
+		data, err = os.ReadFile(s.config.FileStoragePath)
+		require.NoError(t, err)
+
+		metrics := []model.Metrics{}
+		err = json.Unmarshal(data, &metrics)
+		require.NoError(t, err)
+
+		storage := make(storage.MemStorage)
+		for _, metric := range metrics {
+			storage[metric.ID] = metric
+		}
+
+		assert.Equal(t, notEmptyStorage, storage)
+
+		// Завершаем сервер
+		select {
+		case err := <-errChan:
+			require.NoError(t, err)
+		case <-time.After(3 * time.Second):
+			fmt.Println("Server forced shutdown")
+		}
+	})
 }
