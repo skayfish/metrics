@@ -29,6 +29,7 @@ type Server struct {
 	router *chi.Router
 
 	// Канал для отправки сигнала на сохранение данных хранилища в файл
+	// @warning использовать только когда doSaveStorage = true
 	saveStorageChan chan struct{}
 
 	// Определяет, нужно ли сохранять данные хранилища метрик в файл.
@@ -188,6 +189,8 @@ func (s *Server) Listen() error {
 	defer cancel()
 	go func() {
 		if s.config.StoreInterval == 0 {
+			defer close(s.saveStorageChan)
+			defer s.doSaveStorage.Swap(false)
 			// Сохранение данных хранилища метрик в файл синхронно (по получению сигнала)
 			for {
 				select {
@@ -197,8 +200,6 @@ func (s *Server) Listen() error {
 				case <-s.saveStorageChan:
 					if err := s.saveStorageToFile(); err != nil {
 						logger.LogS.Errorf("Failed save storage to file: %v", err)
-						close(s.saveStorageChan)
-						s.doSaveStorage.Swap(false)
 						return
 					}
 				}
