@@ -2,13 +2,15 @@ package controller
 
 import (
 	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
@@ -56,11 +58,11 @@ const templateHTML = `
         <tr>
             <td>
                 {{if eq (printf "%T" .Value) "float64"}}
-                    <span class="float-value">{{.Name}}</span>
+                    <span class="float-value">{{.ID}}</span>
                 {{else if eq (printf "%T" .Value) "int64"}}
-                    <span class="int-value">{{.Name}}</span>
+                    <span class="int-value">{{.ID}}</span>
                 {{else}}
-                    <span class="unknown">{{.Name}}</span>
+                    <span class="unknown">{{.ID}}</span>
                 {{end}}</td>
             <td>
                 {{if eq (printf "%T" .Value) "float64"}}
@@ -81,7 +83,7 @@ const templateHTML = `
 `
 
 // Ошибка во время создания контроллера метрик
-const newMetricsControllerError = "controller: metrics controller creation failed"
+var ErrCreateMetricsController = errors.New("controller: metrics controller creation failed")
 
 // Создаёт новый контроллер метрик
 //
@@ -92,20 +94,24 @@ func NewMetricsController(storage *storage.MemStorage) (*MetricsController, erro
 	// Парсинг шаблона html
 	tmpl, err := template.New("metrics-table").Parse(templateHTML)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %s", newMetricsControllerError, err)
+		return nil, fmt.Errorf("%w: %s", ErrCreateMetricsController, err)
 	}
 
 	return &MetricsController{storage: storage, tableHTMLTemplate: tmpl}, nil
 }
 
-// Обновляет/добавляет метрику в хранилище
+// Обновляет/добавляет метрику в хранилище. Берёт данные из URL
 //
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
-func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) {
+func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Request) {
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
 	mValue := chi.URLParam(req, "value")
+
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL: before",
+		"metrics", c.storage.GetMetrics(),
+	)
 
 	switch mType {
 	case model.Gauge:
@@ -115,7 +121,10 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 			return
 		}
 
-		c.storage.UpdateGauge(mName, value)
+		if err = c.storage.UpdateGauge(mName, value); err != nil {
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+			return
+		}
 	case model.Counter:
 		value, err := strconv.ParseInt(mValue, 10, 64)
 		if err != nil {
@@ -123,7 +132,10 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 			return
 		}
 
-		c.storage.UpdateCounter(mName, value)
+		if err = c.storage.UpdateCounter(mName, value); err != nil {
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+			return
+		}
 	default:
 		http.Error(resp,
 			fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", mType),
@@ -131,50 +143,210 @@ func (c *MetricsController) Update(resp http.ResponseWriter, req *http.Request) 
 		return
 	}
 
-	log.Printf("\nDebug data:\n")
-	log.Printf("\tURL Path: %s\n", req.URL.Path)
-	log.Printf("\tStorage contains:\n\t%v\n\n", c.storage)
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL: after",
+		"metrics", c.storage.GetMetrics(),
+	)
 }
 
-// Возвращает в ответе значение запрошенной метрики
+// Обновляет/добавляет метрику в хранилище. Берёт данные из тела в формате JSON
 //
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
-func (c *MetricsController) GetValue(resp http.ResponseWriter, req *http.Request) {
+func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.Request) {
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
+		return
+	}
+
+	metric := model.Metrics{}
+	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
+		http.Error(resp, fmt.Sprintf("Failed unmarshall json: %s", err), http.StatusBadRequest)
+		return
+	}
+
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromJSON: before",
+		"metrics", c.storage.GetMetrics(),
+	)
+
+	updatedMetric, err := c.storage.Update(metric)
+	if err != nil {
+		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		return
+	}
+
+	logger.LogS.Debugw("controller: MetricsController.UpdateFromJSON: after",
+		"metrics", c.storage.GetMetrics(),
+		"updated metric", updatedMetric,
+	)
+
+	updatedMetricJSON, err := json.Marshal(updatedMetric)
+	if err != nil {
+		logger.LogS.Errorw("controller: MetricsController.UpdateFromJSON",
+			"error", http.StatusText(http.StatusInternalServerError),
+		)
+		http.Error(resp, errors.Unwrap(err).Error(), http.StatusInternalServerError)
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(updatedMetricJSON)
+}
+
+// Возвращает значение запрошенной метрики.
+// Данные для поиска в хранилище берутся из запроса в URL
+//
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
+func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.Request) {
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
 
-	log.Printf("\nDebug data:\n")
-	log.Printf("\tURL Path: %s\n", req.URL.Path)
-	log.Printf("\tStorage contains:\n\t%v\n\n", c.storage)
+	logger.LogS.Debugw("controller: MetricsController.GetValueFromURL",
+		"metrics", c.storage.GetMetrics(),
+	)
 
+	var value interface{}
+	var err error
 	switch mType {
 	case model.Gauge:
-		if value, ok := c.storage.GetGauge(mName); ok {
-			resp.Write([]byte(fmt.Sprint(value)))
-		} else {
-			resp.WriteHeader(http.StatusNotFound)
-		}
+		value, err = c.storage.GetGauge(mName)
 	case model.Counter:
-		if value, ok := c.storage.GetCounter(mName); ok {
-			resp.Write([]byte(fmt.Sprint(value)))
-		} else {
-			resp.WriteHeader(http.StatusNotFound)
-		}
+		value, err = c.storage.GetCounter(mName)
 	default:
 		http.Error(resp,
 			fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", mType),
 			http.StatusBadRequest)
 		return
+	}
+
+	switch {
+	case err == nil:
+		fmt.Fprint(resp, value)
+	case errors.Is(err, storage.ErrNotFound):
+		http.Error(resp, fmt.Sprintf("Metric with id %q, type %q not found", mName, mType),
+			http.StatusNotFound)
+		return
+	case errors.Is(err, storage.ErrFoundNotGaugeMetricType) || errors.Is(err, storage.ErrFoundNotCounterMetricType):
+		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		return
+	default:
+		logger.LogS.Errorw("controller: MetricsController.GetValueFromURL: unknown error while accessing the storage",
+			"err", err,
+			"metric type", mType,
+			"metric name", mName,
+		)
+		http.Error(resp, fmt.Sprint("Unknown error while accessing the storage: ", err), http.StatusInternalServerError)
+		return
+	}
+}
+
+// Возвращает данные запрошенной метрики в формате JSON.
+// Данные для поиска в хранилище берутся из запроса в формате JSON
+//
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
+func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http.Request) {
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
+		return
+	}
+
+	metric := model.Metrics{}
+	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
+		http.Error(resp, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	logger.LogS.Debugw("controller: MetricsController.GetValueFromJSON",
+		"metrics", c.storage.GetMetrics(),
+	)
+
+	var value interface{}
+	var err error
+	switch metric.MType {
+	case model.Gauge:
+		value, err = c.storage.GetGauge(metric.ID)
+	case model.Counter:
+		value, err = c.storage.GetCounter(metric.ID)
+	default:
+		http.Error(resp,
+			fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", metric.MType),
+			http.StatusBadRequest)
+		return
+	}
+
+	switch {
+	case err == nil:
+		break
+	case errors.Is(err, storage.ErrNotFound):
+		http.Error(resp, fmt.Sprintf("Metric with id %q, type %q not found", metric.ID, metric.MType),
+			http.StatusNotFound)
+		return
+	case errors.Is(err, storage.ErrFoundNotGaugeMetricType) || errors.Is(err, storage.ErrFoundNotCounterMetricType):
+		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		return
+	default:
+		logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: unknown error while accessing the storage",
+			"err", err,
+			"metric type", metric.MType,
+			"metric name", metric.ID,
+		)
+		http.Error(resp, fmt.Sprint("Unknown error while accessing the storage: ", err), http.StatusInternalServerError)
+		return
+	}
+
+	switch metric.MType {
+	case model.Gauge:
+		gaugeValue, ok := value.(float64)
+		if !ok {
+			http.Error(resp, "Error converting to float64", http.StatusInternalServerError)
+			logger.LogS.DPanicw("controller: MetricsController.GetValueFromJSON: error converting to float64:", "value", value)
+			return
+		}
+
+		metricJSON, err := json.MarshalIndent(model.Metrics{
+			ID:    metric.ID,
+			MType: metric.MType,
+			Value: &gaugeValue,
+		}, "", "    ")
+		if err != nil {
+			logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: failed marshal gauge metric response", "error", err)
+			http.Error(resp, "Failed marshal gauge metric response", http.StatusInternalServerError)
+			return
+		}
+
+		resp.Header().Set("Content-Type", "application/json")
+		resp.Write(metricJSON)
+	case model.Counter:
+		counterValue, ok := value.(int64)
+		if !ok {
+			http.Error(resp, "Error converting to int64", http.StatusInternalServerError)
+			logger.LogS.DPanicw("controller: MetricsController.GetValueFromJSON: error converting to int64:", "value", value)
+			return
+		}
+
+		metricJSON, err := json.MarshalIndent(model.Metrics{
+			ID:    metric.ID,
+			MType: metric.MType,
+			Delta: &counterValue,
+		}, "", "    ")
+		if err != nil {
+			logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: failed marshal counter metric response", "error", err)
+			http.Error(resp, "Failed marshal counter metric response", http.StatusInternalServerError)
+			return
+		}
+
+		resp.Header().Set("Content-Type", "application/json")
+		resp.Write(metricJSON)
 	}
 }
 
 // Ошибка обработки запроса на получение данных всех метрик
-const getAllMetricsError = "controller: an error occurred while retrieving all metrics"
+const getAllMetricsError = "controller: MetricsController.GetAllMetrics: an error occurred while retrieving all metrics"
 
 // Структура метрики для HTML таблицы
-type metric struct {
-	Name  string      // Название метрики
+type metricHTML struct {
+	ID    string      // Идентификатор метрики
 	Value interface{} // Значение метрики
 }
 
@@ -183,24 +355,30 @@ type metric struct {
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
 func (c *MetricsController) GetAllMetrics(resp http.ResponseWriter, req *http.Request) {
-	log.Printf("\nDebug data:\n")
-	log.Printf("\tURL Path: %s\n", req.URL.Path)
-	log.Printf("\tStorage contains:\n\t%v\n\n", c.storage)
+	logger.LogS.Debugw("controller: MetricsController.GetAllMetrics",
+		"metrics", c.storage.GetMetrics(),
+	)
 
-	metrics := []metric{}
-	for mName, mValue := range c.storage.GetGauges() {
-		metrics = append(metrics, metric{Name: mName, Value: mValue})
-	}
-
-	for mName, mValue := range c.storage.GetCounters() {
-		metrics = append(metrics, metric{Name: mName, Value: mValue})
+	metrics := []metricHTML{}
+	for id, metric := range c.storage.GetMetrics() {
+		switch metric.MType {
+		case model.Counter:
+			metrics = append(metrics, metricHTML{ID: id, Value: *metric.Delta})
+		case model.Gauge:
+			metrics = append(metrics, metricHTML{ID: id, Value: *metric.Value})
+		default:
+			logger.LogS.Warnw("controller: MetricsController.GetAllMetrics: unknown metric type", "type", metric.MType)
+		}
 	}
 
 	resultTableBuf := new(bytes.Buffer)
 	err := c.tableHTMLTemplate.Execute(resultTableBuf, metrics)
 	if err != nil {
+		logger.LogS.Errorw(getAllMetricsError,
+			"error", http.StatusText(http.StatusInternalServerError),
+		)
 		http.Error(resp, err.Error(), http.StatusInternalServerError)
-		log.Printf("%s: %s", getAllMetricsError, http.StatusText(http.StatusInternalServerError))
+		return
 	}
 
 	resp.Header().Set("Content-Type", "text/html; charset=UTF-8")

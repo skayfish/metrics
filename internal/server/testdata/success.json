@@ -1,0 +1,17 @@
+[
+  {
+    "id": "GetSet92",
+    "type": "counter",
+    "delta": 1298476200
+  },
+  {
+    "id": "StackInuse",
+    "type": "gauge",
+    "value": 131072
+  },
+  {
+    "id": "MCacheSys",
+    "type": "gauge",
+    "value": 15288
+  }
+]

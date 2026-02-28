@@ -15,15 +15,15 @@ type NetAddress struct {
 // Возвращает строковое представление адреса
 //
 //	@returns строковое представление адреса
-func (a NetAddress) String() string {
-	return fmt.Sprintf("%s:%d", a.Host, a.Port)
+func (n NetAddress) String() string {
+	return fmt.Sprintf("%s:%d", n.Host, n.Port)
 }
 
 // Обрабатывает входную строку флага и заполняет структуру
 //
 //	@param input входная строка флага
-//	@returns ошибка в случае передачи некорректных данных
-func (a *NetAddress) Set(input string) error {
+//	@returns ошибку в случае передачи некорректных данных
+func (n *NetAddress) Set(input string) error {
 	parts := strings.Split(input, ":")
 	if len(parts) != 2 {
 		return fmt.Errorf("invalid format: expected 'host:port', got %q", input)
@@ -41,14 +41,22 @@ func (a *NetAddress) Set(input string) error {
 		return fmt.Errorf("port must be in range 1–65535, got %d", port)
 	}
 
-	a.Host = host
-	a.Port = port
+	n.Host = host
+	n.Port = port
 	return nil
 }
 
-// Возвращает тип значения для документации
+// Возвращает тип значения адреса для документации
 //
-//	@returns тип значения для документации
-func (a *NetAddress) Type() string {
-	return "host:port"
+//	@returns тип значения адреса для документации
+func (NetAddress) Type() string {
+	return `"host:port"`
+}
+
+// Обрабатывает входную строку переменной окружения и заполняет структуру
+//
+//	@param text входная строка переменной окружения
+//	@returns ошибку в случае передачи некорректных данных
+func (n *NetAddress) UnmarshalText(text []byte) error {
+	return n.Set(string(text))
 }

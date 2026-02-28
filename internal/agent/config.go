@@ -1,6 +1,10 @@
 package agent
 
-import "time"
+import (
+	"time"
+
+	"github.com/skayfish/metrics/internal/logger"
+)
 
 // Конфигурация работы менеджера отправки метрик серверу
 type Config struct {
@@ -24,6 +28,9 @@ type Config struct {
 
 	// Частота отправки метрик серверу (например, раз в 2 секунды)
 	ReportInterval time.Duration
+
+	// Уровень логирования
+	LogLevel logger.Level
 }
 
 // Возвращает тип соединения

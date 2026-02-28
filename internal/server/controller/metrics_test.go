@@ -1,19 +1,22 @@
 package controller
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-resty/resty/v2"
+	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// Проверяет работу обработчика обновления метрики
-func TestCreateUpdateHandler(t *testing.T) {
+// Проверяет работу обработчика обновления метрики через URL
+func TestMetricsController_UpdateFromURL(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -55,9 +58,9 @@ func TestCreateUpdateHandler(t *testing.T) {
 		},
 		{
 			testName:       "update gauge metric",
-			gaugeMetrics:   map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
-			counterMetrics: map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
-			requestURL:     "/update/gauge/MetricName/0.233000024133",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/update/gauge/GaugeMetricName/0.233000024133",
 			want: want{
 				status:      http.StatusOK,
 				contentType: "",
@@ -66,13 +69,35 @@ func TestCreateUpdateHandler(t *testing.T) {
 		},
 		{
 			testName:       "update counter metric",
-			gaugeMetrics:   map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
-			counterMetrics: map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
-			requestURL:     "/update/counter/MetricName/11",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/update/counter/CounterMetricName/11",
 			want: want{
 				status:      http.StatusOK,
 				contentType: "",
 				body:        "",
+			},
+		},
+		{
+			testName:       "found not gauge metric type",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/update/gauge/CounterMetricName/0.233000024133",
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "found not \"gauge\" metric type\n",
+			},
+		},
+		{
+			testName:       "found not counter metric type",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/update/counter/GaugeMetricName/11",
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "found not \"counter\" metric type\n",
 			},
 		},
 	}
@@ -91,7 +116,7 @@ func TestCreateUpdateHandler(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Post("/update/{type}/{name}/{value}", controller.Update)
+			router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
 			server := httptest.NewServer(router)
 			defer server.Close()
 
@@ -106,8 +131,157 @@ func TestCreateUpdateHandler(t *testing.T) {
 	}
 }
 
-// Проверяет работу обработчика получения конкретной метрики
-func TestCreateGetValueHandler(t *testing.T) {
+// Проверяет работу обработчика запроса на обновление метрики, переданной в формате JSON
+func TestMetricsController_UpdateFromJSON(t *testing.T) {
+	type want struct {
+		status      int
+		contentType string
+		body        string
+	}
+	tests := []struct {
+		testName           string
+		gaugeMetrics       map[string]float64
+		counterMetrics     map[string]int64
+		requestURL         string
+		requestBody        string
+		requestContentType string
+		want               want
+	}{
+		{
+			testName:           "expected json in request",
+			requestURL:         "/update/",
+			requestBody:        `{"id":"MetricName", "type":"unknown"}`,
+			requestContentType: `text/plain`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Expected application/json content type\n",
+			},
+		},
+		{
+			testName:           "invalid json",
+			requestURL:         "/update/",
+			requestBody:        `{`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Failed unmarshall json: unexpected EOF\n",
+			},
+		},
+		{
+			testName:           "unrecognized type",
+			requestURL:         "/update/",
+			requestBody:        `{"id":"MetricName", "type":"unknown"}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "unrecognized metric type. Supported types: \"gauge\", \"counter\"\n",
+			},
+		},
+		{
+			testName:           "update gauge metric",
+			gaugeMetrics:       map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics:     map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:         "/update",
+			requestBody:        `{"id":"GaugeMetricName", "type":"gauge", "value": 0.233000024133}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusOK,
+				contentType: "application/json",
+				body:        `{"id":"GaugeMetricName","type":"gauge","value":0.233000024133}`,
+			},
+		},
+		{
+			testName:           "update counter metric",
+			gaugeMetrics:       map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics:     map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:         "/update/",
+			requestBody:        `{"id":"CounterMetricName", "type":"counter", "delta": 11}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusOK,
+				contentType: "application/json",
+				body:        `{"id":"CounterMetricName","type":"counter","delta":4323}`,
+			},
+		},
+		{
+			testName:           "found not gauge metric type",
+			gaugeMetrics:       map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics:     map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:         "/update",
+			requestBody:        `{"id":"CounterMetricName", "type":"gauge", "value": 0.233000024133}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "found not \"gauge\" metric type\n",
+			},
+		},
+		{
+			testName:           "found not counter metric type",
+			gaugeMetrics:       map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics:     map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:         "/update",
+			requestBody:        `{"id":"GaugeMetricName", "type":"counter", "delta": 11}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "found not \"counter\" metric type\n",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			storage := storage.NewMemStorage()
+			controller, err := NewMetricsController(&storage)
+			require.NoError(t, err)
+
+			for name, value := range tt.counterMetrics {
+				storage.UpdateCounter(name, value)
+			}
+
+			for name, value := range tt.gaugeMetrics {
+				storage.UpdateGauge(name, value)
+			}
+
+			router := chi.NewRouter()
+			router.Post("/update/", controller.UpdateFromJSON)
+			router.Post("/update", controller.UpdateFromJSON)
+			server := httptest.NewServer(router)
+			defer server.Close()
+
+			resp, err := resty.New().R().
+				SetBody(tt.requestBody).
+				SetHeader("Content-Type", tt.requestContentType).
+				SetHeader("Accept", "application/json").
+				Post(server.URL + tt.requestURL)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.want.status, resp.StatusCode())
+			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+
+			switch tt.want.contentType {
+			case "text/plain; charset=utf-8":
+				assert.Equal(t, tt.want.body, string(resp.Body()))
+			case "application/json":
+				expectedMetric := model.Metrics{}
+				buf := bytes.NewBuffer([]byte(tt.want.body))
+				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
+				expectedMetricJSON, err := json.Marshal(expectedMetric)
+				require.NoError(t, err)
+				assert.Equal(t, string(expectedMetricJSON), string(resp.Body()))
+			default:
+				t.Error("Unexpected content type", tt.want.contentType)
+			}
+		})
+	}
+}
+
+// Проверяет работу обработчика получения конкретной метрики через URL
+func TestMetricsController_GetValueFromURL(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -134,8 +308,8 @@ func TestCreateGetValueHandler(t *testing.T) {
 			requestURL: "/value/gauge/MetricName",
 			want: want{
 				status:      http.StatusNotFound,
-				contentType: "",
-				body:        "",
+				contentType: "text/plain; charset=utf-8",
+				body:        "Metric with id \"MetricName\", type \"gauge\" not found\n",
 			},
 		},
 		{
@@ -143,8 +317,8 @@ func TestCreateGetValueHandler(t *testing.T) {
 			requestURL: "/value/counter/MetricName",
 			want: want{
 				status:      http.StatusNotFound,
-				contentType: "",
-				body:        "",
+				contentType: "text/plain; charset=utf-8",
+				body:        "Metric with id \"MetricName\", type \"counter\" not found\n",
 			},
 		},
 		{
@@ -167,6 +341,26 @@ func TestCreateGetValueHandler(t *testing.T) {
 				body:        "4312",
 			},
 		},
+		{
+			testName:       "found not gauge metric type",
+			counterMetrics: map[string]int64{"MetricName": 4312},
+			requestURL:     "/value/gauge/MetricName",
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "found not \"gauge\" metric type\n",
+			},
+		},
+		{
+			testName:     "found not counter metric type",
+			gaugeMetrics: map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
+			requestURL:   "/value/counter/MetricName",
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "found not \"counter\" metric type\n",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
@@ -183,7 +377,7 @@ func TestCreateGetValueHandler(t *testing.T) {
 			}
 
 			router := chi.NewRouter()
-			router.Get("/value/{type}/{name}", controller.GetValue)
+			router.Get("/value/{type}/{name}", controller.GetValueFromURL)
 			server := httptest.NewServer(router)
 			defer server.Close()
 
@@ -198,8 +392,164 @@ func TestCreateGetValueHandler(t *testing.T) {
 	}
 }
 
+// Проверяет работу обработчика получения конкретной метрики через JSON
+func TestMetricsController_GetValueFromJSON(t *testing.T) {
+	type want struct {
+		status      int
+		contentType string
+		body        string
+	}
+	tests := []struct {
+		testName           string
+		gaugeMetrics       map[string]float64
+		counterMetrics     map[string]int64
+		requestURL         string
+		requestBody        string
+		requestContentType string
+		want               want
+	}{
+		{
+			testName:           "expected json in request",
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"unknown"}`,
+			requestContentType: `text/plain`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Expected application/json content type\n",
+			},
+		},
+		{
+			testName:           "unknown type",
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"unknown"}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Unknown metric`s type \"unknown\" [counter, gauge]\n",
+			},
+		},
+		{
+			testName:           "not found gauge metric",
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"gauge"}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusNotFound,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Metric with id \"MetricName\", type \"gauge\" not found\n",
+			},
+		},
+		{
+			testName:           "not found counter metric",
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"counter"}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusNotFound,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Metric with id \"MetricName\", type \"counter\" not found\n",
+			},
+		},
+		{
+			testName:           "found gauge metric",
+			gaugeMetrics:       map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"gauge"}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusOK,
+				contentType: "application/json",
+				body:        `{"id":"MetricName", "type":"gauge", "value":-43.12257}`,
+			},
+		},
+		{
+			testName:           "found counter metric",
+			counterMetrics:     map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"counter"}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusOK,
+				contentType: "application/json",
+				body:        `{"id":"MetricName", "type":"counter", "delta":4312}`,
+			},
+		},
+		{
+			testName:           "found not gauge metric type",
+			counterMetrics:     map[string]int64{"MetricName": 4312},
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"gauge"}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "found not \"gauge\" metric type\n",
+			},
+		},
+		{
+			testName:           "found not counter metric type",
+			gaugeMetrics:       map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
+			requestURL:         "/value/",
+			requestBody:        `{"id":"MetricName", "type":"counter"}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "found not \"counter\" metric type\n",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			storage := storage.NewMemStorage()
+			controller, err := NewMetricsController(&storage)
+			require.NoError(t, err)
+
+			for name, value := range tt.counterMetrics {
+				storage.UpdateCounter(name, value)
+			}
+
+			for name, value := range tt.gaugeMetrics {
+				storage.UpdateGauge(name, value)
+			}
+
+			router := chi.NewRouter()
+			router.Post("/value/", controller.GetValueFromJSON)
+			router.Post("/value", controller.GetValueFromJSON)
+			server := httptest.NewServer(router)
+			defer server.Close()
+
+			resp, err := resty.New().R().
+				SetBody(tt.requestBody).
+				SetHeader("Content-Type", tt.requestContentType).
+				SetHeader("Accept", "application/json").
+				Post(server.URL + tt.requestURL)
+			require.NoError(t, err)
+
+			assert.Equal(t, tt.want.status, resp.StatusCode())
+			require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+
+			switch tt.want.contentType {
+			case "text/plain; charset=utf-8":
+				assert.Equal(t, tt.want.body, string(resp.Body()))
+			case "application/json":
+				expectedMetric := model.Metrics{}
+				buf := bytes.NewBuffer([]byte(tt.want.body))
+				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
+				expectedMetricJSON, err := json.MarshalIndent(expectedMetric, "", "    ")
+				require.NoError(t, err)
+				assert.Equal(t, string(expectedMetricJSON), string(resp.Body()))
+			default:
+				t.Error("Unexpected content type", tt.want.contentType)
+			}
+		})
+	}
+}
+
 // Проверяет работу обработчика получения всех метрик
-func TestCreateGetAllValuesHandler(t *testing.T) {
+func TestMetricsController_GetAllMetrics(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -222,7 +572,7 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 		},
 		{
 			testName:       "many metrics",
-			gaugeMetrics:   map[string]float64{"MetricName": -43.12257, "MetricName1": 413.127},
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
 			counterMetrics: map[string]int64{"MetricName": 4312, "MetricName1": -4312, "MetricName2": 12},
 			requestURL:     "/",
 			want: want{
@@ -256,6 +606,7 @@ func TestCreateGetAllValuesHandler(t *testing.T) {
 
 			assert.Equal(t, tt.want.status, resp.StatusCode())
 			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+			assert.False(t, len(resp.Body()) == 0, string(resp.Body()))
 		})
 	}
 }

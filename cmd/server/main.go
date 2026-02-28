@@ -2,38 +2,34 @@ package main
 
 import (
 	"log"
-	"net/http"
 
-	"github.com/go-chi/chi/v5"
-	"github.com/skayfish/metrics/internal/server/controller"
-	"github.com/skayfish/metrics/internal/server/storage"
+	"github.com/skayfish/metrics/internal/logger"
+	"github.com/skayfish/metrics/internal/server"
 )
-
-// Возвращает маршрутизатор запросов
-//
-//	@param storage хранилище метрик
-//	@returns маршрутизатор запросов в случае успеха
-func getRouter(controller *controller.MetricsController) chi.Router {
-	router := chi.NewRouter()
-	router.Post("/update/{type}/{name}/{value}", controller.Update)
-	router.Get("/value/{type}/{name}", controller.GetValue)
-	router.Get("/", controller.GetAllMetrics)
-
-	return router
-}
 
 // Запуск сервера
 func main() {
-	netAddress := parseFlags()
-	storage := storage.NewMemStorage()
-	metricsController, err := controller.NewMetricsController(&storage)
+	// Парсинг конфигурации из флагов запуска приложения и переменных окружения
+	config, err := parseConfig()
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	router := getRouter(metricsController)
-
-	if err = http.ListenAndServe(netAddress.String(), router); err != http.ErrServerClosed {
+	// Инициализация логгера
+	if err = logger.Init(config.LogLevel); err != nil {
 		log.Fatal(err)
+	}
+
+	defer logger.Log.Sync()
+	logger.LogS.Debugw("Server configuration", "config", config)
+
+	// Запуск сервера
+	server, err := server.NewServer(config)
+	if err != nil {
+		logger.LogS.Fatal(err)
+	}
+
+	if err = server.Listen(); err != nil {
+		logger.LogS.Fatal(err)
 	}
 }

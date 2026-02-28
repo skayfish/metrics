@@ -124,7 +124,7 @@ func TestNetAddress_Set(t *testing.T) {
 
 // Проверяет возвращаемый тип значения для документации
 func TestNetAddress_Type(t *testing.T) {
-	want := "host:port"
+	want := `"host:port"`
 	tests := []struct {
 		testName string
 		addr     flags.NetAddress
@@ -145,6 +145,89 @@ func TestNetAddress_Type(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.testName, func(t *testing.T) {
 			assert.Equal(t, want, tt.addr.Type())
+		})
+	}
+}
+
+// Проверяет считывание из переменной окружения
+func TestNetAddress_UnmarshalText(t *testing.T) {
+	tests := []struct {
+		testName string
+		text     []byte
+		wantErr  bool
+		err      error
+		host     string
+		port     int
+	}{
+		{
+			testName: "invalid format",
+			text:     []byte(string("")),
+			wantErr:  true,
+			err:      errors.New("invalid format: expected 'host:port', got \"\""),
+		},
+		{
+			testName: "invalid format",
+			text:     []byte(string("beleb_.erda")),
+			wantErr:  true,
+			err:      errors.New("invalid format: expected 'host:port', got \"beleb_.erda\""),
+		},
+		{
+			testName: "invalid format",
+			text:     []byte(string("::")),
+			wantErr:  true,
+			err:      errors.New("invalid format: expected 'host:port', got \"::\""),
+		},
+		{
+			testName: "invalid port",
+			text:     []byte(string(":port")),
+			wantErr:  true,
+			err:      errors.New("invalid port: \"port\""),
+		},
+		{
+			testName: "port not in range",
+			text:     []byte(string(":-1")),
+			wantErr:  true,
+			err:      errors.New("port must be in range 1–65535, got -1"),
+		},
+		{
+			testName: "port not in range",
+			text:     []byte(string(":0")),
+			wantErr:  true,
+			err:      errors.New("port must be in range 1–65535, got 0"),
+		},
+		{
+			testName: "port not in range",
+			text:     []byte(string(":999999")),
+			wantErr:  true,
+			err:      errors.New("port must be in range 1–65535, got 999999"),
+		},
+		{
+			testName: "empty host",
+			text:     []byte(string(":9999")),
+			wantErr:  false,
+			host:     "",
+			port:     9999,
+		},
+		{
+			testName: "correct",
+			text:     []byte(string("localhost:9999")),
+			wantErr:  false,
+			host:     "localhost",
+			port:     9999,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.testName, func(t *testing.T) {
+			addr := flags.NetAddress{}
+			err := addr.UnmarshalText(tt.text)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Equal(t, tt.err, err)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.host, addr.Host)
+				assert.Equal(t, tt.port, addr.Port)
+			}
 		})
 	}
 }

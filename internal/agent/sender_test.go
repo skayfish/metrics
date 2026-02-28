@@ -1,7 +1,10 @@
 package agent
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -291,6 +294,7 @@ func Test_sender_Run(t *testing.T) {
 	t.Run("correct poll counting", func(t *testing.T) {
 		router := chi.NewRouter()
 		handlerCounter := 0
+		gaugeCounter := 0
 		router.Post("/update/{type}/{name}/{value}", func(resp http.ResponseWriter, req *http.Request) {
 			mType := chi.URLParam(req, "type")
 			mName := chi.URLParam(req, "name")
@@ -311,6 +315,40 @@ func Test_sender_Run(t *testing.T) {
 				}
 
 				handlerCounter++
+			} else if mType == model.Gauge {
+				gaugeCounter++
+			}
+		})
+		router.Post("/update", func(resp http.ResponseWriter, req *http.Request) {
+			require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+
+			decompressor, err := gzip.NewReader(req.Body)
+			require.NoError(t, err)
+			defer decompressor.Close()
+
+			var buf bytes.Buffer
+			_, err = buf.ReadFrom(decompressor)
+			require.NoError(t, err)
+
+			metric := model.Metrics{}
+			require.NoError(t, json.NewDecoder(&buf).Decode(&metric))
+
+			if metric.MType == model.Counter && metric.ID == "PollCount" {
+				require.NotNil(t, metric.Delta)
+				switch {
+				case handlerCounter == 0:
+					assert.Equal(t, int64(1), *metric.Delta)
+					fmt.Print("Handler count 0 succeed\n")
+				case handlerCounter < 3:
+					assert.Equal(t, int64(5), *metric.Delta)
+					fmt.Printf("Handler count %d succeed\n", handlerCounter)
+				default:
+					t.Errorf("expected handler call count = 3, actual = %d", handlerCounter+1)
+				}
+
+				handlerCounter++
+			} else if metric.MType == model.Gauge {
+				gaugeCounter++
 			}
 
 		})
@@ -328,17 +366,18 @@ func Test_sender_Run(t *testing.T) {
 				Port:             port,
 				RetryMaxWaitTime: retryMaxWaitTime,
 				RetryWaitTime:    retryWaitTime,
-				PollInterval:     10 * time.Millisecond,
-				ReportInterval:   50 * time.Millisecond,
+				PollInterval:     100 * time.Millisecond,
+				ReportInterval:   500 * time.Millisecond,
 			},
 			pollCount: 0,
 			client:    resty.New(),
 		}
 
-		ctx, cancel := context.WithTimeout(context.Background(), 120*time.Millisecond)
+		ctx, cancel := context.WithTimeout(context.Background(), 1200*time.Millisecond)
 		defer cancel()
 		err = sender.Run(ctx)
 		require.Equal(t, context.DeadlineExceeded, errors.Unwrap(err))
 		assert.Equal(t, 3, handlerCounter)
+		assert.Equal(t, 28*handlerCounter, gaugeCounter)
 	})
 }
