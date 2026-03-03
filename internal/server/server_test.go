@@ -30,11 +30,11 @@ func getEmptyMiddleware() func(http.HandlerFunc) http.HandlerFunc {
 func Test_getRouter(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		s := storage.NewMemStorage()
-		_, err := getRouter(&s, getEmptyMiddleware())
+		_, err := getRouter(&s, nil, getEmptyMiddleware())
 		assert.NoError(t, err)
 	})
 	t.Run("success", func(t *testing.T) {
-		_, err := getRouter(nil, getEmptyMiddleware())
+		_, err := getRouter(nil, nil, getEmptyMiddleware())
 		assert.NoError(t, err)
 	})
 }
@@ -164,7 +164,7 @@ func TestNewServer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
-			s, err := NewServer(&tt.config)
+			s, err := NewServer(&tt.config, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tt.config, *s.config)
 			assert.Equal(t, tt.want, *s.storage)
@@ -269,7 +269,7 @@ func createServer(t *testing.T, restore bool, fileStoragePath string, storeInter
 		FileStoragePath: fileStoragePath,
 		ToRestore:       restore,
 		StoreInterval:   storeInterval,
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	return s

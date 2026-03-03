@@ -26,8 +26,7 @@ type environments struct {
 	ToRestore *bool `env:"RESTORE" example:"true"`
 
 	// SF TODO
-	DatabaseDSN *string `env:"DATABASE_DSN" example:"host=localhost port=5432 user=username password=XXXX dbname=databasename sslmode=disable"
-	                                        example:"postgres://username:XXXX@localhost:5432/databasename?sslmode=disable"`
+	DatabaseDSN *string `env:"DATABASE_DSN" example:"host=localhost port=5432 user=username password=XXXX dbname=databasename sslmode=disable" example:"postgres://username:XXXX@localhost:5432/databasename?sslmode=disable"`
 }
 
 // Парсит флаги, указанные при запуске программы и переменные окружения
