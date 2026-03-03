@@ -24,6 +24,9 @@ type environments struct {
 
 	// Булево значение (true/false), определяющее, следует ли загружать ранее сохранённые значения из указанного файла при старте сервера
 	ToRestore *bool `env:"RESTORE" example:"true"`
+
+	// SF TODO
+	DatabaseDSN *string `env:"DATABASE_DSN" example:"host=localhost port=5432 user=username password=XXXX dbname=databasename"`
 }
 
 // Парсит флаги, указанные при запуске программы и переменные окружения
@@ -42,6 +45,8 @@ func parseConfig() (*server.Config, error) {
 		"File system path to which current storage data is persisted")
 	toRestore := pflag.BoolP("restore", "r", false,
 		"Read saved values from the \"--file-storage-path\" file when the server starts (default false)")
+	databaseDSN := pflag.StringP("database-dsn", "d", "",
+		`Connection string for database access, structured as: "host=<host> port=<port> user=<username> password=<pass> dbname=<database name>"`)
 
 	pflag.Parse()
 
@@ -68,12 +73,17 @@ func parseConfig() (*server.Config, error) {
 		*toRestore = *envs.ToRestore
 	}
 
+	if envs.DatabaseDSN != nil {
+		*databaseDSN = *envs.DatabaseDSN
+	}
+
 	result := server.Config{
 		Address:         addr,
 		LogLevel:        logLevel,
 		StoreInterval:   time.Duration(*storeInterval) * time.Second,
 		FileStoragePath: *fileStoragePath,
 		ToRestore:       *toRestore,
+		DatabaseDSN:     *databaseDSN,
 	}
 
 	return &result, nil

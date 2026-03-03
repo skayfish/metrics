@@ -181,10 +181,8 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 
 	updatedMetricJSON, err := json.Marshal(updatedMetric)
 	if err != nil {
-		logger.LogS.Errorw("controller: MetricsController.UpdateFromJSON",
-			"error", http.StatusText(http.StatusInternalServerError),
-		)
-		http.Error(resp, errors.Unwrap(err).Error(), http.StatusInternalServerError)
+		logger.LogS.Error("controller: MetricsController.UpdateFromJSON: marshaling metric failed: ", err.Error())
+		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 

@@ -1,8 +1,10 @@
 package main
 
 import (
+	"database/sql"
 	"log"
 
+	_ "github.com/jackc/pgx/v5"
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/server"
 )
@@ -11,6 +13,12 @@ import (
 func main() {
 	// Парсинг конфигурации из флагов запуска приложения и переменных окружения
 	config, err := parseConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Подключение к базе данных
+	database, err := sql.Open("pgx", config.DatabaseDSN)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -24,7 +32,7 @@ func main() {
 	logger.LogS.Debugw("Server configuration", "config", config)
 
 	// Запуск сервера
-	server, err := server.NewServer(config)
+	server, err := server.NewServer(config, database)
 	if err != nil {
 		logger.LogS.Fatal(err)
 	}

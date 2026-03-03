@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -58,12 +59,23 @@ func (s *Server) getSaveMiddleware() func(handler http.HandlerFunc) http.Handler
 //	@param saveMiddleware middleware-обёртка для отправки сигнала на сохранение данных хранилища метрик в файл
 //	@returns chi.Router маршрутизатор запросов в случае успеха
 //	@returns error ошибку в ином случае
+//
+// SF TODO
 func getRouter(
 	storage *storage.MemStorage,
+	database *sql.DB,
 	saveMiddleware func(http.HandlerFunc) http.HandlerFunc,
 ) (chi.Router, error) {
 	router := chi.NewRouter()
 	router.Use(middleware.CompressingMiddleware, middleware.LoggingMiddleware)
+
+	// Base
+
+	baseController := controller.NewBaseController(storage, database)
+
+	router.Get("/ping", baseController.Ping)
+
+	// Metrics
 
 	metricsController, err := controller.NewMetricsController(storage)
 	if err != nil {
@@ -110,7 +122,9 @@ func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 //	@param config конфигурация сервера
 //	@returns *Server сервер в случае успеха
 //	@returns error ошибку в ином случае
-func NewServer(config *Config) (*Server, error) {
+//
+// SF TODO
+func NewServer(config *Config, database *sql.DB) (*Server, error) {
 	var metricsStorage storage.MemStorage
 
 	if config.FileStoragePath == "" {
@@ -148,7 +162,7 @@ func NewServer(config *Config) (*Server, error) {
 		result.saveStorageChan = make(chan struct{})
 	}
 
-	router, err := getRouter(&metricsStorage, result.getSaveMiddleware())
+	router, err := getRouter(&metricsStorage, database, result.getSaveMiddleware())
 	if err != nil {
 		return nil, fmt.Errorf("server: NewServer: failed create router: %v", err)
 	}

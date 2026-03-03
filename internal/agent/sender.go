@@ -138,8 +138,8 @@ func (s *sender) Run(ctx context.Context) error {
 
 	// Ожидание интервалов
 	pollTicker := time.NewTicker(s.config.PollInterval)
-	reportTicker := time.NewTicker(s.config.ReportInterval)
 	defer pollTicker.Stop()
+	reportTicker := time.NewTicker(s.config.ReportInterval)
 	defer reportTicker.Stop()
 	for {
 		if ctx != nil && ctx.Err() != nil {
