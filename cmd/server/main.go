@@ -23,6 +23,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+	defer database.Close()
+
 	// Инициализация логгера
 	if err = logger.Init(config.LogLevel); err != nil {
 		log.Fatal(err)

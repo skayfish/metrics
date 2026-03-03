@@ -35,7 +35,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Unknown metric`s type \"unknown\" [counter, gauge]\n",
+				body:        "Unknown metric`s type \"unknown\" [counter, gauge]",
 			},
 		},
 		{
@@ -44,7 +44,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric`s value must be int64\n",
+				body:        "Metric`s value must be int64",
 			},
 		},
 		{
@@ -53,7 +53,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric`s value must be float64\n",
+				body:        "Metric`s value must be float64",
 			},
 		},
 		{
@@ -86,7 +86,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"gauge\" metric type\n",
+				body:        "found not \"gauge\" metric type",
 			},
 		},
 		{
@@ -97,7 +97,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"counter\" metric type\n",
+				body:        "found not \"counter\" metric type",
 			},
 		},
 	}
@@ -126,7 +126,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 
 			assert.Equal(t, tt.want.status, resp.StatusCode())
 			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			assert.Equal(t, tt.want.body, string(resp.Body()))
+			assert.Equal(t, tt.want.body, resp.String())
 		})
 	}
 }
@@ -155,7 +155,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Expected application/json content type\n",
+				body:        "Expected application/json content type",
 			},
 		},
 		{
@@ -166,7 +166,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Failed unmarshall json: unexpected EOF\n",
+				body:        "Failed unmarshall json: unexpected EOF",
 			},
 		},
 		{
@@ -177,7 +177,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "unrecognized metric type. Supported types: \"gauge\", \"counter\"\n",
+				body:        "unrecognized metric type. Supported types: \"gauge\", \"counter\"",
 			},
 		},
 		{
@@ -216,7 +216,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"gauge\" metric type\n",
+				body:        "found not \"gauge\" metric type",
 			},
 		},
 		{
@@ -229,7 +229,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"counter\" metric type\n",
+				body:        "found not \"counter\" metric type",
 			},
 		},
 	}
@@ -265,14 +265,14 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 
 			switch tt.want.contentType {
 			case "text/plain; charset=utf-8":
-				assert.Equal(t, tt.want.body, string(resp.Body()))
+				assert.Equal(t, tt.want.body, resp.String())
 			case "application/json":
 				expectedMetric := model.Metrics{}
 				buf := bytes.NewBuffer([]byte(tt.want.body))
 				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
 				expectedMetricJSON, err := json.Marshal(expectedMetric)
 				require.NoError(t, err)
-				assert.Equal(t, string(expectedMetricJSON), string(resp.Body()))
+				assert.Equal(t, string(expectedMetricJSON), resp.String())
 			default:
 				t.Error("Unexpected content type", tt.want.contentType)
 			}
@@ -300,7 +300,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Unknown metric`s type \"unknown\" [counter, gauge]\n",
+				body:        "Unknown metric`s type \"unknown\" [counter, gauge]",
 			},
 		},
 		{
@@ -309,7 +309,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric with id \"MetricName\", type \"gauge\" not found\n",
+				body:        "Metric with id \"MetricName\", type \"gauge\" not found",
 			},
 		},
 		{
@@ -318,7 +318,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric with id \"MetricName\", type \"counter\" not found\n",
+				body:        "Metric with id \"MetricName\", type \"counter\" not found",
 			},
 		},
 		{
@@ -348,7 +348,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"gauge\" metric type\n",
+				body:        "found not \"gauge\" metric type",
 			},
 		},
 		{
@@ -358,7 +358,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"counter\" metric type\n",
+				body:        "found not \"counter\" metric type",
 			},
 		},
 	}
@@ -387,7 +387,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 
 			assert.Equal(t, tt.want.status, resp.StatusCode())
 			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			assert.Equal(t, tt.want.body, string(resp.Body()))
+			assert.Equal(t, tt.want.body, resp.String())
 		})
 	}
 }
@@ -416,7 +416,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Expected application/json content type\n",
+				body:        "Expected application/json content type",
 			},
 		},
 		{
@@ -427,7 +427,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Unknown metric`s type \"unknown\" [counter, gauge]\n",
+				body:        "Unknown metric`s type \"unknown\" [counter, gauge]",
 			},
 		},
 		{
@@ -438,7 +438,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric with id \"MetricName\", type \"gauge\" not found\n",
+				body:        "Metric with id \"MetricName\", type \"gauge\" not found",
 			},
 		},
 		{
@@ -449,7 +449,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric with id \"MetricName\", type \"counter\" not found\n",
+				body:        "Metric with id \"MetricName\", type \"counter\" not found",
 			},
 		},
 		{
@@ -485,7 +485,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"gauge\" metric type\n",
+				body:        "found not \"gauge\" metric type",
 			},
 		},
 		{
@@ -497,7 +497,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"counter\" metric type\n",
+				body:        "found not \"counter\" metric type",
 			},
 		},
 	}
@@ -533,14 +533,14 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 
 			switch tt.want.contentType {
 			case "text/plain; charset=utf-8":
-				assert.Equal(t, tt.want.body, string(resp.Body()))
+				assert.Equal(t, tt.want.body, resp.String())
 			case "application/json":
 				expectedMetric := model.Metrics{}
 				buf := bytes.NewBuffer([]byte(tt.want.body))
 				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
 				expectedMetricJSON, err := json.MarshalIndent(expectedMetric, "", "    ")
 				require.NoError(t, err)
-				assert.Equal(t, string(expectedMetricJSON), string(resp.Body()))
+				assert.Equal(t, string(expectedMetricJSON), resp.String())
 			default:
 				t.Error("Unexpected content type", tt.want.contentType)
 			}
@@ -606,7 +606,7 @@ func TestMetricsController_GetAllMetrics(t *testing.T) {
 
 			assert.Equal(t, tt.want.status, resp.StatusCode())
 			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			assert.False(t, len(resp.Body()) == 0, string(resp.Body()))
+			assert.False(t, len(resp.Body()) == 0, resp.String())
 		})
 	}
 }

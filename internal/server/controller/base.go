@@ -2,22 +2,22 @@ package controller
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"time"
 
 	"github.com/skayfish/metrics/internal/logger"
+	"github.com/skayfish/metrics/internal/server/database"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
 
 // SF TODO
 type BaseController struct {
 	storage  *storage.MemStorage // Хранилище метрик
-	database *sql.DB             // База данных
+	database database.Database   // База данных
 }
 
 // SF TODO
-func NewBaseController(storage *storage.MemStorage, database *sql.DB) BaseController {
+func NewBaseController(storage *storage.MemStorage, database database.Database) BaseController {
 	return BaseController{storage: storage, database: database}
 }
 

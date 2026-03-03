@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/controller"
+	"github.com/skayfish/metrics/internal/server/database"
 	"github.com/skayfish/metrics/internal/server/middleware"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
@@ -63,7 +63,7 @@ func (s *Server) getSaveMiddleware() func(handler http.HandlerFunc) http.Handler
 // SF TODO
 func getRouter(
 	storage *storage.MemStorage,
-	database *sql.DB,
+	database database.Database,
 	saveMiddleware func(http.HandlerFunc) http.HandlerFunc,
 ) (chi.Router, error) {
 	router := chi.NewRouter()
@@ -124,7 +124,7 @@ func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 //	@returns error ошибку в ином случае
 //
 // SF TODO
-func NewServer(config *Config, database *sql.DB) (*Server, error) {
+func NewServer(config *Config, database database.Database) (*Server, error) {
 	var metricsStorage storage.MemStorage
 
 	if config.FileStoragePath == "" {
