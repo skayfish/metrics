@@ -56,11 +56,10 @@ func (s *Server) getSaveMiddleware() func(handler http.HandlerFunc) http.Handler
 // Возвращает маршрутизатор запросов
 //
 //	@param storage        хранилище метрик
+//	@param database       база данных
 //	@param saveMiddleware middleware-обёртка для отправки сигнала на сохранение данных хранилища метрик в файл
 //	@returns chi.Router маршрутизатор запросов в случае успеха
 //	@returns error ошибку в ином случае
-//
-// SF TODO
 func getRouter(
 	storage *storage.MemStorage,
 	database database.Database,
@@ -71,7 +70,7 @@ func getRouter(
 
 	// Base
 
-	baseController := controller.NewBaseController(storage, database)
+	baseController := controller.NewBaseController(database)
 
 	router.Get("/ping", baseController.Ping)
 
@@ -119,11 +118,10 @@ func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 
 // Создаёт новый сервер по переданной конфигурации
 //
-//	@param config конфигурация сервера
+//	@param config   конфигурация сервера
+//	@param database база данных
 //	@returns *Server сервер в случае успеха
 //	@returns error ошибку в ином случае
-//
-// SF TODO
 func NewServer(config *Config, database database.Database) (*Server, error) {
 	var metricsStorage storage.MemStorage
 

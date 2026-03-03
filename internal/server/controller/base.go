@@ -7,21 +7,25 @@ import (
 
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/server/database"
-	"github.com/skayfish/metrics/internal/server/storage"
 )
 
-// SF TODO
+// Контроллер обработки базовых запросов
 type BaseController struct {
-	storage  *storage.MemStorage // Хранилище метрик
-	database database.Database   // База данных
+	database database.Database // База данных
 }
 
-// SF TODO
-func NewBaseController(storage *storage.MemStorage, database database.Database) BaseController {
-	return BaseController{storage: storage, database: database}
+// Создаёт новый контроллер обработки базовых запросов
+//
+//	@param database база данных
+//	@returns BaseController новый контроллер обработки базовых запросов
+func NewBaseController(database database.Database) BaseController {
+	return BaseController{database: database}
 }
 
-// SF TODO
+// Проверяет соединение с базой данных
+//
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
 func (c *BaseController) Ping(resp http.ResponseWriter, req *http.Request) {
 	ctx, cancel := context.WithTimeout(req.Context(), 1*time.Second)
 	defer cancel()

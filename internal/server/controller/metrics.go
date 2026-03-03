@@ -85,7 +85,7 @@ const templateHTML = `
 // Ошибка во время создания контроллера метрик
 var ErrCreateMetricsController = errors.New("controller: metrics controller creation failed")
 
-// Создаёт новый контроллер метрик
+// Создаёт новый контроллер обработки запросов, связанных с метриками
 //
 //	@param storage хранилище метрик
 //	@returns *MetricsController контроллер метрик, в случае успеха

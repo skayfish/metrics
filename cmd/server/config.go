@@ -25,7 +25,7 @@ type environments struct {
 	// Булево значение (true/false), определяющее, следует ли загружать ранее сохранённые значения из указанного файла при старте сервера
 	ToRestore *bool `env:"RESTORE" example:"true"`
 
-	// SF TODO
+	// Строка с адресом подключения к базе данных
 	DatabaseDSN *string `env:"DATABASE_DSN" example:"host=localhost port=5432 user=username password=XXXX dbname=databasename sslmode=disable,postgres://username:XXXX@localhost:5432/databasename?sslmode=disable"`
 }
 

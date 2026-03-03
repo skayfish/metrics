@@ -10,12 +10,11 @@ import (
 	"github.com/go-resty/resty/v2"
 	"github.com/golang/mock/gomock"
 	"github.com/skayfish/metrics/internal/server/database"
-	"github.com/skayfish/metrics/internal/server/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
+// Проверяет работу обработчика запроса на проверку соединения
 func TestBaseController_Ping(t *testing.T) {
 	tests := []struct {
 		test          string
@@ -41,8 +40,7 @@ func TestBaseController_Ping(t *testing.T) {
 			mockDatabase := database.NewMockDatabase(ctrl)
 			mockDatabase.EXPECT().PingContext(gomock.Any()).Times(1).Return(tt.databaseError)
 
-			storage := storage.NewMemStorage()
-			controller := NewBaseController(&storage, mockDatabase)
+			controller := NewBaseController(mockDatabase)
 
 			router := chi.NewRouter()
 			router.Get("/ping", controller.Ping)
