@@ -27,7 +27,7 @@ func (c *BaseController) Ping(resp http.ResponseWriter, req *http.Request) {
 	defer cancel()
 	if err := c.database.PingContext(ctx); err != nil {
 		logger.LogS.Error("controller: BaseController.Ping: ping failed: ", err.Error())
-		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 }
