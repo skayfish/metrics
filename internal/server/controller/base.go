@@ -2,6 +2,7 @@ package controller
 
 import (
 	"context"
+	"database/sql"
 	"net/http"
 	"time"
 
@@ -28,6 +29,13 @@ func NewBaseController(database database.Database) BaseController {
 //	@param req  объект запроса
 func (c *BaseController) Ping(resp http.ResponseWriter, req *http.Request) {
 	if c.database == nil {
+		return
+	}
+
+	db, ok := c.database.(*sql.DB)
+	if ok && db == nil {
+		logger.LogS.Error("controller: BaseController.Ping: database not initialized")
+		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
