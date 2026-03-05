@@ -2,7 +2,6 @@ package controller
 
 import (
 	"context"
-	"database/sql"
 	"net/http"
 	"time"
 
@@ -28,19 +27,14 @@ func NewBaseController(database database.Database) BaseController {
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
 func (c *BaseController) Ping(resp http.ResponseWriter, req *http.Request) {
-	switch c.database.(type) {
-	case *sql.DB:
-		ctx, cancel := context.WithTimeout(req.Context(), 1*time.Second)
-		defer cancel()
-		if err := c.database.PingContext(ctx); err != nil {
-			logger.LogS.Error("controller: BaseController.Ping: ping failed: ", err.Error())
-			resp.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-	case nil:
+	if c.database == nil {
 		return
-	default:
-		logger.LogS.Error("controller: BaseController.Ping: unknown database")
+	}
+
+	ctx, cancel := context.WithTimeout(req.Context(), 1*time.Second)
+	defer cancel()
+	if err := c.database.PingContext(ctx); err != nil {
+		logger.LogS.Error("controller: BaseController.Ping: ping failed: ", err.Error())
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
