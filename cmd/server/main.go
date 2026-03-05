@@ -7,6 +7,7 @@ import (
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/server"
+	"github.com/skayfish/metrics/internal/server/database"
 )
 
 // Запуск сервера
@@ -18,14 +19,17 @@ func main() {
 	}
 
 	// Подключение к базе данных
-	var database *sql.DB
+	// SF LOGIC перенести в NewServer
+	var database database.Database
 	if config.DatabaseDSN != nil {
-		database, err := sql.Open("pgx", *config.DatabaseDSN)
+		db, err := sql.Open("pgx", *config.DatabaseDSN)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		defer database.Close()
+		defer db.Close()
+
+		database = db
 	}
 
 	// Инициализация логгера

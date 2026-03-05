@@ -13,6 +13,9 @@ import (
 
 // Переменные окружения
 type environments struct {
+	// SF TODO
+	LogLevel *string `env:"LOG_LEVEL" example:"debug"`
+
 	// Сетевой адрес
 	Address *flags.NetAddress `env:"ADDRESS" example:"localhost:8080"`
 
@@ -51,15 +54,15 @@ func parseConfig() (*server.Config, error) {
 
 	pflag.Parse()
 
-	if *databaseDSN == "" {
-		databaseDSN = nil
-	}
-
 	// Парсинг переменных окружения
 	var envs environments
 	err := env.Parse(&envs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse environment variables: %v", err)
+	}
+
+	if envs.LogLevel != nil {
+		logLevel.Set(*envs.LogLevel)
 	}
 
 	if envs.Address != nil {
@@ -80,6 +83,11 @@ func parseConfig() (*server.Config, error) {
 
 	if envs.DatabaseDSN != nil {
 		*databaseDSN = *envs.DatabaseDSN
+	}
+
+	// Формирование результата
+	if *databaseDSN == "" {
+		databaseDSN = nil
 	}
 
 	result := server.Config{
