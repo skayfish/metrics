@@ -18,12 +18,15 @@ func main() {
 	}
 
 	// Подключение к базе данных
-	database, err := sql.Open("pgx", config.DatabaseDSN)
-	if err != nil {
-		log.Fatal(err)
-	}
+	var database *sql.DB
+	if config.DatabaseDSN != nil {
+		database, err := sql.Open("pgx", *config.DatabaseDSN)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	defer database.Close()
+		defer database.Close()
+	}
 
 	// Инициализация логгера
 	if err = logger.Init(config.LogLevel); err != nil {

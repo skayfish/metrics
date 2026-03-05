@@ -25,5 +25,5 @@ type Config struct {
 	ToRestore bool
 
 	// Строка с адресом подключения к базе данных
-	DatabaseDSN string
+	DatabaseDSN *string
 }

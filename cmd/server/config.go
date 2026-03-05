@@ -51,6 +51,10 @@ func parseConfig() (*server.Config, error) {
 
 	pflag.Parse()
 
+	if *databaseDSN == "" {
+		databaseDSN = nil
+	}
+
 	// Парсинг переменных окружения
 	var envs environments
 	err := env.Parse(&envs)
@@ -84,7 +88,7 @@ func parseConfig() (*server.Config, error) {
 		StoreInterval:   time.Duration(*storeInterval) * time.Second,
 		FileStoragePath: *fileStoragePath,
 		ToRestore:       *toRestore,
-		DatabaseDSN:     *databaseDSN,
+		DatabaseDSN:     databaseDSN,
 	}
 
 	return &result, nil
