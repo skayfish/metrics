@@ -155,7 +155,13 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 
 	updatedMetric, err := c.storage.UpdateContext(req.Context(), metric)
 	if err != nil {
-		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		logger.LogS.Errorf("%s: %v", prefix, err)
+		if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		} else {
+			resp.WriteHeader(http.StatusInternalServerError)
+		}
+
 		return
 	}
 
@@ -217,7 +223,13 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 
 	updatedMetric, err := c.storage.UpdateContext(req.Context(), metric)
 	if err != nil {
-		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		logger.LogS.Errorf("%s: %v", prefix, err)
+		if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		} else {
+			resp.WriteHeader(http.StatusInternalServerError)
+		}
+
 		return
 	}
 

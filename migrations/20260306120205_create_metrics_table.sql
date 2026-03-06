@@ -1,11 +1,11 @@
 -- +goose Up
 -- Создание схемы для метрик
-CREATE SCHEMA IF NOT EXISTS metrics_schema_test;
+CREATE SCHEMA IF NOT EXISTS metrics_schema;
 
 -- Создание таблицы метрик
-CREATE TABLE IF NOT EXISTS metrics_schema_test.metrics (
+CREATE TABLE IF NOT EXISTS metrics_schema.metrics (
     id VARCHAR (100) NOT NULL UNIQUE,
-    metric_type VARCHAR(10) NOT NULL CHECK (metric_type IN ('gauge', 'counter')),
+    type VARCHAR(10) NOT NULL CHECK (type IN ('gauge', 'counter')),
     delta BIGINT,
     value DOUBLE PRECISION,
     hash VARCHAR(255)
@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS metrics_schema_test.metrics (
 
 -- +goose Down
 -- Удаление таблицы метрик
-DROP TABLE IF EXISTS metrics_schema_test.metrics;
+DROP TABLE IF EXISTS metrics_schema.metrics;
 
 -- Удаление схемы для метрик
-DROP SCHEMA IF EXISTS metrics_schema_test CASCADE;
+DROP SCHEMA IF EXISTS metrics_schema CASCADE;

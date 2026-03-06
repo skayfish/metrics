@@ -234,6 +234,11 @@ func (s *Server) Listen() error {
 			}
 		}
 
+		_, ok := s.storage.(*storage.MemStorage)
+		if !ok {
+			return
+		}
+
 		// Сохранение данных хранилища метрик в файл асинхронно (каждые N секунд, задаётся в конфигурации сервера)
 		saveStorageTicker := time.NewTicker(s.config.StoreInterval)
 		defer saveStorageTicker.Stop()
@@ -244,12 +249,8 @@ func (s *Server) Listen() error {
 				logger.LogS.Debug("Data-saving goroutine (file output) has successfully terminated")
 				return
 			case <-saveStorageTicker.C:
-				ms, ok := s.storage.(*storage.MemStorage)
-				if !ok {
-					logger.Log.DPanic("Storage type is not in-memory")
-					return
-				}
-
+				// Проверено перед началом сохранения по таймеру
+				ms, _ := s.storage.(*storage.MemStorage)
 				if err := ms.SaveStorageToFile(s.config.FileStoragePath); err != nil {
 					logger.LogS.Errorf("Failed save storage to file: %v", err)
 					return

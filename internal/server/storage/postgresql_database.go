@@ -35,43 +35,68 @@ func (db PostgreSQLDatabase) UpdateContext(ctx context.Context, metric model.Met
 		value.Valid = true
 	}
 
-	var err error
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
 	switch metric.MType {
 	case model.Gauge:
-		_, err = db.ExecContext(ctx, `
-		INSERT INTO metrics_schema.metrics (id, type, delta, value, hash)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (id)
-		DO UPDATE SET
-			delta = EXCLUDED.delta,
-			value = EXCLUDED.value,
-			hash = EXCLUDED.hash;`, metric.ID, metric.MType, delta, value, metric.Hash)
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (id)
+			DO UPDATE SET
+				delta = EXCLUDED.delta,
+				value = EXCLUDED.value,
+				hash = EXCLUDED.hash;`,
+			metric.ID, metric.MType, delta, value, metric.Hash)
+
 	case model.Counter:
-		_, err = db.ExecContext(ctx, `
-		INSERT INTO metrics_schema.metrics (id, type, delta, value, hash)
-		VALUES ($1, $2, $3, $4, $5)
-		ON CONFLICT (id)
-		DO UPDATE SET
-			delta = delta + EXCLUDED.delta,
-			value = EXCLUDED.value,
-			hash = EXCLUDED.hash;`, metric.ID, metric.MType, delta, value, metric.Hash)
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
+			VALUES ($1, $2, $3, $4, $5)
+			ON CONFLICT (id)
+			DO UPDATE SET
+				delta = metrics_schema.metrics.delta + EXCLUDED.delta,
+				value = EXCLUDED.value,
+				hash = EXCLUDED.hash;`,
+			metric.ID, metric.MType, delta, value, metric.Hash)
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", prefix, err)
 	}
 
-	return &metric, nil
+	updatedMetric, err := getContext(ctx, tx, metric.ID)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	return updatedMetric, nil
 }
 
 // SF TODO
-func (db PostgreSQLDatabase) Get(id string) (*model.Metrics, error) {
-	return db.GetContext(context.Background(), id)
+type SQLExecutor interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
 // SF TODO
-func (db PostgreSQLDatabase) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
-	const prefix = "storage.PostgreSQLDatabase.GetContext"
+func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics, error) {
+	const prefix = "storage.PostgreSQLDatabase.getContext"
 
 	row := db.QueryRowContext(ctx, `
 		SELECT * FROM metrics_schema.metrics
@@ -109,6 +134,16 @@ func (db PostgreSQLDatabase) GetContext(ctx context.Context, id string) (*model.
 		Value: value,
 		Hash:  hash,
 	}, nil
+}
+
+// SF TODO
+func (db PostgreSQLDatabase) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
+	return getContext(ctx, db.DB, id)
+}
+
+// SF TODO
+func (db PostgreSQLDatabase) Get(id string) (*model.Metrics, error) {
+	return db.GetContext(context.Background(), id)
 }
 
 // SF TODO
