@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"path/filepath"
 	"time"
 
 	"github.com/caarlos0/env/v6"
@@ -51,13 +52,18 @@ func parseConfig() (*server.Config, error) {
 	databaseDSN := pflag.StringP("database-dsn", "d", "",
 		`Connection string for database access, structured as: "host=<host> port=<port> user=<username> password=<pass> dbname=<database name>" or
 		                                                       "postgres://<username>:<password>@<host>:<port>/<database name>?sslmode=disable"`)
-	migrationsPath := pflag.StringP("migrations-path", "m", "../../migrations", "Directory path containing database migration files")
+	migrationsPathDefault, err := filepath.Abs(filepath.Join("..", "..", "migrations"))
+	if err != nil {
+		return nil, err
+	}
+
+	migrationsPath := pflag.StringP("migrations-path", "m", migrationsPathDefault, "Directory path containing database migration files")
 
 	pflag.Parse()
 
 	// Парсинг переменных окружения
 	var envs environments
-	err := env.Parse(&envs)
+	err = env.Parse(&envs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse environment variables: %v", err)
 	}
