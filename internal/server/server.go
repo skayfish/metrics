@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -9,11 +10,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/controller"
-	"github.com/skayfish/metrics/internal/server/database"
 	"github.com/skayfish/metrics/internal/server/middleware"
 	"github.com/skayfish/metrics/internal/server/storage"
 )
@@ -23,8 +26,8 @@ type Server struct {
 	// Конфигурация сервере
 	config *Config
 
-	// Хранилище метрик
-	storage *storage.MemStorage
+	// SF TODO
+	storage storage.Storage
 
 	// Маршрутизатор запросов
 	router *chi.Router
@@ -60,9 +63,10 @@ func (s *Server) getSaveMiddleware() func(handler http.HandlerFunc) http.Handler
 //	@param saveMiddleware middleware-обёртка для отправки сигнала на сохранение данных хранилища метрик в файл
 //	@returns chi.Router маршрутизатор запросов в случае успеха
 //	@returns error ошибку в ином случае
+//
+// SF TODO
 func getRouter(
-	storage *storage.MemStorage,
-	database database.Database,
+	storage storage.Storage,
 	saveMiddleware func(http.HandlerFunc) http.HandlerFunc,
 ) (chi.Router, error) {
 	router := chi.NewRouter()
@@ -70,7 +74,7 @@ func getRouter(
 
 	// Base
 
-	baseController := controller.NewBaseController(database)
+	baseController := controller.NewBaseController(storage)
 
 	router.Get("/ping", baseController.Ping)
 
@@ -85,8 +89,8 @@ func getRouter(
 	router.Post("/update", saveMiddleware(metricsController.UpdateFromJSON))
 	router.Post("/update/", saveMiddleware(metricsController.UpdateFromJSON))
 	router.Get("/value/{type}/{name}", metricsController.GetValueFromURL)
-	router.Post("/value", metricsController.GetValueFromJSON)
-	router.Post("/value/", metricsController.GetValueFromJSON)
+	router.Post("/value", metricsController.GetMetricFromJSON)
+	router.Post("/value/", metricsController.GetMetricFromJSON)
 	router.Get("/", metricsController.GetAllMetrics)
 
 	return router, nil
@@ -116,81 +120,87 @@ func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 	return &storage, nil
 }
 
+// SF TODO
+func createStorage(config *Config) (storage.Storage, error) {
+	const prefix = "server.createStorage"
+
+	// Подключение к серверу базы данных, если есть данные для соединения
+	if config.DatabaseDSN != nil {
+		db, err := sql.Open("pgx", *config.DatabaseDSN)
+		if err != nil {
+			return nil, fmt.Errorf("%s: failed open database: %w", prefix, err)
+		}
+
+		err = goose.Up(db, config.MigrationsPath)
+		if err != nil {
+			return nil, fmt.Errorf("%s: migrations failed: %w", prefix, err)
+		}
+
+		return storage.PostgreSQLDatabase{DB: db}, nil
+	}
+
+	// Создание временного файла хранилища, т.к. путь не передан
+	if config.FileStoragePath == "" {
+		file, err := os.CreateTemp(os.TempDir(), "storage*.json")
+		if err != nil {
+			return nil, fmt.Errorf("%s: failed create temporary file for storage: %v", prefix, err)
+		}
+
+		logger.LogS.Warnf("File storage path: %q", file.Name())
+		config.FileStoragePath = file.Name()
+
+		storage := storage.NewMemStorage()
+		return &storage, nil
+	}
+
+	// Восстановление данных хранилища из json файла, при необходимости
+	if config.ToRestore {
+		storageFromFile, err := createStorageFromJSON(config.FileStoragePath)
+		if err != nil {
+			tmp := storage.NewMemStorage()
+			storageFromFile = &tmp
+			logger.LogS.Warnf("Failed fill storage from file: %s", err)
+		}
+
+		return storageFromFile, nil
+	}
+
+	storage := storage.NewMemStorage()
+	return &storage, nil
+
+}
+
 // Создаёт новый сервер по переданной конфигурации
 //
 //	@param config   конфигурация сервера
 //	@param database база данных
 //	@returns *Server сервер в случае успеха
 //	@returns error ошибку в ином случае
-func NewServer(config *Config, database database.Database) (*Server, error) {
-	var metricsStorage storage.MemStorage
+func NewServer(config *Config) (*Server, error) {
+	const prefix = "server.NewServer"
 
-	if config.FileStoragePath == "" {
-		file, err := os.CreateTemp(os.TempDir(), "storage*.json")
-		if err != nil {
-			return nil, fmt.Errorf("server: NewServer: failed create temporary file for storage: %v", err)
-		}
-
-		logger.LogS.Warnf("File storage path: %q", file.Name())
-		config.FileStoragePath = file.Name()
-
-		metricsStorage = storage.NewMemStorage()
-	} else {
-		if config.ToRestore {
-			storageFromFile, err := createStorageFromJSON(config.FileStoragePath)
-			if err != nil {
-				tmp := storage.NewMemStorage()
-				storageFromFile = &tmp
-				logger.LogS.Warnf("Failed fill storage from file: %s", err)
-			}
-
-			metricsStorage = *storageFromFile
-		} else {
-			metricsStorage = storage.NewMemStorage()
-		}
+	storage, err := createStorage(config)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 
-	result := Server{
+	result := Server{ // SF LOGIC перенести в конец функции
 		config:  config,
-		storage: &metricsStorage,
+		storage: storage,
 	}
 
-	if config.StoreInterval == 0 {
+	if config.DatabaseDSN == nil && config.StoreInterval == 0 {
 		result.doSaveStorage.Store(true)
 		result.saveStorageChan = make(chan struct{})
 	}
 
-	router, err := getRouter(&metricsStorage, database, result.getSaveMiddleware())
+	router, err := getRouter(storage, result.getSaveMiddleware())
 	if err != nil {
-		return nil, fmt.Errorf("server: NewServer: failed create router: %v", err)
+		return nil, fmt.Errorf("%s: failed create router: %v", prefix, err)
 	}
 
 	result.router = &router
-
 	return &result, nil
-}
-
-// Сохраняет данные хранилища метрик в json файл, который указан в конфигурации сервера
-//
-//	@returns error ошибку в случае неудачи
-func (s *Server) saveStorageToFile() error {
-	logger.LogS.Debugw("Save metrics storage to file", "file", s.config.FileStoragePath, "metrics storage", s.storage)
-
-	metrics := make([]model.Metrics, 0, len(*s.storage))
-	for _, metric := range *s.storage {
-		metrics = append(metrics, metric)
-	}
-
-	metricsJSON, err := json.MarshalIndent(metrics, "", "    ")
-	if err != nil {
-		return fmt.Errorf("failed marshal metrics: %w", err)
-	}
-
-	if err = os.WriteFile(s.config.FileStoragePath, metricsJSON, 0644); err != nil {
-		return fmt.Errorf("failed write to file %q: %w", s.config.FileStoragePath, err)
-	}
-
-	return nil
 }
 
 // Запускает сервер на ожидание запросов. Блокирует дальнейшую работу программы
@@ -210,7 +220,13 @@ func (s *Server) Listen() error {
 					logger.LogS.Debug("Data-saving goroutine (file output) has successfully terminated")
 					return
 				case <-s.saveStorageChan:
-					if err := s.saveStorageToFile(); err != nil {
+					ms, ok := s.storage.(*storage.MemStorage)
+					if !ok {
+						logger.Log.DPanic("Storage type is not in-memory")
+						return
+					}
+
+					if err := ms.SaveStorageToFile(s.config.FileStoragePath); err != nil {
 						logger.LogS.Errorf("Failed save storage to file: %v", err)
 						return
 					}
@@ -228,7 +244,13 @@ func (s *Server) Listen() error {
 				logger.LogS.Debug("Data-saving goroutine (file output) has successfully terminated")
 				return
 			case <-saveStorageTicker.C:
-				if err := s.saveStorageToFile(); err != nil {
+				ms, ok := s.storage.(*storage.MemStorage)
+				if !ok {
+					logger.Log.DPanic("Storage type is not in-memory")
+					return
+				}
+
+				if err := ms.SaveStorageToFile(s.config.FileStoragePath); err != nil {
 					logger.LogS.Errorf("Failed save storage to file: %v", err)
 					return
 				}
@@ -243,4 +265,9 @@ func (s *Server) Listen() error {
 	}
 
 	return nil
+}
+
+// SF TODO
+func (s *Server) Close() error {
+	return s.storage.Close()
 }

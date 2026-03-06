@@ -2,10 +2,12 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"math"
+	"os"
 
+	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 )
 
@@ -39,11 +41,6 @@ func (ms *MemStorage) Update(metric model.Metrics) (*model.Metrics, error) {
 func (ms *MemStorage) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
 	const prefix = "storage.MemStorage.UpdateContext"
 
-	// SF LOGIC перенести проверку валидности выше
-	if err := metric.Valid(); err != nil {
-		return nil, fmt.Errorf("%s: %w", prefix, err)
-	}
-
 	foundMetric, found := (*ms)[metric.ID]
 	if found {
 		switch metric.MType {
@@ -65,58 +62,6 @@ func (ms *MemStorage) UpdateContext(ctx context.Context, metric model.Metrics) (
 	return &metric, nil
 }
 
-// Обновляет/добавляет датчик в хранилище
-//
-//	@param id    идентификатор датчика
-//	@param value данные метрики датчика
-//	@returns возможную ошибку
-func (ms *MemStorage) UpdateGauge(id string, value float64) error {
-	metric, found := (*ms)[id]
-	if !found {
-		(*ms)[id] = model.Metrics{
-			ID:    id,
-			MType: model.Gauge,
-			Value: &value,
-		}
-
-		return nil
-	}
-
-	if metric.MType != model.Gauge {
-		return fmt.Errorf("storage: MemStorage.UpdateGauge: %w", ErrFoundNotGaugeMetricType)
-	}
-
-	*(*ms)[id].Value = value
-
-	return nil
-}
-
-// Обновляет данные счетчика
-//
-//	@param name  идентификатор счетчика
-//	@param value данные метрики счетчика
-//	@returns возможную ошибку
-func (ms *MemStorage) UpdateCounter(id string, value int64) error {
-	metric, found := (*ms)[id]
-	if !found {
-		(*ms)[id] = model.Metrics{
-			ID:    id,
-			MType: model.Counter,
-			Delta: &value,
-		}
-
-		return nil
-	}
-
-	if metric.MType != model.Counter {
-		return fmt.Errorf("storage: MemStorage.UpdateCounter: %w", ErrFoundNotCounterMetricType)
-	}
-
-	*(*ms)[id].Delta += value
-
-	return nil
-}
-
 // SF TODO
 func (ms MemStorage) Get(id string) (*model.Metrics, error) {
 	return ms.GetContext(context.Background(), id)
@@ -126,46 +71,10 @@ func (ms MemStorage) Get(id string) (*model.Metrics, error) {
 func (ms MemStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
 	metric, found := ms[id]
 	if !found {
-		return nil, fmt.Errorf("storage.MemStorage.Get: %w", ErrMetricNotFound)
+		return nil, fmt.Errorf("storage.MemStorage.GetContext: %w", ErrMetricNotFound)
 	}
 
 	return &metric, nil
-}
-
-// Возвращает значение конкретной метрики датчика
-//
-//	@param id идентификатор датчика
-//	@returns float64 значение метрики датчика, в случае успеха
-//	@returns error ошибку в иных случаях
-func (ms MemStorage) GetGauge(id string) (float64, error) {
-	metric, found := ms[id]
-	if !found {
-		return math.MaxFloat64, fmt.Errorf("storage: MemStorage.GetGauge: %w", ErrMetricNotFound)
-	}
-
-	if metric.MType != model.Gauge {
-		return math.MaxFloat64, fmt.Errorf("storage: MemStorage.GetGauge: %w", ErrFoundNotGaugeMetricType)
-	}
-
-	return *metric.Value, nil
-}
-
-// Возвращает значение конкретной метрики счетчика
-//
-//	@param id идентификатор счетчика
-//	@returns float64 значение метрики счетчика, в случае успеха
-//	@returns error ошибку в иных случаях
-func (ms MemStorage) GetCounter(id string) (int64, error) {
-	metric, found := ms[id]
-	if !found {
-		return math.MaxInt64, fmt.Errorf("storage: MemStorage.GetCounter: %w", ErrMetricNotFound)
-	}
-
-	if metric.MType != model.Counter {
-		return math.MaxInt64, fmt.Errorf("storage: MemStorage.GetCounter: %w", ErrFoundNotCounterMetricType)
-	}
-
-	return *metric.Delta, nil
 }
 
 // Возвращает все метрики датчиков
@@ -198,6 +107,37 @@ func (ms MemStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error)
 	}
 
 	return result, nil
+}
+
+// Сохраняет данные хранилища метрик в json файл, который указан в конфигурации сервера
+//
+//	@returns error ошибку в случае неудачи
+//
+// SF TODO
+func (ms MemStorage) SaveStorageToFile(filePath string) error {
+	// SF LOGIC перенести тесты из сервера
+	logger.LogS.Debugw("Save metrics storage to file", "file", filePath, "metrics storage", ms)
+
+	metrics := make([]model.Metrics, 0, len(ms))
+	for _, metric := range ms {
+		metrics = append(metrics, metric)
+	}
+
+	metricsJSON, err := json.MarshalIndent(metrics, "", "    ")
+	if err != nil {
+		return fmt.Errorf("failed marshal metrics: %w", err)
+	}
+
+	if err = os.WriteFile(filePath, metricsJSON, 0644); err != nil {
+		return fmt.Errorf("failed write to file %q: %w", filePath, err)
+	}
+
+	return nil
+}
+
+// SF TODO
+func (ms MemStorage) Close() error {
+	return nil
 }
 
 // SF TODO

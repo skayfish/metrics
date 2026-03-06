@@ -26,6 +26,9 @@ type Storage interface {
 
 	// SF TODO
 	GetAllContext(ctx context.Context) ([]model.Metrics, error)
+
+	// SF TODO
+	Close() error
 }
 
 // Ошибка: метрика не найдена в хранилище

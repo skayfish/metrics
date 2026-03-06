@@ -9,7 +9,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-resty/resty/v2"
 	"github.com/golang/mock/gomock"
-	"github.com/skayfish/metrics/internal/server/database"
+	"github.com/skayfish/metrics/internal/server/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -37,10 +37,10 @@ func TestBaseController_Ping(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockDatabase := database.NewMockDatabase(ctrl)
+			mockDatabase := storage.NewMockDatabase(ctrl)
 			mockDatabase.EXPECT().PingContext(gomock.Any()).Times(1).Return(tt.databaseError)
 
-			controller := NewBaseController(mockDatabase)
+			controller := NewBaseController(storage.Storage(mockDatabase))
 
 			router := chi.NewRouter()
 			router.Get("/ping", controller.Ping)

@@ -51,6 +51,7 @@ func parseConfig() (*server.Config, error) {
 	databaseDSN := pflag.StringP("database-dsn", "d", "",
 		`Connection string for database access, structured as: "host=<host> port=<port> user=<username> password=<pass> dbname=<database name>" or
 		                                                       "postgres://<username>:<password>@<host>:<port>/<database name>?sslmode=disable"`)
+	migrationsPath := pflag.StringP("migrations-path", "m", "../../migrations", "Directory path containing database migration files")
 
 	pflag.Parse()
 
@@ -97,6 +98,7 @@ func parseConfig() (*server.Config, error) {
 		FileStoragePath: *fileStoragePath,
 		ToRestore:       *toRestore,
 		DatabaseDSN:     databaseDSN,
+		MigrationsPath:  *migrationsPath,
 	}
 
 	return &result, nil

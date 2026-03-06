@@ -13,6 +13,14 @@ var Log *zap.Logger = zap.NewNop()
 // Более медленный менеджер логирования, но более удобное использование
 var LogS *zap.SugaredLogger = Log.Sugar()
 
+// SF TODO
+var CurLogLevel Level = Level(zapcore.InvalidLevel)
+
+// SF TODO
+func IsDebug() bool {
+	return CurLogLevel == Level(zap.DebugLevel)
+}
+
 // Инициализирует менеджер логирования
 //
 //	@warning вызов defer logger.Log.Sync() после инициализации - обязателен!
@@ -35,6 +43,8 @@ func Init(level Level) error {
 
 	Log = logger
 	LogS = logger.Sugar()
+
+	CurLogLevel = level
 
 	return nil
 }

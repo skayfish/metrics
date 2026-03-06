@@ -36,6 +36,20 @@ func (m *MockDatabase) EXPECT() *MockDatabaseMockRecorder {
 	return m.recorder
 }
 
+// Close mocks base method.
+func (m *MockDatabase) Close() error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Close")
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Close indicates an expected call of Close.
+func (mr *MockDatabaseMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockDatabase)(nil).Close))
+}
+
 // ExecContext mocks base method.
 func (m *MockDatabase) ExecContext(arg0 context.Context, arg1 string, arg2 ...interface{}) (sql.Result, error) {
 	m.ctrl.T.Helper()
@@ -57,31 +71,63 @@ func (mr *MockDatabaseMockRecorder) ExecContext(arg0, arg1 interface{}, arg2 ...
 }
 
 // Get mocks base method.
-func (m *MockDatabase) Get() model.Metrics {
+func (m *MockDatabase) Get(arg0 string) (*model.Metrics, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get")
-	ret0, _ := ret[0].(model.Metrics)
-	return ret0
+	ret := m.ctrl.Call(m, "Get", arg0)
+	ret0, _ := ret[0].(*model.Metrics)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockDatabaseMockRecorder) Get() *gomock.Call {
+func (mr *MockDatabaseMockRecorder) Get(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockDatabase)(nil).Get))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockDatabase)(nil).Get), arg0)
 }
 
 // GetAll mocks base method.
-func (m *MockDatabase) GetAll() []model.Metrics {
+func (m *MockDatabase) GetAll() ([]model.Metrics, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAll")
 	ret0, _ := ret[0].([]model.Metrics)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // GetAll indicates an expected call of GetAll.
 func (mr *MockDatabaseMockRecorder) GetAll() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAll", reflect.TypeOf((*MockDatabase)(nil).GetAll))
+}
+
+// GetAllContext mocks base method.
+func (m *MockDatabase) GetAllContext(arg0 context.Context) ([]model.Metrics, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAllContext", arg0)
+	ret0, _ := ret[0].([]model.Metrics)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllContext indicates an expected call of GetAllContext.
+func (mr *MockDatabaseMockRecorder) GetAllContext(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllContext", reflect.TypeOf((*MockDatabase)(nil).GetAllContext), arg0)
+}
+
+// GetContext mocks base method.
+func (m *MockDatabase) GetContext(arg0 context.Context, arg1 string) (*model.Metrics, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetContext", arg0, arg1)
+	ret0, _ := ret[0].(*model.Metrics)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetContext indicates an expected call of GetContext.
+func (mr *MockDatabaseMockRecorder) GetContext(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetContext", reflect.TypeOf((*MockDatabase)(nil).GetContext), arg0, arg1)
 }
 
 // PingContext mocks base method.
@@ -138,15 +184,31 @@ func (mr *MockDatabaseMockRecorder) QueryRowContext(arg0, arg1 interface{}, arg2
 }
 
 // Update mocks base method.
-func (m *MockDatabase) Update(arg0 model.Metrics) error {
+func (m *MockDatabase) Update(arg0 model.Metrics) (*model.Metrics, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Update", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
+	ret0, _ := ret[0].(*model.Metrics)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // Update indicates an expected call of Update.
 func (mr *MockDatabaseMockRecorder) Update(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Update", reflect.TypeOf((*MockDatabase)(nil).Update), arg0)
+}
+
+// UpdateContext mocks base method.
+func (m *MockDatabase) UpdateContext(arg0 context.Context, arg1 model.Metrics) (*model.Metrics, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateContext", arg0, arg1)
+	ret0, _ := ret[0].(*model.Metrics)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateContext indicates an expected call of UpdateContext.
+func (mr *MockDatabaseMockRecorder) UpdateContext(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateContext", reflect.TypeOf((*MockDatabase)(nil).UpdateContext), arg0, arg1)
 }

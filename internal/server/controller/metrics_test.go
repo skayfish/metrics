@@ -15,6 +15,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// SF TODO
+func updateMetrics(t *testing.T, storage storage.Storage, gaugeMetrics map[string]float64, counterMetrics map[string]int64) {
+	for name, value := range counterMetrics {
+		_, err := storage.Update(model.Metrics{ID: name, Delta: &value, MType: model.Counter})
+		require.NoError(t, err)
+	}
+
+	for name, value := range gaugeMetrics {
+		_, err := storage.Update(model.Metrics{ID: name, Value: &value, MType: model.Gauge})
+		require.NoError(t, err)
+	}
+}
+
 // Проверяет работу обработчика обновления метрики через URL
 func TestMetricsController_UpdateFromURL(t *testing.T) {
 	type want struct {
@@ -63,8 +76,8 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			requestURL:     "/update/gauge/GaugeMetricName/0.233000024133",
 			want: want{
 				status:      http.StatusOK,
-				contentType: "",
-				body:        "",
+				contentType: "application/json",
+				body:        `{"id":"GaugeMetricName","type":"gauge","value":0.233000024133}`,
 			},
 		},
 		{
@@ -74,8 +87,8 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			requestURL:     "/update/counter/CounterMetricName/11",
 			want: want{
 				status:      http.StatusOK,
-				contentType: "",
-				body:        "",
+				contentType: "application/json",
+				body:        `{"id":"CounterMetricName","type":"counter","delta":4323}`,
 			},
 		},
 		{
@@ -107,13 +120,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			controller, err := NewMetricsController(&storage)
 			require.NoError(t, err)
 
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
-
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
+			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
 			router := chi.NewRouter()
 			router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
@@ -124,9 +131,21 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			resp, err := request.Post(server.URL + tt.requestURL)
 			require.NoError(t, err)
 
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			assert.Equal(t, tt.want.body, resp.String())
+			assert.Equal(t, tt.want.status, resp.StatusCode(), resp.String())
+			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"), resp.String())
+			switch tt.want.contentType {
+			case "text/plain; charset=utf-8":
+				assert.Equal(t, tt.want.body, resp.String())
+			case "application/json":
+				expectedMetric := model.Metrics{}
+				buf := bytes.NewBuffer([]byte(tt.want.body))
+				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
+				expectedMetricJSON, err := json.Marshal(expectedMetric)
+				require.NoError(t, err)
+				assert.Equal(t, string(expectedMetricJSON), resp.String())
+			default:
+				t.Error("Unexpected content type", tt.want.contentType)
+			}
 		})
 	}
 }
@@ -239,13 +258,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			controller, err := NewMetricsController(&storage)
 			require.NoError(t, err)
 
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
-
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
+			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
 			router := chi.NewRouter()
 			router.Post("/update/", controller.UpdateFromJSON)
@@ -261,7 +274,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			require.NoError(t, err)
 
 			assert.Equal(t, tt.want.status, resp.StatusCode())
-			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+			require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
 
 			switch tt.want.contentType {
 			case "text/plain; charset=utf-8":
@@ -368,13 +381,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			controller, err := NewMetricsController(&storage)
 			require.NoError(t, err)
 
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
-
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
+			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
 			router := chi.NewRouter()
 			router.Get("/value/{type}/{name}", controller.GetValueFromURL)
@@ -392,8 +399,8 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 	}
 }
 
-// Проверяет работу обработчика получения конкретной метрики через JSON
-func TestMetricsController_GetValueFromJSON(t *testing.T) {
+// Проверяет работу обработчика получения конкретной метрики через json
+func TestMetricsController_GetMetricFromJSON(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -507,17 +514,11 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			controller, err := NewMetricsController(&storage)
 			require.NoError(t, err)
 
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
-
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
+			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
 			router := chi.NewRouter()
-			router.Post("/value/", controller.GetValueFromJSON)
-			router.Post("/value", controller.GetValueFromJSON)
+			router.Post("/value/", controller.GetMetricFromJSON)
+			router.Post("/value", controller.GetMetricFromJSON)
 			server := httptest.NewServer(router)
 			defer server.Close()
 
@@ -528,8 +529,8 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 				Post(server.URL + tt.requestURL)
 			require.NoError(t, err)
 
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+			assert.Equal(t, tt.want.status, resp.StatusCode(), resp.String())
+			require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"), resp.String())
 
 			switch tt.want.contentType {
 			case "text/plain; charset=utf-8":
@@ -587,13 +588,7 @@ func TestMetricsController_GetAllMetrics(t *testing.T) {
 			controller, err := NewMetricsController(&storage)
 			require.NoError(t, err)
 
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
-
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
+			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
 			router := chi.NewRouter()
 			router.Get("/", controller.GetAllMetrics)

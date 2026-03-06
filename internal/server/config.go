@@ -26,4 +26,7 @@ type Config struct {
 
 	// Строка с адресом подключения к базе данных
 	DatabaseDSN *string
+
+	// SF TODO
+	MigrationsPath string
 }

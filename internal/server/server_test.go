@@ -30,11 +30,11 @@ func getEmptyMiddleware() func(http.HandlerFunc) http.HandlerFunc {
 func Test_getRouter(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		s := storage.NewMemStorage()
-		_, err := getRouter(&s, nil, getEmptyMiddleware())
+		_, err := getRouter(&s, getEmptyMiddleware())
 		assert.NoError(t, err)
 	})
 	t.Run("success", func(t *testing.T) {
-		_, err := getRouter(nil, nil, getEmptyMiddleware())
+		_, err := getRouter(nil, getEmptyMiddleware())
 		assert.NoError(t, err)
 	})
 }
@@ -164,81 +164,14 @@ func TestNewServer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
-			s, err := NewServer(&tt.config, nil)
+			s, err := NewServer(&tt.config)
 			require.NoError(t, err)
 			assert.Equal(t, tt.config, *s.config)
-			assert.Equal(t, tt.want, *s.storage)
+			ms, ok := s.storage.(*storage.MemStorage)
+			require.True(t, ok)
+			assert.Equal(t, tt.want, *ms)
 		})
 	}
-}
-
-// Проверяет сохранение в файл данных хранилища метрик
-func TestServer_saveStorageToFile(t *testing.T) {
-	emptyStorage := storage.NewMemStorage()
-	notEmptyStorage := newSuccessMemStorage()
-	tests := []struct {
-		test            string
-		server          Server
-		expectedStorage storage.MemStorage
-		wantErr         bool
-		errPrefix       string
-	}{
-		{
-			test: "empty storage",
-			server: Server{
-				storage: &emptyStorage,
-				config:  &Config{},
-			},
-			expectedStorage: emptyStorage,
-		},
-		{
-			test: "not empty storage",
-			server: Server{
-				storage: &notEmptyStorage,
-				config:  &Config{},
-			},
-			expectedStorage: notEmptyStorage,
-		},
-	}
-	for i := range tests {
-		tt := &tests[i]
-		t.Run(tt.test, func(t *testing.T) {
-			file, err := os.CreateTemp(os.TempDir(), "storage*.json")
-			require.NoError(t, err)
-			defer os.Remove(file.Name())
-
-			tt.server.config.FileStoragePath = file.Name()
-
-			err = tt.server.saveStorageToFile()
-			require.NoError(t, err)
-
-			data, err := os.ReadFile(tt.server.config.FileStoragePath)
-			require.NoError(t, err)
-
-			var metrics []model.Metrics
-			err = json.Unmarshal(data, &metrics)
-			require.NoError(t, err)
-
-			storage := make(storage.MemStorage)
-			for _, metric := range metrics {
-				storage[metric.ID] = metric
-			}
-
-			assert.Equal(t, tt.expectedStorage, storage)
-		})
-	}
-
-	t.Run("failed write to file", func(t *testing.T) {
-		s := Server{
-			storage: &notEmptyStorage,
-			config:  &Config{},
-		}
-		s.config.FileStoragePath = "./unknown directory/unknown.json"
-		err := s.saveStorageToFile()
-		require.Error(t, err)
-		require.True(t, strings.HasPrefix(err.Error(),
-			fmt.Sprintf("failed write to file %q:", s.config.FileStoragePath)))
-	})
 }
 
 // Возвращает свободный порт на устройстве
@@ -269,7 +202,7 @@ func createServer(t *testing.T, restore bool, fileStoragePath string, storeInter
 		FileStoragePath: fileStoragePath,
 		ToRestore:       restore,
 		StoreInterval:   storeInterval,
-	}, nil)
+	})
 	require.NoError(t, err)
 
 	return s

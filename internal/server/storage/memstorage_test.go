@@ -1,8 +1,12 @@
 package storage
 
 import (
+	"encoding/json"
+	"fmt"
 	"math"
+	"os"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/skayfish/metrics/internal/model"
@@ -68,33 +72,6 @@ func storagesEqual(t *testing.T, expected, storage MemStorage) {
 
 // Проверяет обновление/добавление метрик в хранилище
 func TestMemStorage_Update(t *testing.T) {
-	t.Run("value is empty", func(t *testing.T) {
-		storage := NewMemStorage()
-		metric, err := storage.Update(model.Metrics{
-			ID:    "ID",
-			MType: model.Gauge,
-		})
-		require.ErrorIs(t, err, model.ErrValueIsEmpty)
-		assert.Nil(t, metric)
-	})
-	t.Run("delta is empty", func(t *testing.T) {
-		storage := NewMemStorage()
-		metric, err := storage.Update(model.Metrics{
-			ID:    "ID",
-			MType: model.Counter,
-		})
-		require.ErrorIs(t, err, model.ErrDeltaIsEmpty)
-		assert.Nil(t, metric)
-	})
-	t.Run("unrecognized metric type", func(t *testing.T) {
-		storage := NewMemStorage()
-		metric, err := storage.Update(model.Metrics{
-			ID:    "ID",
-			MType: "invalid",
-		})
-		require.ErrorIs(t, err, model.ErrUnrecognizedMetricType)
-		assert.Nil(t, metric)
-	})
 	t.Run("found not gauge metric type", func(t *testing.T) {
 		storage := NewMemStorage()
 		delta := int64(5)
@@ -245,211 +222,54 @@ func TestMemStorage_Update(t *testing.T) {
 	})
 }
 
-// Проверяет обновление/добавление метрики датчика
-func TestMemStorage_UpdateGauge(t *testing.T) {
-	t.Run("add new", func(t *testing.T) {
+// Проверяет получение значения метрики из хранилища
+func TestMemStorage_Get(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
 		storage := NewMemStorage()
-		err := storage.UpdateGauge("MetricName", 5.123)
+		_, err := storage.Get("MetricName")
+
+		require.ErrorIs(t, err, ErrMetricNotFound)
+	})
+	t.Run("not found", func(t *testing.T) {
+		gaugeValue := -34.4441
+		counterValue := int64(-36)
+		storage := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &gaugeValue,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &counterValue,
+			},
+		}
+		_, err := storage.Get("UnknownMetricName")
+
+		require.ErrorIs(t, err, ErrMetricNotFound)
+	})
+	t.Run("found gauge", func(t *testing.T) {
+		gaugeValue := -34.4441
+		counterValue := int64(-36)
+		storage := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &gaugeValue,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &counterValue,
+			},
+		}
+
+		metric, err := storage.Get("MetricNameGauge")
 		require.NoError(t, err)
-
-		value := 5.123
-		storagesEqual(t, MemStorage{
-			"MetricName": {
-				ID:    "MetricName",
-				MType: model.Gauge,
-				Value: &value,
-			},
-		}, storage)
+		metricsEqual(t, storage["MetricNameGauge"], *metric)
 	})
-	t.Run("add new", func(t *testing.T) {
-		storage := NewMemStorage()
-		storage.UpdateGauge("MetricName", 5)
-
-		value := float64(5)
-		storagesEqual(t, MemStorage{
-			"MetricName": {
-				ID:    "MetricName",
-				MType: model.Gauge,
-				Value: &value,
-			},
-		}, storage)
-	})
-	t.Run("add two metrics", func(t *testing.T) {
-		storage := NewMemStorage()
-		storage.UpdateGauge("MetricName", 5)
-		storage.UpdateGauge("MetricNameNew", -34.4441)
-
-		value1 := 5.0
-		value2 := -34.4441
-		expected := MemStorage{
-			"MetricName": {
-				ID:    "MetricName",
-				MType: model.Gauge,
-				Value: &value1,
-			},
-			"MetricNameNew": {
-				ID:    "MetricNameNew",
-				MType: model.Gauge,
-				Value: &value2,
-			},
-		}
-
-		storagesEqual(t, expected, storage)
-	})
-	t.Run("add and update", func(t *testing.T) {
-		storage := NewMemStorage()
-		storage.UpdateGauge("MetricName", 5.123)
-		storage.UpdateGauge("MetricName", -34.4441)
-
-		value := -34.4441
-		expected := MemStorage{
-			"MetricName": {
-				ID:    "MetricName",
-				MType: model.Gauge,
-				Value: &value,
-			},
-		}
-
-		storagesEqual(t, expected, storage)
-	})
-
-	t.Run("update old", func(t *testing.T) {
-		oldGaugeValue := -34.4441
-		oldCounterValue := int64(-15)
-		storage := MemStorage{
-			"MetricNameGauge": {
-				ID:    "MetricNameGauge",
-				MType: model.Gauge,
-				Value: &oldGaugeValue,
-			},
-			"MetricNameCounter": {
-				ID:    "MetricNameCounter",
-				MType: model.Counter,
-				Delta: &oldCounterValue,
-			},
-		}
-
-		value := 5.123
-		(&storage).UpdateGauge("MetricNameGauge", value)
-
-		expected := MemStorage{
-			"MetricNameGauge": {
-				ID:    "MetricNameGauge",
-				MType: model.Gauge,
-				Value: &value,
-			},
-			"MetricNameCounter": {
-				ID:    "MetricNameCounter",
-				MType: model.Counter,
-				Delta: &oldCounterValue,
-			},
-		}
-
-		storagesEqual(t, expected, storage)
-	})
-}
-
-// Проверяет обновление/добавление метрики счетчика
-func TestMemStorage_UpdateCounter(t *testing.T) {
-	t.Run("add new", func(t *testing.T) {
-		storage := NewMemStorage()
-		storage.UpdateCounter("MetricName", 53)
-
-		value := int64(53)
-		expected := MemStorage{
-			"MetricName": {
-				ID:    "MetricName",
-				MType: model.Counter,
-				Delta: &value,
-			},
-		}
-
-		storagesEqual(t, expected, storage)
-	})
-	t.Run("add two metrics", func(t *testing.T) {
-		storage := NewMemStorage()
-		storage.UpdateCounter("MetricName1", 5)
-		storage.UpdateCounter("MetricName2", -34)
-
-		value1 := int64(5)
-		value2 := int64(-34)
-		expected := MemStorage{
-			"MetricName1": {
-				ID:    "MetricName1",
-				MType: model.Counter,
-				Delta: &value1,
-			},
-			"MetricName2": {
-				ID:    "MetricName2",
-				MType: model.Counter,
-				Delta: &value2,
-			},
-		}
-
-		storagesEqual(t, expected, storage)
-	})
-	t.Run("add and update", func(t *testing.T) {
-		storage := NewMemStorage()
-		storage.UpdateCounter("MetricName", 5)
-		storage.UpdateCounter("MetricName", -34)
-
-		value := int64(-29)
-		expected := MemStorage{
-			"MetricName": {
-				ID:    "MetricName",
-				MType: model.Counter,
-				Delta: &value,
-			},
-		}
-
-		storagesEqual(t, expected, storage)
-	})
-
-	t.Run("not empty storage", func(t *testing.T) {
-		oldGaugeValue := -34.4441
-		oldCounterValue := int64(-36)
-		storage := MemStorage{
-			"MetricNameGauge": {
-				ID:    "MetricNameGauge",
-				MType: model.Gauge,
-				Value: &oldGaugeValue,
-			},
-			"MetricNameCounter": {
-				ID:    "MetricNameCounter",
-				MType: model.Counter,
-				Delta: &oldCounterValue,
-			},
-		}
-		storage.UpdateCounter("MetricNameCounter", 10)
-		storage.UpdateCounter("MetricNameCounter", 10)
-
-		value := int64(-16)
-		expected := MemStorage{
-			"MetricNameGauge": {
-				ID:    "MetricNameGauge",
-				MType: model.Gauge,
-				Value: &oldGaugeValue,
-			},
-			"MetricNameCounter": {
-				ID:    "MetricNameCounter",
-				MType: model.Counter,
-				Delta: &value,
-			},
-		}
-
-		storagesEqual(t, expected, storage)
-	})
-}
-
-// Проверяет получение значения метрики датчика из хранилища
-func TestMemStorage_GetGauge(t *testing.T) {
-	t.Run("not found", func(t *testing.T) {
-		storage := NewMemStorage()
-		_, err := storage.GetGauge("MetricName")
-
-		require.ErrorIs(t, err, ErrMetricNotFound)
-	})
-	t.Run("not found", func(t *testing.T) {
+	t.Run("found counter", func(t *testing.T) {
 		gaugeValue := -34.4441
 		counterValue := int64(-36)
 		storage := MemStorage{
@@ -464,109 +284,9 @@ func TestMemStorage_GetGauge(t *testing.T) {
 				Delta: &counterValue,
 			},
 		}
-		_, err := storage.GetGauge("UnknownMetricName")
-
-		require.ErrorIs(t, err, ErrMetricNotFound)
-	})
-	t.Run("found", func(t *testing.T) {
-		gaugeValue := -34.4441
-		counterValue := int64(-36)
-		storage := MemStorage{
-			"MetricNameGauge": {
-				ID:    "MetricNameGauge",
-				MType: model.Gauge,
-				Value: &gaugeValue,
-			},
-			"MetricNameCounter": {
-				ID:    "MetricNameCounter",
-				MType: model.Counter,
-				Delta: &counterValue,
-			},
-		}
-
-		value, err := storage.GetGauge("MetricNameGauge")
-
-		assert.NoError(t, err)
-		float64Equal(t, -34.4441, value)
-	})
-	t.Run("incorrect type", func(t *testing.T) {
-		counterValue := int64(-36)
-		storage := MemStorage{
-			"MetricNameCounter": {
-				ID:    "MetricNameCounter",
-				MType: model.Counter,
-				Delta: &counterValue,
-			},
-		}
-
-		// Поиск Gauge метрики с id = MetricNameCounter
-		_, err := storage.GetGauge("MetricNameCounter")
-
-		require.ErrorIs(t, err, ErrFoundNotGaugeMetricType)
-	})
-}
-
-// Проверяет получение значения метрики счетчика из хранилища
-func TestMemStorage_GetCounter(t *testing.T) {
-	t.Run("not found", func(t *testing.T) {
-		storage := NewMemStorage()
-		_, err := storage.GetCounter("MetricName")
-
-		require.ErrorIs(t, err, ErrMetricNotFound)
-	})
-	t.Run("not found", func(t *testing.T) {
-		gaugeValue := -34.4441
-		counterValue := int64(-36)
-		storage := MemStorage{
-			"MetricNameGauge": {
-				ID:    "MetricNameGauge",
-				MType: model.Gauge,
-				Value: &gaugeValue,
-			},
-			"MetricNameCounter": {
-				ID:    "MetricNameCounter",
-				MType: model.Counter,
-				Delta: &counterValue,
-			},
-		}
-		_, err := storage.GetGauge("UnknownMetricName")
-
-		require.ErrorIs(t, err, ErrMetricNotFound)
-	})
-	t.Run("found", func(t *testing.T) {
-		gaugeValue := -34.4441
-		counterValue := int64(-36)
-		storage := MemStorage{
-			"MetricNameGauge": {
-				ID:    "MetricNameGauge",
-				MType: model.Gauge,
-				Value: &gaugeValue,
-			},
-			"MetricNameCounter": {
-				ID:    "MetricNameCounter",
-				MType: model.Counter,
-				Delta: &counterValue,
-			},
-		}
-		value, err := storage.GetCounter("MetricNameCounter")
-
-		assert.NoError(t, err)
-		assert.Equal(t, int64(-36), value)
-	})
-	t.Run("incorrect type", func(t *testing.T) {
-		gaugeValue := -34.4441
-		storage := MemStorage{
-			"MetricNameGauge": {
-				ID:    "MetricNameGauge",
-				MType: model.Gauge,
-				Value: &gaugeValue,
-			},
-		}
-
-		// Поиск counter метрики с id = MetricNameGauge
-		_, err := storage.GetCounter("MetricNameGauge")
-
-		require.ErrorIs(t, err, ErrFoundNotCounterMetricType)
+		metric, err := storage.Get("MetricNameCounter")
+		require.NoError(t, err)
+		metricsEqual(t, storage["MetricNameCounter"], *metric)
 	})
 }
 
@@ -610,5 +330,85 @@ func TestMemStorage_GetAll(t *testing.T) {
 		}
 
 		storagesEqual(t, storage, MemStorage(metricsMap))
+	})
+}
+
+// Возвращает непустое хранилище с валидными данными
+func newSuccessMemStorage() MemStorage {
+	var delta1 int64 = 1298476200
+	var value1 float64 = 131072
+	var value2 float64 = 15288
+
+	return MemStorage{
+		"GetSet92": model.Metrics{
+			ID:    "GetSet92",
+			MType: model.Counter,
+			Delta: &delta1,
+		},
+		"StackInuse": model.Metrics{
+			ID:    "StackInuse",
+			MType: model.Gauge,
+			Value: &value1,
+		},
+		"MCacheSys": model.Metrics{
+			ID:    "MCacheSys",
+			MType: model.Gauge,
+			Value: &value2,
+		},
+	}
+}
+
+// Проверяет сохранение в файл данных хранилища метрик
+func TestMemStorage_SaveStorageToFile(t *testing.T) {
+	emptyStorage := NewMemStorage()
+	notEmptyStorage := newSuccessMemStorage()
+	tests := []struct {
+		test      string
+		storage   MemStorage
+		wantErr   bool
+		errPrefix string
+	}{
+		{
+			test:    "empty storage",
+			storage: emptyStorage,
+		},
+		{
+			test:    "not empty storage",
+			storage: notEmptyStorage,
+		},
+	}
+	for i := range tests {
+		tt := &tests[i]
+		t.Run(tt.test, func(t *testing.T) {
+			file, err := os.CreateTemp(os.TempDir(), "storage*.json")
+			require.NoError(t, err)
+			defer os.Remove(file.Name())
+
+			expectedStorage := tt.storage
+			err = tt.storage.SaveStorageToFile(file.Name())
+			require.NoError(t, err)
+
+			data, err := os.ReadFile(file.Name())
+			require.NoError(t, err)
+
+			var metrics []model.Metrics
+			err = json.Unmarshal(data, &metrics)
+			require.NoError(t, err)
+
+			storage := make(MemStorage)
+			for _, metric := range metrics {
+				storage[metric.ID] = metric
+			}
+
+			assert.Equal(t, expectedStorage, storage)
+		})
+	}
+
+	t.Run("failed write to file", func(t *testing.T) {
+		filePath := "./unknown directory/unknown.json"
+		err := notEmptyStorage.SaveStorageToFile(filePath)
+		require.Error(t, err)
+		hasPrefix := strings.HasPrefix(err.Error(), fmt.Sprintf("failed write to file %q:", filePath))
+		require.True(t, hasPrefix)
 	})
 }

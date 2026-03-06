@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 
 	"github.com/skayfish/metrics/internal/model"
@@ -84,6 +85,10 @@ func (db PostgreSQLDatabase) GetContext(ctx context.Context, id string) (*model.
 
 	err := row.Scan(&id, &mType, &deltaNull, &valueNull, &hash)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, fmt.Errorf("%s: %w", prefix, ErrMetricNotFound)
+		}
+
 		return nil, fmt.Errorf("%s: %w", prefix, err)
 	}
 
@@ -161,6 +166,11 @@ func (db PostgreSQLDatabase) GetAllContext(ctx context.Context) ([]model.Metrics
 	}
 
 	return result, nil
+}
+
+// SF TODO
+func (db PostgreSQLDatabase) Close() error {
+	return db.Close()
 }
 
 // SF TODO
