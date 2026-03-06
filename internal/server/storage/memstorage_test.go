@@ -74,7 +74,7 @@ func TestMemStorage_Update(t *testing.T) {
 			ID:    "ID",
 			MType: model.Gauge,
 		})
-		require.ErrorIs(t, err, ErrValueIsEmpty)
+		require.ErrorIs(t, err, model.ErrValueIsEmpty)
 		assert.Nil(t, metric)
 	})
 	t.Run("delta is empty", func(t *testing.T) {
@@ -83,7 +83,7 @@ func TestMemStorage_Update(t *testing.T) {
 			ID:    "ID",
 			MType: model.Counter,
 		})
-		require.ErrorIs(t, err, ErrDeltaIsEmpty)
+		require.ErrorIs(t, err, model.ErrDeltaIsEmpty)
 		assert.Nil(t, metric)
 	})
 	t.Run("unrecognized metric type", func(t *testing.T) {
@@ -92,7 +92,7 @@ func TestMemStorage_Update(t *testing.T) {
 			ID:    "ID",
 			MType: "invalid",
 		})
-		require.ErrorIs(t, err, ErrUnrecognizedMetricType)
+		require.ErrorIs(t, err, model.ErrUnrecognizedMetricType)
 		assert.Nil(t, metric)
 	})
 	t.Run("found not gauge metric type", func(t *testing.T) {
@@ -447,7 +447,7 @@ func TestMemStorage_GetGauge(t *testing.T) {
 		storage := NewMemStorage()
 		_, err := storage.GetGauge("MetricName")
 
-		require.ErrorIs(t, err, ErrNotFound)
+		require.ErrorIs(t, err, ErrMetricNotFound)
 	})
 	t.Run("not found", func(t *testing.T) {
 		gaugeValue := -34.4441
@@ -466,7 +466,7 @@ func TestMemStorage_GetGauge(t *testing.T) {
 		}
 		_, err := storage.GetGauge("UnknownMetricName")
 
-		require.ErrorIs(t, err, ErrNotFound)
+		require.ErrorIs(t, err, ErrMetricNotFound)
 	})
 	t.Run("found", func(t *testing.T) {
 		gaugeValue := -34.4441
@@ -512,7 +512,7 @@ func TestMemStorage_GetCounter(t *testing.T) {
 		storage := NewMemStorage()
 		_, err := storage.GetCounter("MetricName")
 
-		require.ErrorIs(t, err, ErrNotFound)
+		require.ErrorIs(t, err, ErrMetricNotFound)
 	})
 	t.Run("not found", func(t *testing.T) {
 		gaugeValue := -34.4441
@@ -531,7 +531,7 @@ func TestMemStorage_GetCounter(t *testing.T) {
 		}
 		_, err := storage.GetGauge("UnknownMetricName")
 
-		require.ErrorIs(t, err, ErrNotFound)
+		require.ErrorIs(t, err, ErrMetricNotFound)
 	})
 	t.Run("found", func(t *testing.T) {
 		gaugeValue := -34.4441
@@ -571,12 +571,13 @@ func TestMemStorage_GetCounter(t *testing.T) {
 }
 
 // Проверяет получение значений всех метрик из хранилища
-func TestMemStorage_GetMetrics(t *testing.T) {
+func TestMemStorage_GetAll(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		storage := NewMemStorage()
-		metrics := storage.GetMetrics()
+		metrics, err := storage.GetAll()
+		require.NoError(t, err)
 
-		storagesEqual(t, MemStorage{}, metrics)
+		assert.Equal(t, []model.Metrics{}, metrics)
 	})
 	t.Run("get all", func(t *testing.T) {
 		oldGaugeValue := -34.4441
@@ -600,8 +601,14 @@ func TestMemStorage_GetMetrics(t *testing.T) {
 			},
 		}
 
-		metrics := storage.GetMetrics()
+		metrics, err := storage.GetAll()
+		require.NoError(t, err)
 
-		assert.Equal(t, storage, MemStorage(metrics))
+		metricsMap := make(map[string]model.Metrics, 0)
+		for _, metric := range metrics {
+			metricsMap[metric.ID] = metric
+		}
+
+		storagesEqual(t, storage, MemStorage(metricsMap))
 	})
 }

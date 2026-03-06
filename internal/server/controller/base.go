@@ -29,11 +29,13 @@ func NewBaseController(database database.Database) BaseController {
 //	@param req  объект запроса
 func (c *BaseController) Ping(resp http.ResponseWriter, req *http.Request) {
 	if c.database == nil {
+		// SF LOGIC test
 		return
 	}
 
 	db, ok := c.database.(*sql.DB)
 	if ok && db == nil {
+		// SF LOGIC test
 		logger.LogS.Error("controller: BaseController.Ping: database not initialized")
 		resp.WriteHeader(http.StatusInternalServerError)
 		return

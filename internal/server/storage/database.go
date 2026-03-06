@@ -1,4 +1,4 @@
-package database
+package storage
 
 import (
 	"context"
@@ -7,6 +7,8 @@ import (
 
 // Интерфейс базы данных
 type Database interface {
+	Storage
+
 	// Проверяет, что соединение с базой данных всё ещё активно
 	//
 	//	@param ctx контекст для завершения
