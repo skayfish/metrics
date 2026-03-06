@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -17,6 +18,8 @@ func Test_parseConfig(t *testing.T) {
 	t.Run("default values", func(t *testing.T) {
 		config, err := parseConfig()
 		require.NoError(t, err)
+		migrationsPathDefault, err := filepath.Abs(filepath.Join("..", "..", "migrations"))
+		require.NoError(t, err)
 		assert.Equal(t, server.Config{
 			Address: flags.NetAddress{
 				Host: "localhost",
@@ -27,7 +30,7 @@ func Test_parseConfig(t *testing.T) {
 			FileStoragePath: "",
 			ToRestore:       false,
 			DatabaseDSN:     nil,
-			MigrationsPath:  "../../migrations",
+			MigrationsPath:  migrationsPathDefault,
 		}, *config)
 	})
 }
