@@ -170,7 +170,7 @@ func (db PostgreSQLDatabase) GetAllContext(ctx context.Context) ([]model.Metrics
 
 // SF TODO
 func (db PostgreSQLDatabase) Close() error {
-	return db.Close()
+	return db.DB.Close()
 }
 
 // SF TODO
