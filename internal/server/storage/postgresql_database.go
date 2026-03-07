@@ -15,6 +15,15 @@ type PostgreSQLDatabase struct {
 }
 
 // SF TODO
+func NewPostgreSQLDatabase(db *sql.DB) (*PostgreSQLDatabase, error) {
+	if db == nil {
+		return nil, fmt.Errorf("sql.DB is nil")
+	}
+
+	return &PostgreSQLDatabase{DB: db}, nil
+}
+
+// SF TODO
 func (db PostgreSQLDatabase) Update(metric model.Metrics) (*model.Metrics, error) {
 	return db.UpdateContext(context.Background(), metric)
 }

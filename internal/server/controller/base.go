@@ -33,12 +33,6 @@ func (c *BaseController) Ping(resp http.ResponseWriter, req *http.Request) {
 
 	switch storage := c.storage.(type) {
 	case storage.Database:
-		if storage == nil {
-			logger.LogS.Errorf("%s: database not initialized", prefix)
-			resp.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
 		ctx, cancel := context.WithTimeout(req.Context(), 1*time.Second)
 		defer cancel()
 		if err := storage.PingContext(ctx); err != nil {
@@ -46,10 +40,12 @@ func (c *BaseController) Ping(resp http.ResponseWriter, req *http.Request) {
 			resp.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+
 	case *storage.MemStorage:
 		return
+
 	default:
-		logger.LogS.Warnf("%s: unknown storage", prefix)
+		logger.LogS.Warnf("%s: unknown storage type", prefix)
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
