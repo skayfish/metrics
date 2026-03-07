@@ -111,6 +111,9 @@ func Test_createStorageFromJSON(t *testing.T) {
 
 // Проверяет создание сервера по переданной конфигурации
 func TestNewServer(t *testing.T) {
+	emptyMemStorage := storage.NewMemStorage()
+	notEmptyMemStorage := newSuccessMemStorage()
+
 	tests := []struct {
 		test   string
 		config Config
@@ -122,7 +125,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "",
 				ToRestore:       true,
 			},
-			want: storage.NewMemStorage(),
+			want: emptyMemStorage,
 		},
 		{
 			test: "failed restore",
@@ -130,7 +133,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/errorJSON.json",
 				ToRestore:       true,
 			},
-			want: storage.NewMemStorage(),
+			want: emptyMemStorage,
 		},
 		{
 			test: "success restore",
@@ -138,7 +141,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/success.json",
 				ToRestore:       true,
 			},
-			want: newSuccessMemStorage(),
+			want: notEmptyMemStorage,
 		},
 		{
 			test: "no restore",
@@ -146,7 +149,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/success.json",
 				ToRestore:       false,
 			},
-			want: storage.NewMemStorage(),
+			want: emptyMemStorage,
 		},
 		{
 			test: "no restore",
@@ -154,7 +157,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/errorJSON.json",
 				ToRestore:       false,
 			},
-			want: storage.NewMemStorage(),
+			want: emptyMemStorage,
 		},
 		{
 			test: "no restore",
@@ -162,7 +165,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "",
 				ToRestore:       false,
 			},
-			want: storage.NewMemStorage(),
+			want: emptyMemStorage,
 		},
 	}
 	for _, tt := range tests {
@@ -175,6 +178,18 @@ func TestNewServer(t *testing.T) {
 			assert.Equal(t, tt.want, *ms)
 		})
 	}
+
+	t.Run("database creation failed", func(t *testing.T) {
+		databaseDSN := "host=unknown user=unknown dbname=unknown password=unknown sslmode=disable"
+		config := Config{
+			DatabaseDSN: &databaseDSN,
+		}
+
+		s, err := NewServer(&config)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed create storage:")
+		require.Nil(t, s)
+	})
 }
 
 // Возвращает свободный порт на устройстве
@@ -416,7 +431,7 @@ func TestServer_Listen(t *testing.T) {
 		// Запуск сервера
 		errChan := listenServer(s)
 		defer close(errChan)
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond) // (~0 миллисекунд прошло до)
 
 		// Делаем запрос к серверу
 		client := resty.New()
@@ -428,7 +443,7 @@ func TestServer_Listen(t *testing.T) {
 		assert.Empty(t, resp.String())
 		assert.Equal(t, http.StatusOK, resp.StatusCode())
 
-		// Ожидаем запись в файл (но её быть не должно)
+		// Ожидаем запись в файл (но её быть не должно) (~100 миллисекунд прошло до)
 		time.Sleep(100 * time.Millisecond)
 
 		// Проверка файла с данными хранилища
@@ -443,7 +458,7 @@ func TestServer_Listen(t *testing.T) {
 		assert.Empty(t, resp.String())
 		assert.Equal(t, http.StatusOK, resp.StatusCode())
 
-		// Ожидаем запись в файл (но её быть не должно)
+		// Ожидаем запись в файл (но её быть не должно) (~200 миллисекунд прошло до)
 		time.Sleep(100 * time.Millisecond)
 
 		// Проверка файла с данными хранилища
@@ -451,8 +466,8 @@ func TestServer_Listen(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, data)
 
-		// Ждём ещё время, чтобы прошло пол секунды в сумме (~300 миллисекунд прошло)
-		time.Sleep(400 * time.Millisecond) // ~700 миллисекунд
+		// Ждём ещё время, чтобы прошло пол секунды в сумме (~300 миллисекунд прошло до)
+		time.Sleep(400 * time.Millisecond) // ~700 миллисекунд в сумме
 
 		// Проверка файла с данными хранилища
 		data, err = os.ReadFile(s.config.FileStoragePath)
