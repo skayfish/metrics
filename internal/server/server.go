@@ -102,14 +102,16 @@ func getRouter(
 //	@returns *storage.MemStorage хранилище метрик в случае успеха
 //	@returns error ошибку в ином случае
 func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
+	const prefix = "server.createStorageFromJSON"
+
 	data, err := os.ReadFile(filePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed read from file %q: %w", filePath, err)
+		return nil, fmt.Errorf("%s: failed read from file %q: %w", prefix, filePath, err)
 	}
 
 	var metrics []model.Metrics
 	if err = json.Unmarshal(data, &metrics); err != nil {
-		return nil, fmt.Errorf("failed unmarshal metrics from file %q: %w", filePath, err)
+		return nil, fmt.Errorf("%s: failed unmarshal metrics from file %q: %w", prefix, filePath, err)
 	}
 
 	storage := make(storage.MemStorage, len(metrics))
@@ -186,10 +188,10 @@ func NewServer(config *Config) (*Server, error) {
 
 	storage, err := createStorage(config)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %v", prefix, err)
+		return nil, fmt.Errorf("%s: failed create storage: %v", prefix, err)
 	}
 
-	result := Server{ // SF LOGIC перенести в конец функции
+	result := Server{
 		config:  config,
 		storage: storage,
 	}
@@ -211,9 +213,9 @@ func NewServer(config *Config) (*Server, error) {
 // Запускает сервер на ожидание запросов. Блокирует дальнейшую работу программы
 //
 //	@returns error ошибку в случае неудачи
-func (s *Server) Listen() error {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+//
+// SF TODO
+func (s *Server) Listen(ctx context.Context) error {
 	go func() {
 		if s.config.StoreInterval == 0 {
 			defer close(s.saveStorageChan)

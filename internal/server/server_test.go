@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -212,7 +213,7 @@ func createServer(t *testing.T, restore bool, fileStoragePath string, storeInter
 func listenServer(s *Server) chan error {
 	errChan := make(chan error)
 	go func() {
-		err := s.Listen()
+		err := s.Listen(context.Background())
 		errChan <- err
 	}()
 	return errChan

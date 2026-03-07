@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 
 	"github.com/skayfish/metrics/internal/logger"
@@ -31,7 +32,9 @@ func main() {
 
 	defer server.Close()
 
-	if err = server.Listen(); err != nil {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err = server.Listen(ctx); err != nil {
 		logger.LogS.Fatal(err)
 	}
 }
