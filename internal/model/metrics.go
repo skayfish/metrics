@@ -23,10 +23,10 @@ type Metrics struct {
 
 var (
 	// Ошибка: значение метрики типа gauge - пустое
-	ErrValueIsEmpty = errors.New(`gauge metric value is empty`)
+	ErrGaugeValueIsEmpty = errors.New(`gauge metric value is empty`)
 
 	// Ошибка: значение метрики типа counter - пустое
-	ErrDeltaIsEmpty = errors.New(`counter metric delta is empty`)
+	ErrCounterDeltaIsEmpty = errors.New(`counter metric delta is empty`)
 
 	// Ошибка: неизвестный тип метрики
 	ErrUnrecognizedMetricType = errors.New(`unrecognized metric type. Supported types: "gauge", "counter"`)
@@ -37,11 +37,11 @@ func (m Metrics) Valid() error {
 	switch m.MType {
 	case Gauge:
 		if m.Value == nil {
-			return ErrValueIsEmpty
+			return ErrGaugeValueIsEmpty
 		}
 	case Counter:
 		if m.Delta == nil {
-			return ErrDeltaIsEmpty
+			return ErrCounterDeltaIsEmpty
 		}
 	default:
 		return ErrUnrecognizedMetricType
