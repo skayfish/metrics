@@ -159,6 +159,7 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 		if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
 			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		} else {
+			logger.LogS.Errorf("%s: %v", prefix, err)
 			resp.WriteHeader(http.StatusInternalServerError)
 		}
 
@@ -227,6 +228,7 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 		if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
 			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		} else {
+			logger.LogS.Errorf("%s: %v", prefix, err)
 			resp.WriteHeader(http.StatusInternalServerError)
 		}
 
@@ -249,7 +251,7 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 
 	updatedMetricJSON, err := json.Marshal(updatedMetric)
 	if err != nil {
-		logger.LogS.Error("controller: MetricsController.UpdateFromJSON: marshaling metric failed: ", err.Error())
+		logger.LogS.Errorf("%s: marshaling metric failed: %v", prefix, err)
 		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -321,8 +323,7 @@ func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.
 		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		return
 	default:
-		logger.LogS.Errorw(fmt.Sprintf("%s: unknown error while accessing the storage", prefix),
-			"err", err,
+		logger.LogS.Errorw(fmt.Sprintf("%s: unknown error while accessing the storage: %v", prefix, err),
 			"metric type", mType,
 			"metric name", mName,
 		)
@@ -407,7 +408,7 @@ func (c *MetricsController) GetMetricFromJSON(resp http.ResponseWriter, req *htt
 	// Формирование ответа
 	metricJSON, err := json.MarshalIndent(*storageMetric, "", "    ")
 	if err != nil {
-		logger.LogS.Errorw(fmt.Sprintf("%s: failed marshal metric", prefix), "error", err)
+		logger.LogS.Errorf("%s: failed marshal metric: %v", prefix, err)
 		http.Error(resp, "Failed marshal metric", http.StatusInternalServerError)
 		return
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-resty/resty/v2"
+	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
 	"github.com/stretchr/testify/assert"
@@ -26,6 +27,14 @@ func updateMetrics(t *testing.T, storage storage.Storage, gaugeMetrics map[strin
 		_, err := storage.Update(model.Metrics{ID: name, Value: &value, MType: model.Gauge})
 		require.NoError(t, err)
 	}
+}
+
+// SF TODO
+func setLogLevel(t *testing.T, level string) {
+	var logLevel logger.Level
+	err := logLevel.Set(level)
+	require.NoError(t, err)
+	logger.Init(logLevel)
 }
 
 // Проверяет работу обработчика обновления метрики через URL
@@ -114,39 +123,43 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
-
-			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
-
-			router := chi.NewRouter()
-			router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
-			server := httptest.NewServer(router)
-			defer server.Close()
-
-			request := resty.New().R()
-			resp, err := request.Post(server.URL + tt.requestURL)
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.want.status, resp.StatusCode(), resp.String())
-			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"), resp.String())
-			switch tt.want.contentType {
-			case "text/plain; charset=utf-8":
-				assert.Equal(t, tt.want.body, resp.String())
-			case "application/json":
-				expectedMetric := model.Metrics{}
-				buf := bytes.NewBuffer([]byte(tt.want.body))
-				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
-				expectedMetricJSON, err := json.Marshal(expectedMetric)
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
 				require.NoError(t, err)
-				assert.Equal(t, string(expectedMetricJSON), resp.String())
-			default:
-				t.Error("Unexpected content type", tt.want.contentType)
-			}
-		})
+
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
+
+				router := chi.NewRouter()
+				router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
+				server := httptest.NewServer(router)
+				defer server.Close()
+
+				request := resty.New().R()
+				resp, err := request.Post(server.URL + tt.requestURL)
+				require.NoError(t, err)
+
+				assert.Equal(t, tt.want.status, resp.StatusCode(), resp.String())
+				assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"), resp.String())
+				switch tt.want.contentType {
+				case "text/plain; charset=utf-8":
+					assert.Equal(t, tt.want.body, resp.String())
+				case "application/json":
+					expectedMetric := model.Metrics{}
+					buf := bytes.NewBuffer([]byte(tt.want.body))
+					require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
+					expectedMetricJSON, err := json.Marshal(expectedMetric)
+					require.NoError(t, err)
+					assert.Equal(t, string(expectedMetricJSON), resp.String())
+				default:
+					t.Error("Unexpected content type", tt.want.contentType)
+				}
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
 
@@ -252,44 +265,48 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
-
-			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
-
-			router := chi.NewRouter()
-			router.Post("/update/", controller.UpdateFromJSON)
-			router.Post("/update", controller.UpdateFromJSON)
-			server := httptest.NewServer(router)
-			defer server.Close()
-
-			resp, err := resty.New().R().
-				SetBody(tt.requestBody).
-				SetHeader("Content-Type", tt.requestContentType).
-				SetHeader("Accept", "application/json").
-				Post(server.URL + tt.requestURL)
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-
-			switch tt.want.contentType {
-			case "text/plain; charset=utf-8":
-				assert.Equal(t, tt.want.body, resp.String())
-			case "application/json":
-				expectedMetric := model.Metrics{}
-				buf := bytes.NewBuffer([]byte(tt.want.body))
-				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
-				expectedMetricJSON, err := json.Marshal(expectedMetric)
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
 				require.NoError(t, err)
-				assert.Equal(t, string(expectedMetricJSON), resp.String())
-			default:
-				t.Error("Unexpected content type", tt.want.contentType)
-			}
-		})
+
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
+
+				router := chi.NewRouter()
+				router.Post("/update/", controller.UpdateFromJSON)
+				router.Post("/update", controller.UpdateFromJSON)
+				server := httptest.NewServer(router)
+				defer server.Close()
+
+				resp, err := resty.New().R().
+					SetBody(tt.requestBody).
+					SetHeader("Content-Type", tt.requestContentType).
+					SetHeader("Accept", "application/json").
+					Post(server.URL + tt.requestURL)
+				require.NoError(t, err)
+
+				assert.Equal(t, tt.want.status, resp.StatusCode())
+				require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+
+				switch tt.want.contentType {
+				case "text/plain; charset=utf-8":
+					assert.Equal(t, tt.want.body, resp.String())
+				case "application/json":
+					expectedMetric := model.Metrics{}
+					buf := bytes.NewBuffer([]byte(tt.want.body))
+					require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
+					expectedMetricJSON, err := json.Marshal(expectedMetric)
+					require.NoError(t, err)
+					assert.Equal(t, string(expectedMetricJSON), resp.String())
+				default:
+					t.Error("Unexpected content type", tt.want.contentType)
+				}
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
 
@@ -375,27 +392,31 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
+				require.NoError(t, err)
 
-			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
-			router := chi.NewRouter()
-			router.Get("/value/{type}/{name}", controller.GetValueFromURL)
-			server := httptest.NewServer(router)
-			defer server.Close()
+				router := chi.NewRouter()
+				router.Get("/value/{type}/{name}", controller.GetValueFromURL)
+				server := httptest.NewServer(router)
+				defer server.Close()
 
-			request := resty.New().R()
-			resp, err := request.Get(server.URL + tt.requestURL)
-			require.NoError(t, err)
+				request := resty.New().R()
+				resp, err := request.Get(server.URL + tt.requestURL)
+				require.NoError(t, err)
 
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			assert.Equal(t, tt.want.body, resp.String())
-		})
+				assert.Equal(t, tt.want.status, resp.StatusCode())
+				assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+				assert.Equal(t, tt.want.body, resp.String())
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
 
@@ -508,44 +529,48 @@ func TestMetricsController_GetMetricFromJSON(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
-
-			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
-
-			router := chi.NewRouter()
-			router.Post("/value/", controller.GetMetricFromJSON)
-			router.Post("/value", controller.GetMetricFromJSON)
-			server := httptest.NewServer(router)
-			defer server.Close()
-
-			resp, err := resty.New().R().
-				SetBody(tt.requestBody).
-				SetHeader("Content-Type", tt.requestContentType).
-				SetHeader("Accept", "application/json").
-				Post(server.URL + tt.requestURL)
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.want.status, resp.StatusCode(), resp.String())
-			require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"), resp.String())
-
-			switch tt.want.contentType {
-			case "text/plain; charset=utf-8":
-				assert.Equal(t, tt.want.body, resp.String())
-			case "application/json":
-				expectedMetric := model.Metrics{}
-				buf := bytes.NewBuffer([]byte(tt.want.body))
-				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
-				expectedMetricJSON, err := json.MarshalIndent(expectedMetric, "", "    ")
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
 				require.NoError(t, err)
-				assert.Equal(t, string(expectedMetricJSON), resp.String())
-			default:
-				t.Error("Unexpected content type", tt.want.contentType)
-			}
-		})
+
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
+
+				router := chi.NewRouter()
+				router.Post("/value/", controller.GetMetricFromJSON)
+				router.Post("/value", controller.GetMetricFromJSON)
+				server := httptest.NewServer(router)
+				defer server.Close()
+
+				resp, err := resty.New().R().
+					SetBody(tt.requestBody).
+					SetHeader("Content-Type", tt.requestContentType).
+					SetHeader("Accept", "application/json").
+					Post(server.URL + tt.requestURL)
+				require.NoError(t, err)
+
+				assert.Equal(t, tt.want.status, resp.StatusCode(), resp.String())
+				require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"), resp.String())
+
+				switch tt.want.contentType {
+				case "text/plain; charset=utf-8":
+					assert.Equal(t, tt.want.body, resp.String())
+				case "application/json":
+					expectedMetric := model.Metrics{}
+					buf := bytes.NewBuffer([]byte(tt.want.body))
+					require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
+					expectedMetricJSON, err := json.MarshalIndent(expectedMetric, "", "    ")
+					require.NoError(t, err)
+					assert.Equal(t, string(expectedMetricJSON), resp.String())
+				default:
+					t.Error("Unexpected content type", tt.want.contentType)
+				}
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
 
@@ -582,26 +607,30 @@ func TestMetricsController_GetAllMetrics(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
+				require.NoError(t, err)
 
-			updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
-			router := chi.NewRouter()
-			router.Get("/", controller.GetAllMetrics)
-			server := httptest.NewServer(router)
-			defer server.Close()
+				router := chi.NewRouter()
+				router.Get("/", controller.GetAllMetrics)
+				server := httptest.NewServer(router)
+				defer server.Close()
 
-			request := resty.New().R()
-			resp, err := request.Get(server.URL + tt.requestURL)
-			require.NoError(t, err)
+				request := resty.New().R()
+				resp, err := request.Get(server.URL + tt.requestURL)
+				require.NoError(t, err)
 
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			assert.False(t, len(resp.Body()) == 0, resp.String())
-		})
+				assert.Equal(t, tt.want.status, resp.StatusCode())
+				assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+				assert.False(t, len(resp.Body()) == 0, resp.String())
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
