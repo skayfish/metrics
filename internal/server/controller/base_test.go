@@ -37,10 +37,10 @@ func TestBaseController_Ping(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockDatabase := storage.NewMockDatabase(ctrl)
+			mockDatabase := storage.NewMockDatabaseStorage(ctrl)
 			mockDatabase.EXPECT().PingContext(gomock.Any()).Times(1).Return(tt.databaseError)
 
-			controller := NewBaseController(storage.Storage(mockDatabase))
+			controller := NewBaseController(mockDatabase)
 
 			router := chi.NewRouter()
 			router.Get("/ping", controller.Ping)

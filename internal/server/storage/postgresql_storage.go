@@ -10,27 +10,27 @@ import (
 )
 
 // SF TODO
-type PostgreSQLDatabase struct {
+type PostgreSQLStorage struct {
 	*sql.DB
 }
 
 // SF TODO
-func NewPostgreSQLDatabase(db *sql.DB) (*PostgreSQLDatabase, error) {
+func NewPostgreSQLStorage(db *sql.DB) (*PostgreSQLStorage, error) {
 	if db == nil {
 		return nil, fmt.Errorf("sql.DB is nil")
 	}
 
-	return &PostgreSQLDatabase{DB: db}, nil
+	return &PostgreSQLStorage{DB: db}, nil
 }
 
 // SF TODO
-func (db PostgreSQLDatabase) Update(metric model.Metrics) (*model.Metrics, error) {
+func (db PostgreSQLStorage) Update(metric model.Metrics) (*model.Metrics, error) {
 	return db.UpdateContext(context.Background(), metric)
 }
 
 // SF TODO
-func (db PostgreSQLDatabase) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
-	const prefix = "storage.PostgreSQLDatabase.UpdateContext"
+func (db PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
+	const prefix = "storage.PostgreSQLStorage.UpdateContext"
 
 	var delta sql.NullInt64
 	if metric.Delta != nil {
@@ -105,7 +105,7 @@ type SQLExecutor interface {
 
 // SF TODO
 func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics, error) {
-	const prefix = "storage.PostgreSQLDatabase.getContext"
+	const prefix = "storage.PostgreSQLStorage.getContext"
 
 	row := db.QueryRowContext(ctx, `
 		SELECT * FROM metrics_schema.metrics
@@ -146,23 +146,23 @@ func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics,
 }
 
 // SF TODO
-func (db PostgreSQLDatabase) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
+func (db PostgreSQLStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
 	return getContext(ctx, db.DB, id)
 }
 
 // SF TODO
-func (db PostgreSQLDatabase) Get(id string) (*model.Metrics, error) {
+func (db PostgreSQLStorage) Get(id string) (*model.Metrics, error) {
 	return db.GetContext(context.Background(), id)
 }
 
 // SF TODO
-func (db PostgreSQLDatabase) GetAll() ([]model.Metrics, error) {
+func (db PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
 	return db.GetAllContext(context.Background())
 }
 
 // SF TODO
-func (db PostgreSQLDatabase) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
-	const prefix = "storage.PostgreSQLDatabase.GetAllContext"
+func (db PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
+	const prefix = "storage.PostgreSQLStorage.GetAllContext"
 
 	rows, err := db.QueryContext(ctx, `SELECT * FROM metrics_schema.metrics;`)
 	if err != nil {
@@ -213,9 +213,9 @@ func (db PostgreSQLDatabase) GetAllContext(ctx context.Context) ([]model.Metrics
 }
 
 // SF TODO
-func (db PostgreSQLDatabase) Close() error {
+func (db PostgreSQLStorage) Close() error {
 	return db.DB.Close()
 }
 
 // SF TODO
-var _ Database = (*PostgreSQLDatabase)(nil)
+var _ DatabaseStorage = (*PostgreSQLStorage)(nil)

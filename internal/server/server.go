@@ -133,17 +133,17 @@ func createStorage(config *Config) (storage.Storage, error) {
 			return nil, fmt.Errorf("%s: failed open database: %w", prefix, err)
 		}
 
-		database, err := storage.NewPostgreSQLDatabase(db)
+		storage, err := storage.NewPostgreSQLStorage(db)
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed create PostgreSQL instance: %w", prefix, err)
 		}
 
-		err = goose.Up(database.DB, config.MigrationsPath)
+		err = goose.Up(storage.DB, config.MigrationsPath)
 		if err != nil {
 			return nil, fmt.Errorf("%s: migrations failed: %w", prefix, err)
 		}
 
-		return database, nil
+		return storage, nil
 	}
 
 	// Создание временного файла хранилища, т.к. путь не передан

@@ -31,5 +31,11 @@ type Storage interface {
 	Close() error
 }
 
+// SF TODO
+type DatabaseStorage interface {
+	Storage
+	Database
+}
+
 // Ошибка: метрика не найдена в хранилище
 var ErrMetricNotFound = errors.New(`metric not found`)
