@@ -67,6 +67,8 @@ func newSuccessMemStorage() storage.MemStorage {
 
 // Проверяет создание хранилища метрик из json файла
 func Test_createStorageFromJSON(t *testing.T) {
+	const prefix = "server.createStorageFromJSON"
+
 	tests := []struct {
 		test        string
 		filePath    string
@@ -79,14 +81,14 @@ func Test_createStorageFromJSON(t *testing.T) {
 			filePath:    "./testdata/unknown.json",
 			want:        storage.MemStorage{},
 			wantErr:     true,
-			errorPrefix: fmt.Sprintf("failed read from file %q:", "./testdata/unknown.json"),
+			errorPrefix: fmt.Sprintf("%s: failed read from file %q:", prefix, "./testdata/unknown.json"),
 		},
 		{
 			test:        "failed unmarshal",
 			filePath:    "./testdata/errorJSON.json",
 			want:        storage.MemStorage{},
 			wantErr:     true,
-			errorPrefix: fmt.Sprintf("failed unmarshal metrics from file %q:", "./testdata/errorJSON.json"),
+			errorPrefix: fmt.Sprintf("%s: failed unmarshal metrics from file %q:", prefix, "./testdata/errorJSON.json"),
 		},
 		{
 			test:     "success",
@@ -98,7 +100,7 @@ func Test_createStorageFromJSON(t *testing.T) {
 		t.Run(tt.test, func(t *testing.T) {
 			metrics, err := createStorageFromJSON(tt.filePath)
 			if tt.wantErr {
-				require.True(t, strings.HasPrefix(err.Error(), tt.errorPrefix))
+				require.True(t, strings.HasPrefix(err.Error(), tt.errorPrefix), err.Error())
 			} else {
 				require.NoError(t, err)
 				require.Equal(t, tt.want, *metrics)
