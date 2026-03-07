@@ -115,7 +115,6 @@ func (ms MemStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error)
 //
 // SF TODO
 func (ms MemStorage) SaveStorageToFile(filePath string) error {
-	// SF LOGIC перенести тесты из сервера
 	logger.LogS.Debugw("Save metrics storage to file", "file", filePath, "metrics storage", ms)
 
 	metrics := make([]model.Metrics, 0, len(ms))

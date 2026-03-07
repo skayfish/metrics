@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -13,6 +14,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// SF TODO
+func storageByMetricsArray(metrics []model.Metrics) MemStorage {
+	storage := make(MemStorage)
+	for _, metric := range metrics {
+		storage[metric.ID] = metric
+	}
+
+	return storage
+}
 
 // Проверяет создание нового хранилища метрик
 func TestNewMemStorage(t *testing.T) {
@@ -297,7 +308,7 @@ func TestMemStorage_GetAll(t *testing.T) {
 		metrics, err := storage.GetAll()
 		require.NoError(t, err)
 
-		assert.Equal(t, []model.Metrics{}, metrics)
+		storagesEqual(t, NewMemStorage(), storageByMetricsArray(metrics))
 	})
 	t.Run("get all", func(t *testing.T) {
 		oldGaugeValue := -34.4441
@@ -324,12 +335,77 @@ func TestMemStorage_GetAll(t *testing.T) {
 		metrics, err := storage.GetAll()
 		require.NoError(t, err)
 
+		storagesEqual(t, storage, storageByMetricsArray(metrics))
+	})
+}
+
+// Проверяет получение значений всех метрик из хранилища
+func TestMemStorage_GetAllContext(t *testing.T) {
+	oldGaugeValue := -34.4441
+	oldGaugeValue1 := 0.1
+	oldCounterValue := int64(-36)
+
+	t.Run("empty", func(t *testing.T) {
+		storage := NewMemStorage()
+		metrics, err := storage.GetAllContext(context.Background())
+		require.NoError(t, err)
+
+		storagesEqual(t, NewMemStorage(), storageByMetricsArray(metrics))
+	})
+	t.Run("get all", func(t *testing.T) {
+		storage := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &oldGaugeValue,
+			},
+			"MetricNameGauge1": {
+				ID:    "MetricNameGauge1",
+				MType: model.Gauge,
+				Value: &oldGaugeValue1,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &oldCounterValue,
+			},
+		}
+
+		metrics, err := storage.GetAllContext(context.Background())
+		require.NoError(t, err)
+
 		metricsMap := make(map[string]model.Metrics, 0)
 		for _, metric := range metrics {
 			metricsMap[metric.ID] = metric
 		}
 
 		storagesEqual(t, storage, MemStorage(metricsMap))
+	})
+	t.Run("canceled context", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		storage := MemStorage{
+			"MetricNameGauge": {
+				ID:    "MetricNameGauge",
+				MType: model.Gauge,
+				Value: &oldGaugeValue,
+			},
+			"MetricNameGauge1": {
+				ID:    "MetricNameGauge1",
+				MType: model.Gauge,
+				Value: &oldGaugeValue1,
+			},
+			"MetricNameCounter": {
+				ID:    "MetricNameCounter",
+				MType: model.Counter,
+				Delta: &oldCounterValue,
+			},
+		}
+		metrics, err := storage.GetAllContext(ctx)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, context.Canceled)
+
+		storagesEqual(t, NewMemStorage(), storageByMetricsArray(metrics))
 	})
 }
 
@@ -395,12 +471,7 @@ func TestMemStorage_SaveStorageToFile(t *testing.T) {
 			err = json.Unmarshal(data, &metrics)
 			require.NoError(t, err)
 
-			storage := make(MemStorage)
-			for _, metric := range metrics {
-				storage[metric.ID] = metric
-			}
-
-			assert.Equal(t, expectedStorage, storage)
+			storagesEqual(t, expectedStorage, storageByMetricsArray(metrics))
 		})
 	}
 
@@ -411,4 +482,31 @@ func TestMemStorage_SaveStorageToFile(t *testing.T) {
 		hasPrefix := strings.HasPrefix(err.Error(), fmt.Sprintf("failed write to file %q:", filePath))
 		require.True(t, hasPrefix)
 	})
+}
+
+// SF TODO
+func TestMemStorage_Close(t *testing.T) {
+	emptyStorage := NewMemStorage()
+	notEmptyStorage := newSuccessMemStorage()
+	tests := []struct {
+		test    string
+		storage MemStorage
+	}{
+		{
+			test:    "empty storage",
+			storage: emptyStorage,
+		},
+		{
+			test:    "not empty storage",
+			storage: notEmptyStorage,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.test, func(t *testing.T) {
+			expectedStorage := tt.storage
+			err := tt.storage.Close()
+			require.NoError(t, err)
+			storagesEqual(t, expectedStorage, tt.storage)
+		})
+	}
 }
