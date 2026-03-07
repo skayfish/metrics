@@ -5,14 +5,8 @@ import (
 	"database/sql"
 )
 
-// Интерфейс базы данных
-type Database interface {
-	// Проверяет, что соединение с базой данных всё ещё активно
-	//
-	//	@param ctx контекст для завершения
-	//	@returns error ошибку, если соединение не активно
-	PingContext(ctx context.Context) error
-
+// SF TODO
+type sqlExecutor interface {
 	// Выполняет запрос, возвращающий строки из базы данных — обычно это запрос SELECT.
 	//
 	//	@param ctx   контекст для завершения
@@ -46,3 +40,25 @@ type Database interface {
 	//	@returns error ошибку в ином случае
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
+
+// SF TODO
+var _ sqlExecutor = (*sql.Tx)(nil)
+
+//go:generate mockgen --destination=mock_sql_database.go --package=storage github.com/skayfish/metrics/internal/server/storage SQLDatabase
+
+// Интерфейс базы данных
+type SQLDatabase interface {
+	sqlExecutor
+
+	// SF TODO
+	PingContext(ctx context.Context) error
+
+	// SF TODO
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
+
+	// SF TODO
+	Close() error
+}
+
+// SF TODO
+var _ SQLDatabase = (*sql.DB)(nil)

@@ -6,7 +6,6 @@ package storage
 
 import (
 	context "context"
-	sql "database/sql"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -48,26 +47,6 @@ func (m *MockDatabaseStorage) Close() error {
 func (mr *MockDatabaseStorageMockRecorder) Close() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockDatabaseStorage)(nil).Close))
-}
-
-// ExecContext mocks base method.
-func (m *MockDatabaseStorage) ExecContext(arg0 context.Context, arg1 string, arg2 ...interface{}) (sql.Result, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "ExecContext", varargs...)
-	ret0, _ := ret[0].(sql.Result)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ExecContext indicates an expected call of ExecContext.
-func (mr *MockDatabaseStorageMockRecorder) ExecContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ExecContext", reflect.TypeOf((*MockDatabaseStorage)(nil).ExecContext), varargs...)
 }
 
 // Get mocks base method.
@@ -142,45 +121,6 @@ func (m *MockDatabaseStorage) PingContext(arg0 context.Context) error {
 func (mr *MockDatabaseStorageMockRecorder) PingContext(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PingContext", reflect.TypeOf((*MockDatabaseStorage)(nil).PingContext), arg0)
-}
-
-// QueryContext mocks base method.
-func (m *MockDatabaseStorage) QueryContext(arg0 context.Context, arg1 string, arg2 ...interface{}) (*sql.Rows, error) {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "QueryContext", varargs...)
-	ret0, _ := ret[0].(*sql.Rows)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// QueryContext indicates an expected call of QueryContext.
-func (mr *MockDatabaseStorageMockRecorder) QueryContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryContext", reflect.TypeOf((*MockDatabaseStorage)(nil).QueryContext), varargs...)
-}
-
-// QueryRowContext mocks base method.
-func (m *MockDatabaseStorage) QueryRowContext(arg0 context.Context, arg1 string, arg2 ...interface{}) *sql.Row {
-	m.ctrl.T.Helper()
-	varargs := []interface{}{arg0, arg1}
-	for _, a := range arg2 {
-		varargs = append(varargs, a)
-	}
-	ret := m.ctrl.Call(m, "QueryRowContext", varargs...)
-	ret0, _ := ret[0].(*sql.Row)
-	return ret0
-}
-
-// QueryRowContext indicates an expected call of QueryRowContext.
-func (mr *MockDatabaseStorageMockRecorder) QueryRowContext(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	varargs := append([]interface{}{arg0, arg1}, arg2...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "QueryRowContext", reflect.TypeOf((*MockDatabaseStorage)(nil).QueryRowContext), varargs...)
 }
 
 // Update mocks base method.

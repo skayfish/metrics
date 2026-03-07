@@ -11,7 +11,7 @@ import (
 
 // SF TODO
 type PostgreSQLStorage struct {
-	*sql.DB
+	db SQLDatabase // SF TODO
 }
 
 // SF TODO
@@ -20,16 +20,21 @@ func NewPostgreSQLStorage(db *sql.DB) (*PostgreSQLStorage, error) {
 		return nil, fmt.Errorf("sql.DB is nil")
 	}
 
-	return &PostgreSQLStorage{DB: db}, nil
+	return &PostgreSQLStorage{db: db}, nil
 }
 
 // SF TODO
-func (db PostgreSQLStorage) Update(metric model.Metrics) (*model.Metrics, error) {
-	return db.UpdateContext(context.Background(), metric)
+func (s PostgreSQLStorage) PingContext(ctx context.Context) error {
+	return s.db.PingContext(ctx)
 }
 
 // SF TODO
-func (db PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
+func (s PostgreSQLStorage) Update(metric model.Metrics) (*model.Metrics, error) {
+	return s.UpdateContext(context.Background(), metric)
+}
+
+// SF TODO
+func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.UpdateContext"
 
 	var delta sql.NullInt64
@@ -44,7 +49,7 @@ func (db PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metr
 		value.Valid = true
 	}
 
-	tx, err := db.BeginTx(ctx, nil)
+	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
@@ -97,14 +102,7 @@ func (db PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metr
 }
 
 // SF TODO
-type SQLExecutor interface {
-	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
-	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-}
-
-// SF TODO
-func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics, error) {
+func getContext(ctx context.Context, db sqlExecutor, id string) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.getContext"
 
 	row := db.QueryRowContext(ctx, `
@@ -146,25 +144,25 @@ func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics,
 }
 
 // SF TODO
-func (db PostgreSQLStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
-	return getContext(ctx, db.DB, id)
+func (s PostgreSQLStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
+	return getContext(ctx, s.db, id)
 }
 
 // SF TODO
-func (db PostgreSQLStorage) Get(id string) (*model.Metrics, error) {
-	return db.GetContext(context.Background(), id)
+func (s PostgreSQLStorage) Get(id string) (*model.Metrics, error) {
+	return s.GetContext(context.Background(), id)
 }
 
 // SF TODO
-func (db PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
-	return db.GetAllContext(context.Background())
+func (s PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
+	return s.GetAllContext(context.Background())
 }
 
 // SF TODO
-func (db PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
+func (s PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.GetAllContext"
 
-	rows, err := db.QueryContext(ctx, `SELECT * FROM metrics_schema.metrics;`)
+	rows, err := s.db.QueryContext(ctx, `SELECT * FROM metrics_schema.metrics;`)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", prefix, err)
 	}
@@ -213,8 +211,8 @@ func (db PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics,
 }
 
 // SF TODO
-func (db PostgreSQLStorage) Close() error {
-	return db.DB.Close()
+func (s *PostgreSQLStorage) Close() error {
+	return s.db.Close()
 }
 
 // SF TODO

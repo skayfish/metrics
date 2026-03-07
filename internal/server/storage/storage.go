@@ -32,6 +32,17 @@ type Storage interface {
 }
 
 // SF TODO
+type Database interface {
+	// Проверяет, что соединение с базой данных всё ещё активно
+	//
+	//	@param ctx контекст для завершения
+	//	@returns error ошибку, если соединение не активно
+	PingContext(ctx context.Context) error
+}
+
+// SF TODO
+//
+//go:generate mockgen --destination=mock_database_storage.go --package=storage github.com/skayfish/metrics/internal/server/storage DatabaseStorage
 type DatabaseStorage interface {
 	Storage
 	Database

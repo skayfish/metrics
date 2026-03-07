@@ -133,14 +133,14 @@ func createStorage(config *Config) (storage.Storage, error) {
 			return nil, fmt.Errorf("%s: failed open database: %w", prefix, err)
 		}
 
+		err = goose.Up(db, config.MigrationsPath)
+		if err != nil {
+			return nil, fmt.Errorf("%s: migrations failed: %w", prefix, err)
+		}
+
 		storage, err := storage.NewPostgreSQLStorage(db)
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed create PostgreSQL instance: %w", prefix, err)
-		}
-
-		err = goose.Up(storage.DB, config.MigrationsPath)
-		if err != nil {
-			return nil, fmt.Errorf("%s: migrations failed: %w", prefix, err)
 		}
 
 		return storage, nil
