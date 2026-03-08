@@ -26,7 +26,7 @@ type Server struct {
 	// Конфигурация сервере
 	config *Config
 
-	// SF TODO
+	// Хранилище данных
 	storage storage.Storage
 
 	// Маршрутизатор запросов
@@ -58,13 +58,10 @@ func (s *Server) getSaveMiddleware() func(handler http.HandlerFunc) http.Handler
 
 // Возвращает маршрутизатор запросов
 //
-//	@param storage        хранилище метрик
-//	@param database       база данных
+//	@param storage        хранилище данных
 //	@param saveMiddleware middleware-обёртка для отправки сигнала на сохранение данных хранилища метрик в файл
 //	@returns chi.Router маршрутизатор запросов в случае успеха
 //	@returns error ошибку в ином случае
-//
-// SF TODO
 func getRouter(
 	storage storage.Storage,
 	saveMiddleware func(http.HandlerFunc) http.HandlerFunc,
@@ -122,7 +119,14 @@ func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 	return &storage, nil
 }
 
-// SF TODO
+// Создаёт хранилище в зависимости от переданных данных конфигурации.
+//
+// Если передана database dsn, то хранилище создаётся как база данных.
+// В ином случае создаётся хранилище в памяти.
+//
+//	@param config конфигурация сервера
+//	@returns storage.Storage созданное хранилище данных
+//	@returns error ошибку, если не удалось создать хранилище данных
 func createStorage(config *Config) (storage.Storage, error) {
 	const prefix = "server.createStorage"
 
@@ -181,8 +185,8 @@ func createStorage(config *Config) (storage.Storage, error) {
 //
 //	@param config   конфигурация сервера
 //	@param database база данных
-//	@returns *Server сервер в случае успеха
-//	@returns error ошибку в ином случае
+//	@returns *Server новый сервер
+//	@returns error ошибку, если не удалось создать сервер
 func NewServer(config *Config) (*Server, error) {
 	const prefix = "server.NewServer"
 
@@ -212,9 +216,8 @@ func NewServer(config *Config) (*Server, error) {
 
 // Запускает сервер на ожидание запросов. Блокирует дальнейшую работу программы
 //
-//	@returns error ошибку в случае неудачи
-//
-// SF TODO
+//	@param ctx контекст для завершения работы
+//	@returns error ошибку, если во время работы возникли проблемы
 func (s *Server) Listen(ctx context.Context) error {
 	go func() {
 		if s.config.StoreInterval == 0 {
@@ -275,7 +278,9 @@ func (s *Server) Listen(ctx context.Context) error {
 	return nil
 }
 
-// SF TODO
+// Закрывает сервер
+//
+//	@returns error ошибку, если возникли проблемы при завершении сервера
 func (s *Server) Close() error {
 	return s.storage.Close()
 }

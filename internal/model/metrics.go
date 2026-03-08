@@ -32,7 +32,9 @@ var (
 	ErrUnrecognizedMetricType = errors.New(`unrecognized metric type. Supported types: "gauge", "counter"`)
 )
 
-// SF TODO
+// Проверяет метрику на валидность
+//	@returns error ошибку в случае некорректности
+//	@returns nil если метрика валидна
 func (m Metrics) Valid() error {
 	switch m.MType {
 	case Gauge:

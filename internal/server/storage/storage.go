@@ -7,31 +7,59 @@ import (
 	"github.com/skayfish/metrics/internal/model"
 )
 
-// SF TODO
+// Интерфейс хранилища данных
 type Storage interface {
-	// SF TODO
+
+	// Добавляет/обновляет метрику в хранилище
+	//
+	//	@param m метрика для добавления/обновления
+	//	@returns *model.Metrics добавленную/обновленную метрику
+	//	@returns error          ошибку, если возникли проблемы при добавлении/обновлении метрики
 	Update(m model.Metrics) (*model.Metrics, error)
 
-	// SF TODO
+	// Добавляет/обновляет метрику в хранилище
+	//
+	//	@param ctx контекст для завершения работы
+	//	@param m   метрика для добавления/обновления
+	//	@returns *model.Metrics добавленную/обновленную метрику
+	//	@returns error          ошибку, если возникли проблемы при добавлении/обновлении метрики
 	UpdateContext(ctx context.Context, m model.Metrics) (*model.Metrics, error)
 
-	// SF TODO
+	// Возвращает конкретную метрику из хранилища
+	//
+	//	@param id идентификатор метрики
+	//	@returns *model.Metrics найденную метрику
+	//	@returns error          ошибку, если возникли проблемы при поиске метрики
 	Get(id string) (*model.Metrics, error)
 
-	// SF TODO
+	// Возвращает конкретную метрику из хранилища
+	//
+	//	@param ctx контекст для завершения работы
+	//	@param id  идентификатор метрики
+	//	@returns *model.Metrics найденную метрику
+	//	@returns error          ошибку, если возникли проблемы при получении метрики
 	GetContext(ctx context.Context, id string) (*model.Metrics, error)
 
-	// SF TODO
+	// Возвращает все метрики из хранилища
+	//
+	//	@returns []model.Metrics все метрики из хранилища
+	//	@returns error           ошибку, если возникли проблемы при получении всех метрик
 	GetAll() ([]model.Metrics, error)
 
-	// SF TODO
+	// Возвращает все метрики из хранилища
+	//
+	//	@param ctx контекст для завершения работы
+	//	@returns []model.Metrics все метрики из хранилища
+	//	@returns error           ошибку, если возникли проблемы при получении всех метрик
 	GetAllContext(ctx context.Context) ([]model.Metrics, error)
 
-	// SF TODO
+	// Завершает работу хранилища
+	//
+	//	@returns error ошибку, если возникли проблемы при завершении работы хранилища
 	Close() error
 }
 
-// SF TODO
+// Интерфейс базы данных
 type Database interface {
 	// Проверяет, что соединение с базой данных всё ещё активно
 	//
@@ -42,7 +70,7 @@ type Database interface {
 
 //go:generate mockgen --destination=mock_database_storage.go --package=storage github.com/skayfish/metrics/internal/server/storage DatabaseStorage
 
-// SF TODO
+// Интерфейс хранилища, в виде базы данных
 type DatabaseStorage interface {
 	Storage
 	Database

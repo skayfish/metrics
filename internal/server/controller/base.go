@@ -16,10 +16,8 @@ type BaseController struct {
 
 // Создаёт новый контроллер обработки базовых запросов
 //
-//	@param database база данных
+//	@param storage хранилище данных
 //	@returns BaseController новый контроллер обработки базовых запросов
-//
-// SF TODO
 func NewBaseController(storage storage.Storage) BaseController {
 	return BaseController{storage: storage}
 }

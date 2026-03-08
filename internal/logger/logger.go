@@ -13,10 +13,10 @@ var Log *zap.Logger = zap.NewNop()
 // Более медленный менеджер логирования, но более удобное использование
 var LogS *zap.SugaredLogger = Log.Sugar()
 
-// SF TODO
+// Текущий установленный уровень логирования. По умолчанию - некорректный. Устанавливается с помощью Init(...)
 var CurLogLevel Level = Level(zapcore.InvalidLevel)
 
-// SF TODO
+// Проверяет является ли текущий установленный уровень логирования - debug
 func IsDebug() bool {
 	return CurLogLevel == Level(zap.DebugLevel)
 }

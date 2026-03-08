@@ -13,7 +13,7 @@ import (
 
 // Переменные окружения
 type environments struct {
-	// SF TODO
+	// Уровень логирования
 	LogLevel *string `env:"LOG_LEVEL" example:"debug"`
 
 	// Сетевой адрес

@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
+// Проверяет создание хранилища в виде базы данных PostgreSQL
 func TestNewPostgreSQLStorage(t *testing.T) {
 	db, _, err := sqlmock.New()
 	require.NoError(t, err)
@@ -52,7 +52,7 @@ func TestNewPostgreSQLStorage(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет добавление/обновление новых метрик в хранилище PostgreSQL
 func TestPostgreSQLStorage_Update(t *testing.T) {
 	t.Run("add counter", func(t *testing.T) {
 		delta := int64(5)
@@ -216,7 +216,7 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 	})
 }
 
-// SF TODO
+// Проверяет получение метрики из хранилища PostgreSQL
 func TestPostgreSQLStorage_Get(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
 		db, mock, err := sqlmock.New()
@@ -354,7 +354,7 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 	})
 }
 
-// SF TODO
+// Проверяет получение всех метрик из хранилища PostgreSQL
 func TestPostgreSQLStorage_GetAll(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		db, mock, err := sqlmock.New()

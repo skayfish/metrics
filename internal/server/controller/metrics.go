@@ -84,11 +84,9 @@ const templateHTML = `
 
 // Создаёт новый контроллер обработки запросов, связанных с метриками
 //
-//	@param storage хранилище метрик
+//	@param storage хранилище данных
 //	@returns *MetricsController контроллер метрик, в случае успеха
 //	@returns error ошибка создания, в ином случае
-//
-// SF TODO
 func NewMetricsController(storage storage.Storage) (*MetricsController, error) {
 	tmpl, err := template.New("metrics-table").Parse(templateHTML)
 	if err != nil {

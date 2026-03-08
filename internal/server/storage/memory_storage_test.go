@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
+// Формирует хранилище по метрикам
 func storageByMetricsArray(metrics []model.Metrics) MemStorage {
 	storage := make(MemStorage)
 	for _, metric := range metrics {
@@ -484,7 +484,7 @@ func TestMemStorage_SaveStorageToFile(t *testing.T) {
 	})
 }
 
-// SF TODO
+// Проверяет закрытие хранилище в памяти приложения
 func TestMemStorage_Close(t *testing.T) {
 	emptyStorage := NewMemStorage()
 	notEmptyStorage := newSuccessMemStorage()

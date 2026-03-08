@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
+// Заполняет хранилище данных метриками
 func updateMetrics(t *testing.T, storage storage.Storage, gaugeMetrics map[string]float64, counterMetrics map[string]int64) {
 	for name, value := range counterMetrics {
 		_, err := storage.Update(model.Metrics{ID: name, Delta: &value, MType: model.Counter})
@@ -29,7 +29,8 @@ func updateMetrics(t *testing.T, storage storage.Storage, gaugeMetrics map[strin
 	}
 }
 
-// SF TODO
+// Устанавливает уровень логирования для всего тестирования.
+// @warning всегда возвращать через defer setLogLevel(t, "info")
 func setLogLevel(t *testing.T, level string) {
 	var logLevel logger.Level
 	err := logLevel.Set(level)

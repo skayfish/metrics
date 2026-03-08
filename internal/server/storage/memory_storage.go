@@ -11,7 +11,7 @@ import (
 	"github.com/skayfish/metrics/internal/model"
 )
 
-// Хранилище метрик
+// Хранилище метрик в памяти приложения
 type MemStorage map[string]model.Metrics
 
 // Создаёт пустое хранилище метрик
@@ -62,12 +62,21 @@ func (ms *MemStorage) UpdateContext(ctx context.Context, metric model.Metrics) (
 	return &metric, nil
 }
 
-// SF TODO
+// Ищет метрику в хранилище
+//
+//	@param id идентификатор метрики
+//	@returns *model.Metrics метрика из хранилища
+//	@returns error ошибку, если не удалось найти метрику
 func (ms MemStorage) Get(id string) (*model.Metrics, error) {
 	return ms.GetContext(context.Background(), id)
 }
 
-// SF TODO
+// Ищет метрику в хранилище
+//
+//	@param ctx контекст для завершения работы
+//	@param id  идентификатор метрики
+//	@returns *model.Metrics метрика из хранилища
+//	@returns error ошибку, если не удалось найти метрику
 func (ms MemStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
 	metric, found := ms[id]
 	if !found {
@@ -77,13 +86,10 @@ func (ms MemStorage) GetContext(ctx context.Context, id string) (*model.Metrics,
 	return &metric, nil
 }
 
-// Возвращает все метрики датчиков
+// Возвращает все метрики в хранилище
 //
-//	@returns все метрики датчиков:
-//		- ключ     - идентификатор метрики,
-//		- значение - данные метрики
-//
-// SF TODO
+//	@returns []model.Metrics метрики в хранилище
+//	@returns error возвращает nil, нужно для удовлетворению интерфейса Storage
 func (ms MemStorage) GetAll() ([]model.Metrics, error) {
 	result := make([]model.Metrics, 0)
 	for _, metric := range ms {
@@ -93,7 +99,11 @@ func (ms MemStorage) GetAll() ([]model.Metrics, error) {
 	return result, nil
 }
 
-// SF TODO
+// Возвращает все метрики в хранилище
+//
+//	@param ctx контекст для завершения работы
+//	@returns []model.Metrics метрики в хранилище
+//	@returns error ошибку, если контекст стал ошибочным
 func (ms MemStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
 	const prefix = "storage.MemStorage.GetAllContext"
 
@@ -109,11 +119,10 @@ func (ms MemStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error)
 	return result, nil
 }
 
-// Сохраняет данные хранилища метрик в json файл, который указан в конфигурации сервера
+// Сохраняет данные хранилища метрик в json файл
 //
-//	@returns error ошибку в случае неудачи
-//
-// SF TODO
+//	@param filePath путь к json файлу
+//	@returns error ошибку, если возникли проблемы при сохранении
 func (ms MemStorage) SaveStorageToFile(filePath string) error {
 	logger.LogS.Debugw("Save metrics storage to file", "file", filePath, "metrics storage", ms)
 
@@ -134,10 +143,12 @@ func (ms MemStorage) SaveStorageToFile(filePath string) error {
 	return nil
 }
 
-// SF TODO
+// Ничего не делает. Необходимо для удовлетворения интерфейсу [Storage]
+//
+//	@returns error nil
 func (ms MemStorage) Close() error {
 	return nil
 }
 
-// SF TODO
+// Проверка, что [MemStorage] удовлетворяет интерфейсу [Storage]
 var _ Storage = (*MemStorage)(nil)

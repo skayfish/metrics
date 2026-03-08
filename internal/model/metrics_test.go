@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
+// Тестирует проверку метрики на валидность
 func TestMetrics_Valid(t *testing.T) {
 	value := -53.12
 	delta := int64(770)
