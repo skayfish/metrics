@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"errors"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -161,6 +162,52 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		require.NoError(t, err)
 
 		metricsEqual(t, expected, *metric)
+
+		// Проверка мок вызовов
+		err = mock.ExpectationsWereMet()
+		require.NoError(t, err)
+	})
+	t.Run("rollback", func(t *testing.T) {
+		delta := int64(5)
+		expected := model.Metrics{
+			ID:    "counterID",
+			MType: model.Counter,
+			Delta: &delta,
+		}
+
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		errorMessage := "some error"
+
+		mock.ExpectBegin()
+		mock.ExpectExec(
+			`INSERT INTO metrics_schema\.metrics \(id, "type", delta, value, hash\)
+			VALUES \(\$1, \$2, \$3, \$4, \$5\)
+			ON CONFLICT \(id\)
+			DO UPDATE SET
+				delta = metrics_schema\.metrics\.delta \+ EXCLUDED\.delta,
+				value = EXCLUDED\.value,
+				hash = EXCLUDED\.hash;`).
+			WithArgs(
+				expected.ID,
+				model.Counter,
+				sql.NullInt64{Valid: true, Int64: delta},
+				sql.NullFloat64{Valid: false},
+				"",
+			).
+			WillReturnError(errors.New(errorMessage))
+		mock.ExpectRollback()
+
+		storage, err := NewPostgreSQLStorage(db)
+		require.NoError(t, err)
+
+		// Обновление метрики в бд
+		metric, err := storage.Update(expected)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), errorMessage)
+		require.Nil(t, metric)
 
 		// Проверка мок вызовов
 		err = mock.ExpectationsWereMet()
