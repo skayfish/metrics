@@ -17,7 +17,7 @@ type PostgreSQLStorage struct {
 // SF TODO
 func NewPostgreSQLStorage(db *sql.DB) (*PostgreSQLStorage, error) {
 	if db == nil {
-		return nil, fmt.Errorf("sql.DB is nil")
+		return nil, fmt.Errorf("database is nil")
 	}
 
 	return &PostgreSQLStorage{db: db}, nil
@@ -62,8 +62,8 @@ func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metri
 
 	switch metric.MType {
 	case model.Gauge:
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
 			VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (id)
 			DO UPDATE SET
@@ -73,8 +73,8 @@ func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metri
 			metric.ID, metric.MType, delta, value, metric.Hash)
 
 	case model.Counter:
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
 			VALUES ($1, $2, $3, $4, $5)
 			ON CONFLICT (id)
 			DO UPDATE SET
@@ -102,11 +102,11 @@ func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metri
 }
 
 // SF TODO
-func getContext(ctx context.Context, db sqlExecutor, id string) (*model.Metrics, error) {
+func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.getContext"
 
-	row := db.QueryRowContext(ctx, `
-		SELECT * FROM metrics_schema.metrics
+	row := db.QueryRowContext(ctx,
+		`SELECT * FROM metrics_schema.metrics
 		WHERE id = $1;`, id)
 	var (
 		mType     string

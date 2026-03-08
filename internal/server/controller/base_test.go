@@ -51,8 +51,6 @@ func TestBaseController_Ping(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
 			mockDatabase := storage.NewMockDatabaseStorage(ctrl)
 			mockDatabase.EXPECT().PingContext(gomock.Any()).Times(1).Return(tt.databaseError)
 

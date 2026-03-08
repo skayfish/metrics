@@ -40,9 +40,9 @@ type Database interface {
 	PingContext(ctx context.Context) error
 }
 
-// SF TODO
-//
 //go:generate mockgen --destination=mock_database_storage.go --package=storage github.com/skayfish/metrics/internal/server/storage DatabaseStorage
+
+// SF TODO
 type DatabaseStorage interface {
 	Storage
 	Database

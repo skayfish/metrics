@@ -6,57 +6,29 @@ import (
 )
 
 // SF TODO
-type sqlExecutor interface {
-	// Выполняет запрос, возвращающий строки из базы данных — обычно это запрос SELECT.
-	//
-	//	@param ctx   контекст для завершения
-	//	@param query запрос в виде строки
-	//	@param args  аргументы запроса
-	//	@returns *sql.Rows результирующие строки, в случае успеха
-	//	@returns error ошибку, в ином случае
+type SQLExecutor interface {
 	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
-
-	// Выполняет запрос, который, как ожидается, вернёт не более одной строки.
-	//
-	// QueryRowContext всегда возвращает ненулевое значение. Ошибки откладываются до тех пор,
-	// пока не будет вызван метод Scan у объекта [Row].
-	//
-	// Если запрос не выбирает ни одной строки, метод [*Row.Scan] вернёт [ErrNoRows].
-	// В противном случае [*Row.Scan] считывает первую выбранную строку и игнорирует остальные.
-	//
-	//	@param ctx   контекст для завершения
-	//	@param query запрос в виде строки
-	//	@param args  аргументы запроса
-	//	@returns *sql.Row запрошенная строка
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
-
-	// Выполняет подготовленный оператор с указанными аргументами и
-	// возвращает объект [Result], содержащий сводную информацию о результате выполнения оператора.
-	//
-	//	@param ctx   контекст для завершения
-	//	@param query запрос в виде строки
-	//	@param args  аргументы запроса
-	//	@returns sql.Result объект, содержащий сводную информацию о результате выполнения оператора в случае успеха
-	//	@returns error ошибку в ином случае
 	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
 }
 
 // SF TODO
-var _ sqlExecutor = (*sql.Tx)(nil)
+type SQLTransaction interface {
+	SQLExecutor
 
-//go:generate mockgen --destination=mock_sql_database.go --package=storage github.com/skayfish/metrics/internal/server/storage SQLDatabase
+	Commit() error
+	Rollback() error
+}
+
+// SF TODO
+var _ SQLTransaction = (*sql.Tx)(nil)
 
 // Интерфейс базы данных
 type SQLDatabase interface {
-	sqlExecutor
+	SQLExecutor
 
-	// SF TODO
 	PingContext(ctx context.Context) error
-
-	// SF TODO
 	BeginTx(ctx context.Context, opts *sql.TxOptions) (*sql.Tx, error)
-
-	// SF TODO
 	Close() error
 }
 
