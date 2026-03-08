@@ -41,23 +41,23 @@ func float64Equal(t *testing.T, expected, num float64) {
 	assert.Truef(t, math.Abs(expected-num) <= 1e-10, "expected(%f) != num(%f)", expected, num)
 }
 
-func metricsEqual(t *testing.T, expected, metrics model.Metrics) {
+func metricsEqual(t *testing.T, expected, target model.Metrics) {
 	require.Equal(t, reflect.TypeFor[model.Metrics]().NumField(), 5)
 
-	assert.Equal(t, expected.ID, metrics.ID)
-	assert.Equal(t, expected.Hash, metrics.Hash)
-	require.Equal(t, expected.MType, metrics.MType)
+	assert.Equal(t, expected.ID, target.ID)
+	assert.Equal(t, expected.Hash, target.Hash)
+	require.Equal(t, expected.MType, target.MType)
 	switch expected.MType {
 	case model.Gauge:
 		require.NotNil(t, expected.Value)
-		require.NotNil(t, metrics.Value)
-		float64Equal(t, *expected.Value, *metrics.Value)
+		require.NotNil(t, target.Value)
+		float64Equal(t, *expected.Value, *target.Value)
 	case model.Counter:
 		require.NotNil(t, expected.Delta)
-		require.NotNil(t, metrics.Delta)
-		assert.Equal(t, *expected.Delta, *metrics.Delta)
+		require.NotNil(t, target.Delta)
+		assert.Equal(t, *expected.Delta, *target.Delta)
 	default:
-		t.Error("Unknown metric type")
+		t.Error("Unknown target metric type")
 	}
 }
 

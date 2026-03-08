@@ -11,7 +11,7 @@ import (
 
 // SF TODO
 type PostgreSQLStorage struct {
-	db SQLDatabase // SF TODO
+	*sql.DB // SF TODO
 }
 
 // SF TODO
@@ -20,12 +20,7 @@ func NewPostgreSQLStorage(db *sql.DB) (*PostgreSQLStorage, error) {
 		return nil, fmt.Errorf("database is nil")
 	}
 
-	return &PostgreSQLStorage{db: db}, nil
-}
-
-// SF TODO
-func (s PostgreSQLStorage) PingContext(ctx context.Context) error {
-	return s.db.PingContext(ctx)
+	return &PostgreSQLStorage{DB: db}, nil
 }
 
 // SF TODO
@@ -49,7 +44,7 @@ func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metri
 		value.Valid = true
 	}
 
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
@@ -145,7 +140,7 @@ func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics,
 
 // SF TODO
 func (s PostgreSQLStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
-	return getContext(ctx, s.db, id)
+	return getContext(ctx, s.DB, id)
 }
 
 // SF TODO
@@ -162,7 +157,7 @@ func (s PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
 func (s PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.GetAllContext"
 
-	rows, err := s.db.QueryContext(ctx, `SELECT * FROM metrics_schema.metrics;`)
+	rows, err := s.DB.QueryContext(ctx, `SELECT * FROM metrics_schema.metrics;`)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", prefix, err)
 	}
@@ -185,12 +180,14 @@ func (s PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, 
 
 		var delta *int64
 		if deltaNull.Valid {
-			delta = &deltaNull.Int64
+			tmp := deltaNull.Int64
+			delta = &tmp
 		}
 
 		var value *float64
 		if valueNull.Valid {
-			value = &valueNull.Float64
+			tmp := valueNull.Float64
+			value = &tmp
 		}
 
 		result = append(result, model.Metrics{
@@ -208,11 +205,6 @@ func (s PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, 
 	}
 
 	return result, nil
-}
-
-// SF TODO
-func (s *PostgreSQLStorage) Close() error {
-	return s.db.Close()
 }
 
 // SF TODO

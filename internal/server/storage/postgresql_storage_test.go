@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"errors"
 	"testing"
 
@@ -76,20 +77,20 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 				hash = EXCLUDED\.hash;`).
 			WithArgs(
 				expected.ID,
-				model.Counter,
-				sql.NullInt64{Valid: true, Int64: delta},
+				expected.MType,
+				sql.NullInt64{Valid: true, Int64: *expected.Delta},
 				sql.NullFloat64{Valid: false},
-				"",
+				expected.Hash,
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRow(
 				expected.ID,
-				model.Counter,
-				delta,
-				nil,
-				"")
+				expected.MType,
+				*expected.Delta,
+				expected.Value,
+				expected.Hash)
 		mock.ExpectQuery(
 			`SELECT \* FROM metrics_schema\.metrics
 		    WHERE id = \$1;`).
@@ -133,20 +134,20 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 				hash = EXCLUDED\.hash;`).
 			WithArgs(
 				expected.ID,
-				model.Gauge,
+				expected.MType,
 				sql.NullInt64{Valid: false},
-				sql.NullFloat64{Valid: true, Float64: value},
-				"",
+				sql.NullFloat64{Valid: true, Float64: *expected.Value},
+				expected.Hash,
 			).
 			WillReturnResult(sqlmock.NewResult(1, 1))
 
 		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRow(
 				expected.ID,
-				model.Gauge,
-				nil,
-				value,
-				"")
+				expected.MType,
+				expected.Delta,
+				*expected.Value,
+				expected.Hash)
 		mock.ExpectQuery(
 			`SELECT \* FROM metrics_schema\.metrics
 		    WHERE id = \$1;`).
@@ -192,10 +193,10 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 				hash = EXCLUDED\.hash;`).
 			WithArgs(
 				expected.ID,
-				model.Counter,
-				sql.NullInt64{Valid: true, Int64: delta},
+				expected.MType,
+				sql.NullInt64{Valid: true, Int64: *expected.Delta},
 				sql.NullFloat64{Valid: false},
-				"",
+				expected.Hash,
 			).
 			WillReturnError(errors.New(errorMessage))
 		mock.ExpectRollback()
@@ -208,6 +209,230 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), errorMessage)
 		require.Nil(t, metric)
+
+		// Проверка мок вызовов
+		err = mock.ExpectationsWereMet()
+		require.NoError(t, err)
+	})
+}
+
+// SF TODO
+func TestPostgreSQLStorage_Get(t *testing.T) {
+	t.Run("not found", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
+
+		id := "MetricName"
+		mock.ExpectQuery(
+			`SELECT \* FROM metrics_schema\.metrics
+		    WHERE id = \$1;`).
+			WithArgs(id).
+			WillReturnRows(expectedRow)
+
+		storage, err := NewPostgreSQLStorage(db)
+		require.NoError(t, err)
+
+		// Получение метрики из бд
+		metric, err := storage.Get(id)
+		require.Error(t, err)
+		require.ErrorIs(t, err, ErrMetricNotFound)
+		require.Nil(t, metric)
+
+		// Проверка мок вызовов
+		err = mock.ExpectationsWereMet()
+		require.NoError(t, err)
+	})
+	t.Run("failed scan", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		expectedRow := sqlmock.NewRows([]string{"id"}).
+			AddRow("error id")
+
+		id := "MetricName"
+		mock.ExpectQuery(
+			`SELECT \* FROM metrics_schema\.metrics
+		    WHERE id = \$1;`).
+			WithArgs(id).
+			WillReturnRows(expectedRow)
+
+		storage, err := NewPostgreSQLStorage(db)
+		require.NoError(t, err)
+
+		// Получение метрики из бд
+		metric, err := storage.Get(id)
+		require.Error(t, err)
+		require.Nil(t, metric)
+
+		// Проверка мок вызовов
+		err = mock.ExpectationsWereMet()
+		require.NoError(t, err)
+	})
+	t.Run("found gauge", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		value := 0.15
+		expectedMetric := model.Metrics{
+			ID:    "gaugeID",
+			MType: model.Gauge,
+			Value: &value,
+		}
+
+		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
+			AddRow(
+				expectedMetric.ID,
+				expectedMetric.MType,
+				expectedMetric.Delta,
+				*expectedMetric.Value,
+				expectedMetric.Hash)
+
+		mock.ExpectQuery(
+			`SELECT \* FROM metrics_schema\.metrics
+		    WHERE id = \$1;`).
+			WithArgs(expectedMetric.ID).
+			WillReturnRows(expectedRow)
+
+		storage, err := NewPostgreSQLStorage(db)
+		require.NoError(t, err)
+
+		// Получение метрики из бд
+		metric, err := storage.Get(expectedMetric.ID)
+		require.NoError(t, err)
+		require.NotNil(t, metric)
+
+		metricsEqual(t, expectedMetric, *metric)
+
+		// Проверка мок вызовов
+		err = mock.ExpectationsWereMet()
+		require.NoError(t, err)
+	})
+	t.Run("found counter", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		delta := int64(5)
+		expectedMetric := model.Metrics{
+			ID:    "counterID",
+			MType: model.Counter,
+			Delta: &delta,
+		}
+
+		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
+			AddRow(
+				expectedMetric.ID,
+				expectedMetric.MType,
+				*expectedMetric.Delta,
+				expectedMetric.Value,
+				expectedMetric.Hash)
+
+		mock.ExpectQuery(
+			`SELECT \* FROM metrics_schema\.metrics
+		    WHERE id = \$1;`).
+			WithArgs(expectedMetric.ID).
+			WillReturnRows(expectedRow)
+
+		storage, err := NewPostgreSQLStorage(db)
+		require.NoError(t, err)
+
+		// Получение метрики из бд
+		metric, err := storage.Get(expectedMetric.ID)
+		require.NoError(t, err)
+		require.NotNil(t, metric)
+
+		metricsEqual(t, expectedMetric, *metric)
+
+		// Проверка мок вызовов
+		err = mock.ExpectationsWereMet()
+		require.NoError(t, err)
+	})
+}
+
+// SF TODO
+func TestPostgreSQLStorage_GetAll(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		expectedRows := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
+		mock.ExpectQuery(`SELECT \* FROM metrics_schema\.metrics`).
+			WillReturnRows(expectedRows)
+
+		storage, err := NewPostgreSQLStorage(db)
+		require.NoError(t, err)
+
+		// Получение метрик из бд
+		metrics, err := storage.GetAll()
+		require.NoError(t, err)
+		require.NotNil(t, metrics)
+
+		storagesEqual(t, NewMemStorage(), storageByMetricsArray(metrics))
+
+		// Проверка мок вызовов
+		err = mock.ExpectationsWereMet()
+		require.NoError(t, err)
+	})
+	t.Run("get all", func(t *testing.T) {
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		gaugeValue1 := -34.4441
+		gaugeValue2 := 0.1
+		counterDelta1 := int64(-36)
+		counterDelta2 := int64(5)
+		gaugeID1 := "MetricNameGauge1"
+		gaugeID2 := "MetricNameGauge2"
+		counterID1 := "MetricNameCounter1"
+		counterID2 := "MetricNameCounter2"
+		expectedS := MemStorage{
+			gaugeID1: {
+				ID:    gaugeID1,
+				MType: model.Gauge,
+				Value: &gaugeValue1,
+			},
+			gaugeID2: {
+				ID:    gaugeID2,
+				MType: model.Gauge,
+				Value: &gaugeValue2,
+			},
+			counterID1: {
+				ID:    counterID1,
+				MType: model.Counter,
+				Delta: &counterDelta1,
+			},
+			counterID2: {
+				ID:    counterID2,
+				MType: model.Counter,
+				Delta: &counterDelta2,
+			},
+		}
+
+		expectedRows := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
+			AddRows([][]driver.Value{
+				{expectedS[gaugeID1].ID, expectedS[gaugeID1].MType, expectedS[gaugeID1].Delta, *expectedS[gaugeID1].Value, expectedS[gaugeID1].Hash},
+				{expectedS[gaugeID2].ID, expectedS[gaugeID2].MType, expectedS[gaugeID2].Delta, *expectedS[gaugeID2].Value, expectedS[gaugeID2].Hash},
+				{expectedS[counterID1].ID, expectedS[counterID1].MType, *expectedS[counterID1].Delta, expectedS[counterID1].Value, expectedS[counterID1].Hash},
+				{expectedS[counterID2].ID, expectedS[counterID2].MType, *expectedS[counterID2].Delta, expectedS[counterID2].Value, expectedS[counterID2].Hash},
+			}...)
+		mock.ExpectQuery(`SELECT \* FROM metrics_schema\.metrics;`).
+			WillReturnRows(expectedRows)
+
+		// Получение метрик из бд
+		storage, err := NewPostgreSQLStorage(db)
+		require.NoError(t, err)
+
+		metrics, err := storage.GetAll()
+		require.NoError(t, err)
+
+		storagesEqual(t, expectedS, storageByMetricsArray(metrics))
 
 		// Проверка мок вызовов
 		err = mock.ExpectationsWereMet()
