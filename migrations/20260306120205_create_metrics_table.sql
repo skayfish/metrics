@@ -1,9 +1,9 @@
 -- +goose Up
 -- Создание схемы для метрик
-CREATE SCHEMA IF NOT EXISTS metrics_schema;
+CREATE SCHEMA metrics_schema;
 
 -- Создание таблицы метрик
-CREATE TABLE IF NOT EXISTS metrics_schema.metrics (
+CREATE TABLE metrics_schema.metrics (
     id VARCHAR (100) NOT NULL UNIQUE,
     type VARCHAR(10) NOT NULL CHECK (type IN ('gauge', 'counter')),
     delta BIGINT,
