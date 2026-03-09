@@ -9,6 +9,24 @@ import (
 	"github.com/skayfish/metrics/internal/model"
 )
 
+const (
+	insertGaugeQuery = `INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
+						VALUES ($1, $2, $3, $4, $5)
+						ON CONFLICT (id)
+						DO UPDATE SET
+							delta = EXCLUDED.delta,
+							value = EXCLUDED.value,
+							hash = EXCLUDED.hash;`
+
+	insertCounterQuery = `INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
+						VALUES ($1, $2, $3, $4, $5)
+						ON CONFLICT (id)
+						DO UPDATE SET
+							delta = metrics_schema.metrics.delta + EXCLUDED.delta,
+							value = EXCLUDED.value,
+							hash = EXCLUDED.hash;`
+)
+
 // Хранилище, в виде базы данных PostgreSQL
 type PostgreSQLStorage struct {
 	*sql.DB
@@ -27,24 +45,35 @@ func NewPostgreSQLStorage(db *sql.DB) (*PostgreSQLStorage, error) {
 	return &PostgreSQLStorage{DB: db}, nil
 }
 
-// Добавляет/обновляет метрику в хранилище
-//
-//	@param metric метрика, которую нужно добавить/обновить в хранилище
-//	@returns *model.Metrics обновленная метрика
-//	@returns error          ошибку, если не удалось обновить метрику
-func (s PostgreSQLStorage) Update(metric model.Metrics) (*model.Metrics, error) {
-	return s.UpdateContext(context.Background(), metric)
+// SF TODO
+type config struct {
+	ctx context.Context // SF TODO
+	db  SQLExecutor     // SF TODO
 }
 
-// Добавляет/обновляет метрику в хранилище
-//
-//	@param ctx    контекст для завершения работы
-//	@param metric метрика, которую нужно добавить/обновить в хранилище
-//	@returns *model.Metrics обновленная метрика
-//	@returns error          ошибку, если не удалось обновить метрику
-func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
-	const prefix = "storage.PostgreSQLStorage.UpdateContext"
+// SF TODO
+type updateConfig struct {
+	config
 
+	sGauge   *sql.Stmt // SF TODO
+	sCounter *sql.Stmt // SF TODO
+}
+
+// SF TODO
+func updateContext(cfg updateConfig, metric model.Metrics) (*model.Metrics, error) {
+	const prefix = "storage.PostgreSQLStorage.updateContext"
+
+	var stmt *sql.Stmt
+	switch metric.MType {
+	case model.Gauge:
+		stmt = cfg.sGauge
+	case model.Counter:
+		stmt = cfg.sCounter
+	default:
+		return nil, fmt.Errorf("%s: unknown metric type", prefix)
+	}
+
+	// Запись данных в БД
 	var delta sql.NullInt64
 	if metric.Delta != nil {
 		delta.Int64 = *metric.Delta
@@ -57,6 +86,28 @@ func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metri
 		value.Valid = true
 	}
 
+	_, err := stmt.ExecContext(cfg.ctx, metric.ID, metric.MType, delta, value, metric.Hash)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", prefix, err)
+	}
+
+	updatedMetric, err := getContext(cfg.ctx, cfg.db, metric.ID)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	return updatedMetric, nil
+}
+
+// Добавляет/обновляет метрику в хранилище
+//
+//	@param ctx    контекст для завершения работы
+//	@param metric метрика, которую нужно добавить/обновить в хранилище
+//	@returns *model.Metrics обновленная метрика
+//	@returns error          ошибку, если не удалось обновить метрику
+func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
+	const prefix = "storage.PostgreSQLStorage.UpdateContext"
+
 	tx, err := s.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
@@ -68,35 +119,21 @@ func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metri
 		}
 	}()
 
-	switch metric.MType {
-	case model.Gauge:
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
-			VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (id)
-			DO UPDATE SET
-				delta = EXCLUDED.delta,
-				value = EXCLUDED.value,
-				hash = EXCLUDED.hash;`,
-			metric.ID, metric.MType, delta, value, metric.Hash)
+	cfg := updateConfig{config: config{ctx: ctx, db: tx}}
+	func() {
+		var stmt *sql.Stmt
+		stmt, err = tx.PrepareContext(ctx, insertGaugeQuery)
+		cfg.sGauge = stmt
 
-	case model.Counter:
-		_, err = tx.ExecContext(ctx,
-			`INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
-			VALUES ($1, $2, $3, $4, $5)
-			ON CONFLICT (id)
-			DO UPDATE SET
-				delta = metrics_schema.metrics.delta + EXCLUDED.delta,
-				value = EXCLUDED.value,
-				hash = EXCLUDED.hash;`,
-			metric.ID, metric.MType, delta, value, metric.Hash)
-	}
+		stmt, err = tx.PrepareContext(ctx, insertCounterQuery)
+		cfg.sCounter = stmt
+	}()
 
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", prefix, err)
+		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 
-	updatedMetric, err := getContext(ctx, tx, metric.ID)
+	updatedMetric, err := updateContext(cfg, metric)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
@@ -107,6 +144,63 @@ func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metri
 	}
 
 	return updatedMetric, nil
+}
+
+// Добавляет/обновляет метрику в хранилище
+//
+//	@param metric метрика, которую нужно добавить/обновить в хранилище
+//	@returns *model.Metrics обновленная метрика
+//	@returns error          ошибку, если не удалось обновить метрику
+func (s PostgreSQLStorage) Update(metric model.Metrics) (*model.Metrics, error) {
+	return s.UpdateContext(context.Background(), metric)
+}
+
+// SF TODO
+func (s PostgreSQLStorage) UpdatesContext(ctx context.Context, m []model.Metrics) ([]model.Metrics, error) {
+	const prefix = "storage.PostgreSQLStorage.UpdatesContext"
+
+	tx, err := s.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	cfg := updateConfig{config: config{ctx: ctx, db: tx}}
+	func() {
+		var stmt *sql.Stmt
+		stmt, err = tx.PrepareContext(ctx, insertGaugeQuery)
+		cfg.sGauge = stmt
+
+		stmt, err = tx.PrepareContext(ctx, insertCounterQuery)
+		cfg.sCounter = stmt
+	}()
+
+	updatedMetrics := []model.Metrics{}
+	for _, metric := range m {
+		updatedMetric, err := updateContext(cfg, metric)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %v", prefix, err)
+		}
+
+		updatedMetrics = append(updatedMetrics, *updatedMetric)
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	return updatedMetrics, nil
+}
+
+// SF TODO
+func (s PostgreSQLStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
+	return s.UpdatesContext(context.Background(), m)
 }
 
 // Возвращает конкретную метрику из хранилища

@@ -9,7 +9,6 @@ import (
 
 // Интерфейс хранилища данных
 type Storage interface {
-
 	// Добавляет/обновляет метрику в хранилище
 	//
 	//	@param m метрика для добавления/обновления
@@ -24,6 +23,21 @@ type Storage interface {
 	//	@returns *model.Metrics добавленную/обновленную метрику
 	//	@returns error          ошибку, если возникли проблемы при добавлении/обновлении метрики
 	UpdateContext(ctx context.Context, m model.Metrics) (*model.Metrics, error)
+
+	// Добавляет/обновляет набор метрик в хранилище
+	//
+	//	@param m набор метрик для добавления/обновления
+	//	@returns []model.Metrics добавленный/обновленный набор метрик
+	//	@returns error           ошибку, если возникли проблемы при добавлении/обновлении набора метрик
+	Updates(m []model.Metrics) ([]model.Metrics, error)
+
+	// Добавляет/обновляет набор метрик в хранилище
+	//
+	//	@param ctx контекст для завершения работы
+	//	@param m набор метрик для добавления/обновления
+	//	@returns []model.Metrics добавленный/обновленный набор метрик
+	//	@returns error           ошибку, если возникли проблемы при добавлении/обновлении набора метрик
+	UpdatesContext(ctx context.Context, m []model.Metrics) ([]model.Metrics, error)
 
 	// Возвращает конкретную метрику из хранилища
 	//

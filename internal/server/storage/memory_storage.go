@@ -62,6 +62,46 @@ func (ms *MemStorage) UpdateContext(ctx context.Context, metric model.Metrics) (
 	return &metric, nil
 }
 
+// SF TODO
+func (ms *MemStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
+	return ms.UpdatesContext(context.Background(), m)
+}
+
+// SF TODO
+func (ms *MemStorage) UpdatesContext(ctx context.Context, m []model.Metrics) ([]model.Metrics, error) {
+	const prefix = "storage.MemStorage.UpdatesContext"
+
+	for _, metric := range m {
+		foundMetric, found := (*ms)[metric.ID]
+		if !found {
+			continue
+		}
+
+		switch metric.MType {
+		case model.Gauge:
+			if foundMetric.MType != model.Gauge {
+				return nil, fmt.Errorf("%s: %w", prefix, ErrFoundNotGaugeMetricType)
+			}
+		case model.Counter:
+			if foundMetric.MType != model.Counter {
+				return nil, fmt.Errorf("%s: %w", prefix, ErrFoundNotCounterMetricType)
+			}
+		}
+	}
+
+	updatedMetrics := []model.Metrics{}
+	for _, metric := range m {
+		updatedMetric, err := ms.UpdateContext(ctx, metric)
+		if err != nil {
+			return []model.Metrics{}, fmt.Errorf("%s: %v", prefix, err)
+		}
+
+		updatedMetrics = append(updatedMetrics, *updatedMetric)
+	}
+
+	return updatedMetrics, nil
+}
+
 // Ищет метрику в хранилище
 //
 //	@param id идентификатор метрики

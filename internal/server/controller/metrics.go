@@ -284,23 +284,7 @@ func (c *MetricsController) Updates(resp http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	updatedMetrics := []model.Metrics{}
-	for _, metric := range metrics {
-		updatedMetric, err := c.storage.UpdateContext(req.Context(), metric)
-		if err != nil {
-			logger.LogS.Errorf("%s: %v", prefix, err)
-			if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
-				http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
-			} else {
-				logger.LogS.Errorf("%s: %v", prefix, err)
-				resp.WriteHeader(http.StatusInternalServerError)
-			}
-
-			return
-		}
-
-		updatedMetrics = append(updatedMetrics, *updatedMetric)
-	}
+	updatedMetrics, err := c.storage.UpdatesContext(req.Context(), metrics)
 
 	if logger.IsDebug() {
 		metrics, err := c.storage.GetAllContext(req.Context())

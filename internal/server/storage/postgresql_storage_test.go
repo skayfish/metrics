@@ -12,6 +12,29 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	mockInsertGaugeQuery = `INSERT INTO metrics_schema\.metrics \(id, "type", delta, value, hash\)
+							VALUES \(\$1, \$2, \$3, \$4, \$5\)
+							ON CONFLICT \(id\)
+							DO UPDATE SET
+								delta = EXCLUDED\.delta,
+								value = EXCLUDED\.value,
+								hash = EXCLUDED\.hash;`
+
+	mockInsertCounterQuery = `INSERT INTO metrics_schema\.metrics \(id, "type", delta, value, hash\)
+							VALUES \(\$1, \$2, \$3, \$4, \$5\)
+							ON CONFLICT \(id\)
+							DO UPDATE SET
+								delta = metrics_schema\.metrics\.delta \+ EXCLUDED\.delta,
+								value = EXCLUDED\.value,
+								hash = EXCLUDED\.hash;`
+
+	mockSelectMetricQuery = `SELECT \* FROM metrics_schema\.metrics
+							WHERE id = \$1;`
+
+	mockSelectAllMetricsQuery = `SELECT \* FROM metrics_schema\.metrics;`
+)
+
 // Проверяет создание хранилища в виде базы данных PostgreSQL
 func TestNewPostgreSQLStorage(t *testing.T) {
 	db, _, err := sqlmock.New()
@@ -67,14 +90,9 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		defer db.Close()
 
 		mock.ExpectBegin()
-		mock.ExpectExec(
-			`INSERT INTO metrics_schema\.metrics \(id, "type", delta, value, hash\)
-			VALUES \(\$1, \$2, \$3, \$4, \$5\)
-			ON CONFLICT \(id\)
-			DO UPDATE SET
-				delta = metrics_schema\.metrics\.delta \+ EXCLUDED\.delta,
-				value = EXCLUDED\.value,
-				hash = EXCLUDED\.hash;`).
+		mock.ExpectPrepare(mockInsertGaugeQuery)
+		mock.ExpectPrepare(mockInsertCounterQuery)
+		mock.ExpectExec(mockInsertCounterQuery).
 			WithArgs(
 				expected.ID,
 				expected.MType,
@@ -91,9 +109,7 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 				*expected.Delta,
 				expected.Value,
 				expected.Hash)
-		mock.ExpectQuery(
-			`SELECT \* FROM metrics_schema\.metrics
-		    WHERE id = \$1;`).
+		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(expected.ID).
 			WillReturnRows(expectedRow)
 		mock.ExpectCommit()
@@ -124,14 +140,9 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		defer db.Close()
 
 		mock.ExpectBegin()
-		mock.ExpectExec(
-			`INSERT INTO metrics_schema\.metrics \(id, "type", delta, value, hash\)
-			VALUES \(\$1, \$2, \$3, \$4, \$5\)
-			ON CONFLICT \(id\)
-			DO UPDATE SET
-				delta = EXCLUDED\.delta,
-				value = EXCLUDED\.value,
-				hash = EXCLUDED\.hash;`).
+		mock.ExpectPrepare(mockInsertGaugeQuery)
+		mock.ExpectPrepare(mockInsertCounterQuery)
+		mock.ExpectExec(mockInsertGaugeQuery).
 			WithArgs(
 				expected.ID,
 				expected.MType,
@@ -148,9 +159,7 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 				expected.Delta,
 				*expected.Value,
 				expected.Hash)
-		mock.ExpectQuery(
-			`SELECT \* FROM metrics_schema\.metrics
-		    WHERE id = \$1;`).
+		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(expected.ID).
 			WillReturnRows(expectedRow)
 		mock.ExpectCommit()
@@ -183,14 +192,9 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		errorMessage := "some error"
 
 		mock.ExpectBegin()
-		mock.ExpectExec(
-			`INSERT INTO metrics_schema\.metrics \(id, "type", delta, value, hash\)
-			VALUES \(\$1, \$2, \$3, \$4, \$5\)
-			ON CONFLICT \(id\)
-			DO UPDATE SET
-				delta = metrics_schema\.metrics\.delta \+ EXCLUDED\.delta,
-				value = EXCLUDED\.value,
-				hash = EXCLUDED\.hash;`).
+		mock.ExpectPrepare(mockInsertGaugeQuery)
+		mock.ExpectPrepare(mockInsertCounterQuery)
+		mock.ExpectExec(mockInsertCounterQuery).
 			WithArgs(
 				expected.ID,
 				expected.MType,
@@ -226,9 +230,7 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
 
 		id := "MetricName"
-		mock.ExpectQuery(
-			`SELECT \* FROM metrics_schema\.metrics
-		    WHERE id = \$1;`).
+		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(id).
 			WillReturnRows(expectedRow)
 
@@ -254,9 +256,7 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 			AddRow("error id")
 
 		id := "MetricName"
-		mock.ExpectQuery(
-			`SELECT \* FROM metrics_schema\.metrics
-		    WHERE id = \$1;`).
+		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(id).
 			WillReturnRows(expectedRow)
 
@@ -292,9 +292,7 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 				*expectedMetric.Value,
 				expectedMetric.Hash)
 
-		mock.ExpectQuery(
-			`SELECT \* FROM metrics_schema\.metrics
-		    WHERE id = \$1;`).
+		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(expectedMetric.ID).
 			WillReturnRows(expectedRow)
 
@@ -332,9 +330,7 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 				expectedMetric.Value,
 				expectedMetric.Hash)
 
-		mock.ExpectQuery(
-			`SELECT \* FROM metrics_schema\.metrics
-		    WHERE id = \$1;`).
+		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(expectedMetric.ID).
 			WillReturnRows(expectedRow)
 
@@ -362,7 +358,7 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 		defer db.Close()
 
 		expectedRows := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
-		mock.ExpectQuery(`SELECT \* FROM metrics_schema\.metrics`).
+		mock.ExpectQuery(mockSelectAllMetricsQuery).
 			WillReturnRows(expectedRows)
 
 		storage, err := NewPostgreSQLStorage(db)
@@ -422,7 +418,7 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 				{expectedS[counterID1].ID, expectedS[counterID1].MType, *expectedS[counterID1].Delta, expectedS[counterID1].Value, expectedS[counterID1].Hash},
 				{expectedS[counterID2].ID, expectedS[counterID2].MType, *expectedS[counterID2].Delta, expectedS[counterID2].Value, expectedS[counterID2].Hash},
 			}...)
-		mock.ExpectQuery(`SELECT \* FROM metrics_schema\.metrics;`).
+		mock.ExpectQuery(mockSelectAllMetricsQuery).
 			WillReturnRows(expectedRows)
 
 		// Получение метрик из бд

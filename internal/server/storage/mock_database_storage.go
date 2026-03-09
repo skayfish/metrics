@@ -152,3 +152,33 @@ func (mr *MockDatabaseStorageMockRecorder) UpdateContext(arg0, arg1 interface{})
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateContext", reflect.TypeOf((*MockDatabaseStorage)(nil).UpdateContext), arg0, arg1)
 }
+
+// Updates mocks base method.
+func (m *MockDatabaseStorage) Updates(arg0 []model.Metrics) ([]model.Metrics, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Updates", arg0)
+	ret0, _ := ret[0].([]model.Metrics)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// Updates indicates an expected call of Updates.
+func (mr *MockDatabaseStorageMockRecorder) Updates(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Updates", reflect.TypeOf((*MockDatabaseStorage)(nil).Updates), arg0)
+}
+
+// UpdatesContext mocks base method.
+func (m *MockDatabaseStorage) UpdatesContext(arg0 context.Context, arg1 []model.Metrics) ([]model.Metrics, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatesContext", arg0, arg1)
+	ret0, _ := ret[0].([]model.Metrics)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatesContext indicates an expected call of UpdatesContext.
+func (mr *MockDatabaseStorageMockRecorder) UpdatesContext(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatesContext", reflect.TypeOf((*MockDatabaseStorage)(nil).UpdatesContext), arg0, arg1)
+}

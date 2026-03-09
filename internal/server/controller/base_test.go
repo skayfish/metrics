@@ -22,6 +22,10 @@ func (UnknownStorage) Update(m model.Metrics) (*model.Metrics, error) { return n
 func (UnknownStorage) UpdateContext(ctx context.Context, m model.Metrics) (*model.Metrics, error) {
 	return nil, nil
 }
+func (UnknownStorage) Updates(m []model.Metrics) ([]model.Metrics, error) { return nil, nil }
+func (UnknownStorage) UpdatesContext(ctx context.Context, m []model.Metrics) ([]model.Metrics, error) {
+	return nil, nil
+}
 func (UnknownStorage) Get(id string) (*model.Metrics, error) { return nil, nil }
 func (UnknownStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
 	return nil, nil
