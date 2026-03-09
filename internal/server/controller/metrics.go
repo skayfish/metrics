@@ -282,11 +282,21 @@ func (c *MetricsController) Updates(resp http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	validationErrors := []error{}
 	for _, metric := range metrics {
 		if err := metric.Valid(); err != nil {
-			http.Error(resp, fmt.Sprintf("%v: id=%q", err, metric.ID), http.StatusBadRequest)
-			return
+			validationErrors = append(validationErrors, fmt.Errorf("%v: id=%q", err, metric.ID))
 		}
+	}
+
+	if len(validationErrors) > 0 {
+		errMessage := ""
+		for _, err := range validationErrors {
+			errMessage += fmt.Sprintln(err)
+		}
+
+		http.Error(resp, errMessage, http.StatusBadRequest)
+		return
 	}
 
 	updatedMetrics, err := c.storage.UpdatesContext(req.Context(), metrics)

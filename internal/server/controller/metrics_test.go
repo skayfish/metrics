@@ -372,51 +372,89 @@ func TestMetricsController_Updates(t *testing.T) {
 			},
 		},
 		{
-			testName:           "gauge value is empty",
+			testName:           "unrecognized type",
 			requestURL:         "/updates/",
-			requestBody:        `[{"id":"MetricName", "type":"gauge"}]`,
+			requestBody:        `[{"id":"MetricName", "type":"unknown"}, {"id":"MetricName", "type":"unknown"}, {"id":"MetricName1", "type":"unknown"}]`,
 			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        `gauge metric value is empty: id="MetricName"`,
+				body: "unrecognized metric type (supported types: \"gauge\", \"counter\"): id=\"MetricName\"\n" +
+					"unrecognized metric type (supported types: \"gauge\", \"counter\"): id=\"MetricName\"\n" +
+					"unrecognized metric type (supported types: \"gauge\", \"counter\"): id=\"MetricName1\"",
+			},
+		},
+		{
+			testName:           "gauge value is empty",
+			requestURL:         "/updates/",
+			requestBody:        `[{"id":"MetricName", "type":"gauge"}, {"id":"MetricName1", "type":"gauge"}, {"id":"MetricName2", "type":"gauge"}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body: "gauge metric value is empty: id=\"MetricName\"\n" +
+					"gauge metric value is empty: id=\"MetricName1\"\n" +
+					"gauge metric value is empty: id=\"MetricName2\"",
 			},
 		},
 		{
 			testName:           "counter delta is empty",
 			requestURL:         "/updates/",
-			requestBody:        `[{"id":"MetricName", "type":"counter"}]`,
+			requestBody:        `[{"id":"MetricName", "type":"counter"}, {"id":"MetricName1", "type":"counter"}, {"id":"MetricName2", "type":"counter"}]`,
 			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        `counter metric delta is empty: id="MetricName"`,
+				body: "counter metric delta is empty: id=\"MetricName\"\n" +
+					"counter metric delta is empty: id=\"MetricName1\"\n" +
+					"counter metric delta is empty: id=\"MetricName2\"",
 			},
 		},
 		{
-			testName:           "update gauge metric",
-			gaugeMetrics:       map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
-			counterMetrics:     map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
-			requestURL:         "/updates",
-			requestBody:        `[{"id":"GaugeMetricName", "type":"gauge", "value": 0.233000024133}]`,
-			requestContentType: `application/json`,
-			want: want{
-				status:      http.StatusOK,
-				contentType: "application/json",
-				body:        `[{"id":"GaugeMetricName","type":"gauge","value":0.233000024133}]`,
-			},
-		},
-		{
-			testName:           "update counter metric",
-			gaugeMetrics:       map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
-			counterMetrics:     map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			testName:           "some value or delta are empty",
 			requestURL:         "/updates/",
-			requestBody:        `[{"id":"CounterMetricName", "type":"counter", "delta": 11}]`,
+			requestBody:        `[{"id":"MetricName", "type":"counter"}, {"id":"MetricName1", "type":"gauge"}, {"id":"MetricName2", "type":"gauge"}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body: "counter metric delta is empty: id=\"MetricName\"\n" +
+					"gauge metric value is empty: id=\"MetricName1\"\n" +
+					"gauge metric value is empty: id=\"MetricName2\"",
+			},
+		},
+		{
+			testName:       "update gauge metric",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/updates",
+			requestBody: `[{"id":"GaugeMetricName", "type":"gauge", "value": 0.233000024133},
+							{"id":"GaugeMetricName1", "type":"gauge", "value": 15.12},
+							{"id":"GaugeMetricName", "type":"gauge", "value": -15.12}]`,
 			requestContentType: `application/json`,
 			want: want{
 				status:      http.StatusOK,
 				contentType: "application/json",
-				body:        `[{"id":"CounterMetricName","type":"counter","delta":4323}]`,
+				body: `[{"id":"GaugeMetricName", "type":"gauge", "value": 0.233000024133},
+						{"id":"GaugeMetricName1", "type":"gauge", "value": 15.12},
+						{"id":"GaugeMetricName", "type":"gauge", "value": -15.12}]`,
+			},
+		},
+		{
+			testName:       "update counter metric",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/updates/",
+			requestBody: `[{"id":"CounterMetricName", "type":"counter", "delta": 11},
+							{"id":"CounterMetricName1", "type":"counter", "delta": 4312},
+							{"id":"CounterMetricName", "type":"counter", "delta": -4323}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusOK,
+				contentType: "application/json",
+				body: `[{"id":"CounterMetricName", "type":"counter", "delta": 4323},
+						{"id":"CounterMetricName1", "type":"counter", "delta": 0},
+						{"id":"CounterMetricName", "type":"counter", "delta": 0}]`,
 			},
 		},
 		{
