@@ -220,6 +220,101 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 	})
 }
 
+// SF TODO
+func TestPostgreSQLStorage_Updates(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		delta1 := int64(5)
+		delta2 := int64(-774)
+		value1 := 0.5531
+		value2 := -0.00041
+		expected := []model.Metrics{
+			{ // #0
+				ID:    "counterID1",
+				MType: model.Counter,
+				Delta: &delta1,
+			},
+			{ // #1
+				ID:    "gaugeID1",
+				MType: model.Gauge,
+				Value: &value1,
+			},
+			{ // #2
+				ID:    "gaugeID2",
+				MType: model.Gauge,
+				Value: &value2,
+			},
+			{ // #3
+				ID:    "counterID2",
+				MType: model.Counter,
+				Delta: &delta2,
+			},
+		}
+
+		db, mock, err := sqlmock.New()
+		require.NoError(t, err)
+		defer db.Close()
+
+		mock.ExpectBegin()
+		mock.ExpectPrepare(mockInsertGaugeQuery)
+		mock.ExpectPrepare(mockInsertCounterQuery)
+		for _, metric := range expected {
+			delta := sql.NullInt64{Valid: false}
+			value := sql.NullFloat64{Valid: false}
+			switch metric.MType {
+			case model.Gauge:
+				value = sql.NullFloat64{Valid: true, Float64: *metric.Value}
+				mock.ExpectExec(mockInsertGaugeQuery).
+					WithArgs(
+						metric.ID,
+						metric.MType,
+						delta,
+						value,
+						metric.Hash,
+					).
+					WillReturnResult(sqlmock.NewResult(1, 1))
+			case model.Counter:
+				delta = sql.NullInt64{Valid: true, Int64: *metric.Delta}
+				mock.ExpectExec(mockInsertCounterQuery).
+					WithArgs(
+						metric.ID,
+						metric.MType,
+						delta,
+						value,
+						metric.Hash,
+					).
+					WillReturnResult(sqlmock.NewResult(1, 1))
+			}
+
+			expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
+			switch metric.MType {
+			case model.Gauge:
+				expectedRow.AddRow(metric.ID, metric.MType, metric.Delta, *metric.Value, metric.Hash)
+			case model.Counter:
+				expectedRow.AddRow(metric.ID, metric.MType, *metric.Delta, metric.Value, metric.Hash)
+			}
+
+			mock.ExpectQuery(mockSelectMetricQuery).
+				WithArgs(metric.ID).
+				WillReturnRows(expectedRow)
+		}
+
+		mock.ExpectCommit()
+
+		storage, err := NewPostgreSQLStorage(db)
+		require.NoError(t, err)
+
+		// Обновление метрики в бд
+		updatedMetric, err := storage.Updates(expected)
+		require.NoError(t, err)
+
+		storagesEqual(t, storageByMetricsArray(expected), storageByMetricsArray(updatedMetric))
+
+		// Проверка мок вызовов
+		err = mock.ExpectationsWereMet()
+		require.NoError(t, err)
+	})
+}
+
 // Проверяет получение метрики из хранилища PostgreSQL
 func TestPostgreSQLStorage_Get(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {

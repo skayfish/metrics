@@ -25,6 +25,11 @@ const (
 							delta = metrics_schema.metrics.delta + EXCLUDED.delta,
 							value = EXCLUDED.value,
 							hash = EXCLUDED.hash;`
+
+	selectMetricQuery = `SELECT * FROM metrics_schema.metrics
+						WHERE id = $1;`
+
+	selectAllMetricsQuery = `SELECT * FROM metrics_schema.metrics;`
 )
 
 // Хранилище, в виде базы данных PostgreSQL
@@ -213,9 +218,7 @@ func (s PostgreSQLStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
 func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.getContext"
 
-	row := db.QueryRowContext(ctx,
-		`SELECT * FROM metrics_schema.metrics
-		WHERE id = $1;`, id)
+	row := db.QueryRowContext(ctx, selectMetricQuery, id)
 	var (
 		mType     string
 		deltaNull sql.NullInt64
@@ -286,7 +289,7 @@ func (s PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
 func (s PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.GetAllContext"
 
-	rows, err := s.DB.QueryContext(ctx, `SELECT * FROM metrics_schema.metrics;`)
+	rows, err := s.DB.QueryContext(ctx, selectAllMetricsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", prefix, err)
 	}
