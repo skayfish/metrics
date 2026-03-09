@@ -17,7 +17,6 @@ func Test_parseConfig(t *testing.T) {
 	t.Run("default values", func(t *testing.T) {
 		config, err := parseConfig()
 		require.NoError(t, err)
-		require.NoError(t, err)
 		assert.Equal(t, server.Config{
 			Address: flags.NetAddress{
 				Host: "localhost",
