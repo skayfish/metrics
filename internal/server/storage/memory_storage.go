@@ -38,6 +38,12 @@ func (ms *MemStorage) Update(metric model.Metrics) (*model.Metrics, error) {
 	return ms.UpdateContext(context.Background(), metric)
 }
 
+// Обновляет/добавляет метрику в хранилище
+//
+//	@param ctx    контекст для завершения работы
+//	@param metric метрика для добавления/обновления
+//	@returns *model.Metrics добавленную/обновленную метрику
+//	@returns error ошибку, если добавить/обновить метрику не удалось
 func (ms *MemStorage) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
 	const prefix = "storage.MemStorage.UpdateContext"
 
@@ -62,12 +68,21 @@ func (ms *MemStorage) UpdateContext(ctx context.Context, metric model.Metrics) (
 	return &metric, nil
 }
 
-// SF TODO
+// Обновляет/добавляет метрики в хранилище.
+//
+//	@param m метрики для добавления/обновления
+//	@returns []model.Metrics добавленные/обновленные метрики
+//	@returns error ошибку, если добавить/обновить метрики не удалось
 func (ms *MemStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
 	return ms.UpdatesContext(context.Background(), m)
 }
 
-// SF TODO
+// Обновляет/добавляет метрики в хранилище.
+//
+//	@param ctx контекст для завершения работы
+//	@param m   метрики для добавления/обновления
+//	@returns []model.Metrics добавленные/обновленные метрики
+//	@returns error ошибку, если добавить/обновить метрики не удалось
 func (ms *MemStorage) UpdatesContext(ctx context.Context, m []model.Metrics) ([]model.Metrics, error) {
 	const prefix = "storage.MemStorage.UpdatesContext"
 

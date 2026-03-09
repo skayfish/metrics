@@ -256,7 +256,10 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 	resp.Write(updatedMetricJSON)
 }
 
-// SF TODO
+// Обновляет/добавляет метрики в хранилище. Берёт данные из тела в формате JSON
+//
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
 func (c *MetricsController) Updates(resp http.ResponseWriter, req *http.Request) {
 	const prefix = "controller.MetricsController.Updates"
 

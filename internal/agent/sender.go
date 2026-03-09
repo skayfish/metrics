@@ -204,10 +204,8 @@ func compress(data []byte) ([]byte, error) {
 
 // Отправляет метрики серверу
 //
-//	@param gaugeMetrics метрики датчиков
-//	@returns ошибку отправки метрик серверу
-//
-// SF TODO
+//	@param metrics метрики для отправки
+//	@returns ошибку, если возникли проблемы при отправки метрик
 func (s *sender) send(metrics []model.Metrics) error {
 	const prefix = "agent.sender.send"
 

@@ -33,17 +33,28 @@ const (
 	selectAllMetricsQuery = `SELECT * FROM metrics_schema.metrics;`
 )
 
-// SF TODO
+// Выполняет переданную функцию с повторениями c linear возрастающей по времени задержкой.
+//
+//	@param execute функция, которую нужно будет повторять, если возникает ошибка
+//	@returns error возможную ошибку или nil, при отсутствии
 func ExecuteWithRetry(execute func() error) error {
-	const maxRetries = 3
+	const maxRetries = 5
 	var lastErr error
 
 	retryDuration := time.Second
 	classifier := NewPostgresErrorClassifier()
 	for attempt := 0; attempt < maxRetries; attempt++ {
-		err := execute()
-		if classifier.Classify(err) == NonRetriable {
-			return err
+		lastErr = execute()
+		if lastErr == nil {
+			return nil
+		}
+
+		if classifier.Classify(lastErr) == NonRetriable {
+			return lastErr
+		}
+
+		if attempt+1 == maxRetries {
+			break
 		}
 
 		time.Sleep(retryDuration)
@@ -71,22 +82,27 @@ func NewPostgreSQLStorage(db *sql.DB) (*PostgreSQLStorage, error) {
 	return &PostgreSQLStorage{DB: db}, nil
 }
 
-// SF TODO
+// Конфигурация для запроса в PostgreSQL
 type config struct {
-	ctx context.Context // SF TODO
-	db  SQLExecutor     // SF TODO
+	ctx context.Context // Контекст для завершения работы
+	db  SQLExecutor     // База данных
 }
 
-// SF TODO
+// Конфигурация для обновления/добавления метрики
 type updateConfig struct {
 	config
 
-	sGauge   *sql.Stmt // SF TODO
-	sCounter *sql.Stmt // SF TODO
-	sGet     *sql.Stmt // SF TODO
+	sGauge   *sql.Stmt // Подготовленный запрос для обновления/добавления метрики типа gauge
+	sCounter *sql.Stmt // Подготовленный запрос для обновления/добавления метрики типа counter
+	sGet     *sql.Stmt // Подготовленный запрос для получения конкретной метрики
 }
 
-// SF TODO
+// Добавляет/обновляет метрику в базе данных
+//
+// @param cfg    конфигурация метода
+// @param metric метрика для добавления/обновления
+// @returns *model.Metrics добавленную/обновленную метрику
+// @returns error ошибку, если не удалось добавить/обновить метрику
 func updateContext(cfg updateConfig, metric model.Metrics) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.updateContext"
 
@@ -100,7 +116,6 @@ func updateContext(cfg updateConfig, metric model.Metrics) (*model.Metrics, erro
 		return nil, fmt.Errorf("%s: unknown metric type", prefix)
 	}
 
-	// Запись данных в БД
 	var delta sql.NullInt64
 	if metric.Delta != nil {
 		delta.Int64 = *metric.Delta
@@ -194,7 +209,12 @@ func (s PostgreSQLStorage) Update(metric model.Metrics) (*model.Metrics, error) 
 	return s.UpdateContext(context.Background(), metric)
 }
 
-// SF TODO
+// Добавляет/обновляет метрики в базе данных
+//
+//	@param ctx контекст для завершения работы
+//	@param m   метрики для добавления/обновления
+//	@returns []model.Metrics обновленные/добавленные метрики
+//	@returns error ошибку, если не удалось добавить/обновить метрики
 func (s PostgreSQLStorage) UpdatesContext(ctx context.Context, m []model.Metrics) ([]model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.UpdatesContext"
 
@@ -248,27 +268,28 @@ func (s PostgreSQLStorage) UpdatesContext(ctx context.Context, m []model.Metrics
 	return updatedMetrics, nil
 }
 
-// SF TODO
+// Добавляет/обновляет метрики в базе данных
+//
+//	@param m метрики для добавления/обновления
+//	@returns []model.Metrics обновленные/добавленные метрики
+//	@returns error ошибку, если не удалось добавить/обновить метрики
 func (s PostgreSQLStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
 	return s.UpdatesContext(context.Background(), m)
 }
 
-// SF TODO
+// Конфигурация для получения конкретной метрики
 type getConfig struct {
 	config
 
-	sGet *sql.Stmt
+	sGet *sql.Stmt // Подготовленный запрос для получения конкретной метрики
 }
 
 // Возвращает конкретную метрику из хранилища
 //
-//	@param ctx контекст для завершения работы
-//	@param db  база данных
+//	@param cfg конфигурация для получения конкретной метрики
 //	@param id  идентификатор метрики
 //	@returns *model.Metrics найденную метрику
 //	@returns error          ошибку, если возникли проблемы при поиске метрики
-//
-// SF TODO
 func getContext(cfg getConfig, id string) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.getContext"
 
@@ -338,14 +359,18 @@ func (s PostgreSQLStorage) Get(id string) (*model.Metrics, error) {
 	return s.GetContext(context.Background(), id)
 }
 
-// SF TODO
+// Конфигурация для получения всех метрик
 type getAllConfig struct {
 	config
 
-	sGetAll *sql.Stmt
+	sGetAll *sql.Stmt // Подготовленный запрос для получения всех метрик
 }
 
-// SF TODO
+// Возвращает все метрики из хранилища
+//
+//	@param cfg конфигурация для получения всех метрик
+//	@returns []model.Metrics все метрики из хранилища
+//	@returns error           ошибку, если возникли проблемы при получении всех метрик
 func getAllContext(cfg getAllConfig) (result []model.Metrics, err error) {
 	const prefix = "storage.PostgreSQLStorage.getAllContext"
 

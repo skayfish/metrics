@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
+// Тестирует базовые настройки конфигурации
 func Test_parseConfig(t *testing.T) {
 	t.Run("default values", func(t *testing.T) {
 		config, err := parseConfig()

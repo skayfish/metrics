@@ -21,12 +21,17 @@ const (
 // Классификатор ошибок PostgreSQL
 type PostgresErrorClassifier struct{}
 
-// SF TODO
+// Создаёт новый классификатор PostgreSQL ошибок
+//
+//	@returns *PostgresErrorClassifier
 func NewPostgresErrorClassifier() *PostgresErrorClassifier {
 	return &PostgresErrorClassifier{}
 }
 
-// SF TODO
+// Классифицирует переданную ошибку
+//
+//	@param err ошибка для классификации
+//	@returns PGErrorClassification retriable классификацию ошибки
 func (c *PostgresErrorClassifier) Classify(err error) PGErrorClassification {
 	if err == nil {
 		return NonRetriable
@@ -41,7 +46,10 @@ func (c *PostgresErrorClassifier) Classify(err error) PGErrorClassification {
 	return NonRetriable
 }
 
-// SF TODO
+// Классифицирует PostgreSQL ошибку
+//
+//	@param pgErr PostgreSQL ошибка
+//	@returns PGErrorClassification retriable классификацию ошибки
 func СlassifyPgError(pgErr *pgconn.PgError) PGErrorClassification {
 	// Коды ошибок PostgreSQL: https://www.postgresql.org/docs/current/errcodes-appendix.html
 

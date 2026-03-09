@@ -75,7 +75,7 @@ func TestNewPostgreSQLStorage(t *testing.T) {
 	}
 }
 
-// Проверяет добавление/обновление новых метрик в хранилище PostgreSQL
+// Проверяет добавление/обновление метрик в хранилище PostgreSQL
 func TestPostgreSQLStorage_Update(t *testing.T) {
 	t.Run("add counter", func(t *testing.T) {
 		delta := int64(5)
@@ -223,7 +223,7 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 	})
 }
 
-// SF TODO
+// Проверяет добавление/обновление метрик в хранилище PostgreSQL
 func TestPostgreSQLStorage_Updates(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		delta1 := int64(5)
