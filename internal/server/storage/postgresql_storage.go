@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/skayfish/metrics/internal/model"
 )
@@ -31,6 +32,26 @@ const (
 
 	selectAllMetricsQuery = `SELECT * FROM metrics_schema.metrics;`
 )
+
+// SF TODO
+func ExecuteWithRetry(execute func() error) error {
+	const maxRetries = 3
+	var lastErr error
+
+	retryDuration := time.Second
+	classifier := NewPostgresErrorClassifier()
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		err := execute()
+		if classifier.Classify(err) == NonRetriable {
+			return err
+		}
+
+		time.Sleep(retryDuration)
+		retryDuration += 2 * time.Second
+	}
+
+	return fmt.Errorf("execution aborted after %d attempts: %w", maxRetries, lastErr)
+}
 
 // Хранилище, в виде базы данных PostgreSQL
 type PostgreSQLStorage struct {
@@ -62,6 +83,7 @@ type updateConfig struct {
 
 	sGauge   *sql.Stmt // SF TODO
 	sCounter *sql.Stmt // SF TODO
+	sGet     *sql.Stmt // SF TODO
 }
 
 // SF TODO
@@ -91,12 +113,17 @@ func updateContext(cfg updateConfig, metric model.Metrics) (*model.Metrics, erro
 		value.Valid = true
 	}
 
-	_, err := stmt.ExecContext(cfg.ctx, metric.ID, metric.MType, delta, value, metric.Hash)
+	err := ExecuteWithRetry(func() error {
+		_, err := stmt.ExecContext(cfg.ctx, metric.ID, metric.MType, delta, value, metric.Hash)
+		return err
+	})
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", prefix, err)
 	}
 
-	updatedMetric, err := getContext(cfg.ctx, cfg.db, metric.ID)
+	updatedMetric, err := getContext(
+		getConfig{config: cfg.config, sGet: cfg.sGet},
+		metric.ID)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
@@ -125,18 +152,25 @@ func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metri
 	}()
 
 	cfg := updateConfig{config: config{ctx: ctx, db: tx}}
-	func() {
-		var stmt *sql.Stmt
-		stmt, err = tx.PrepareContext(ctx, insertGaugeQuery)
-		cfg.sGauge = stmt
 
-		stmt, err = tx.PrepareContext(ctx, insertCounterQuery)
-		cfg.sCounter = stmt
-	}()
-
+	var stmt *sql.Stmt
+	stmt, err = tx.PrepareContext(ctx, insertGaugeQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
+	cfg.sGauge = stmt
+
+	stmt, err = tx.PrepareContext(ctx, insertCounterQuery)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+	cfg.sCounter = stmt
+
+	stmt, err = tx.PrepareContext(ctx, selectMetricQuery)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+	cfg.sGet = stmt
 
 	updatedMetric, err := updateContext(cfg, metric)
 	if err != nil {
@@ -176,14 +210,25 @@ func (s PostgreSQLStorage) UpdatesContext(ctx context.Context, m []model.Metrics
 	}()
 
 	cfg := updateConfig{config: config{ctx: ctx, db: tx}}
-	func() {
-		var stmt *sql.Stmt
-		stmt, err = tx.PrepareContext(ctx, insertGaugeQuery)
-		cfg.sGauge = stmt
 
-		stmt, err = tx.PrepareContext(ctx, insertCounterQuery)
-		cfg.sCounter = stmt
-	}()
+	var stmt *sql.Stmt
+	stmt, err = tx.PrepareContext(ctx, insertGaugeQuery)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+	cfg.sGauge = stmt
+
+	stmt, err = tx.PrepareContext(ctx, insertCounterQuery)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+	cfg.sCounter = stmt
+
+	stmt, err = tx.PrepareContext(ctx, selectMetricQuery)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+	cfg.sGet = stmt
 
 	updatedMetrics := []model.Metrics{}
 	for _, metric := range m {
@@ -208,6 +253,13 @@ func (s PostgreSQLStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
 	return s.UpdatesContext(context.Background(), m)
 }
 
+// SF TODO
+type getConfig struct {
+	config
+
+	sGet *sql.Stmt
+}
+
 // Возвращает конкретную метрику из хранилища
 //
 //	@param ctx контекст для завершения работы
@@ -215,18 +267,21 @@ func (s PostgreSQLStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
 //	@param id  идентификатор метрики
 //	@returns *model.Metrics найденную метрику
 //	@returns error          ошибку, если возникли проблемы при поиске метрики
-func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics, error) {
+//
+// SF TODO
+func getContext(cfg getConfig, id string) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.getContext"
 
-	row := db.QueryRowContext(ctx, selectMetricQuery, id)
 	var (
 		mType     string
 		deltaNull sql.NullInt64
 		valueNull sql.NullFloat64
 		hash      string
 	)
-
-	err := row.Scan(&id, &mType, &deltaNull, &valueNull, &hash)
+	err := ExecuteWithRetry(func() error {
+		row := cfg.sGet.QueryRowContext(cfg.ctx, id)
+		return row.Scan(&id, &mType, &deltaNull, &valueNull, &hash)
+	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("%s: %w", prefix, ErrMetricNotFound)
@@ -261,7 +316,17 @@ func getContext(ctx context.Context, db SQLExecutor, id string) (*model.Metrics,
 //	@returns *model.Metrics найденную метрику
 //	@returns error          ошибку, если возникли проблемы при получении метрики
 func (s PostgreSQLStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
-	return getContext(ctx, s.DB, id)
+	const prefix = "storage.PostgreSQLStorage.GetContext"
+
+	cfg := getConfig{config: config{ctx: ctx, db: s.DB}}
+
+	stmt, err := s.PrepareContext(ctx, selectMetricQuery)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+	cfg.sGet = stmt
+
+	return getContext(cfg, id)
 }
 
 // Возвращает конкретную метрику из хранилища
@@ -273,12 +338,67 @@ func (s PostgreSQLStorage) Get(id string) (*model.Metrics, error) {
 	return s.GetContext(context.Background(), id)
 }
 
-// Возвращает все метрики из хранилища
-//
-//	@returns []model.Metrics все метрики из хранилища
-//	@returns error           ошибку, если возникли проблемы при получении всех метрик
-func (s PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
-	return s.GetAllContext(context.Background())
+// SF TODO
+type getAllConfig struct {
+	config
+
+	sGetAll *sql.Stmt
+}
+
+// SF TODO
+func getAllContext(cfg getAllConfig) (result []model.Metrics, err error) {
+	const prefix = "storage.PostgreSQLStorage.getAllContext"
+
+	err = ExecuteWithRetry(func() error {
+		result = make([]model.Metrics, 0)
+		rows, err := cfg.sGetAll.QueryContext(cfg.ctx)
+		if err != nil {
+			return err
+		}
+
+		defer rows.Close()
+
+		var (
+			id        string
+			mType     string
+			deltaNull sql.NullInt64
+			valueNull sql.NullFloat64
+			hash      string
+		)
+		for rows.Next() {
+			err := rows.Scan(&id, &mType, &deltaNull, &valueNull, &hash)
+			if err != nil {
+				return err
+			}
+
+			var delta *int64
+			if deltaNull.Valid {
+				tmp := deltaNull.Int64
+				delta = &tmp
+			}
+
+			var value *float64
+			if valueNull.Valid {
+				tmp := valueNull.Float64
+				value = &tmp
+			}
+
+			result = append(result, model.Metrics{
+				ID:    id,
+				MType: mType,
+				Delta: delta,
+				Value: value,
+				Hash:  hash,
+			})
+		}
+
+		return rows.Err()
+	})
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	return result, nil
 }
 
 // Возвращает все метрики из хранилища
@@ -289,54 +409,23 @@ func (s PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
 func (s PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.GetAllContext"
 
-	rows, err := s.DB.QueryContext(ctx, selectAllMetricsQuery)
+	cfg := getAllConfig{config: config{ctx: ctx, db: s.DB}}
+
+	stmt, err := s.PrepareContext(ctx, selectAllMetricsQuery)
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", prefix, err)
+		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
+	cfg.sGetAll = stmt
 
-	defer rows.Close()
+	return getAllContext(cfg)
+}
 
-	result := make([]model.Metrics, 0)
-	var (
-		id        string
-		mType     string
-		deltaNull sql.NullInt64
-		valueNull sql.NullFloat64
-		hash      string
-	)
-	for rows.Next() {
-		err := rows.Scan(&id, &mType, &deltaNull, &valueNull, &hash)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", prefix, err)
-		}
-
-		var delta *int64
-		if deltaNull.Valid {
-			tmp := deltaNull.Int64
-			delta = &tmp
-		}
-
-		var value *float64
-		if valueNull.Valid {
-			tmp := valueNull.Float64
-			value = &tmp
-		}
-
-		result = append(result, model.Metrics{
-			ID:    id,
-			MType: mType,
-			Delta: delta,
-			Value: value,
-			Hash:  hash,
-		})
-	}
-
-	err = rows.Err()
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", prefix, err)
-	}
-
-	return result, nil
+// Возвращает все метрики из хранилища
+//
+//	@returns []model.Metrics все метрики из хранилища
+//	@returns error           ошибку, если возникли проблемы при получении всех метрик
+func (s PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
+	return s.GetAllContext(context.Background())
 }
 
 // Проверка, что [PostgreSQLStorage] удовлетворяет интерфейсу [DatabaseStorage]

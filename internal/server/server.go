@@ -134,7 +134,11 @@ func createStorage(config *Config) (storage.Storage, error) {
 
 	// Подключение к серверу базы данных, если есть данные для соединения
 	if config.DatabaseDSN != nil {
-		db, err := sql.Open("pgx", *config.DatabaseDSN)
+		var db *sql.DB
+		err := storage.ExecuteWithRetry(func() (err error) {
+			db, err = sql.Open("pgx", *config.DatabaseDSN)
+			return
+		})
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed open database: %w", prefix, err)
 		}

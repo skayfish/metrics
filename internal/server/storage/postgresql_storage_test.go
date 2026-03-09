@@ -92,6 +92,7 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectPrepare(mockInsertGaugeQuery)
 		mock.ExpectPrepare(mockInsertCounterQuery)
+		mock.ExpectPrepare(mockSelectMetricQuery)
 		mock.ExpectExec(mockInsertCounterQuery).
 			WithArgs(
 				expected.ID,
@@ -142,6 +143,7 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectPrepare(mockInsertGaugeQuery)
 		mock.ExpectPrepare(mockInsertCounterQuery)
+		mock.ExpectPrepare(mockSelectMetricQuery)
 		mock.ExpectExec(mockInsertGaugeQuery).
 			WithArgs(
 				expected.ID,
@@ -194,6 +196,7 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectPrepare(mockInsertGaugeQuery)
 		mock.ExpectPrepare(mockInsertCounterQuery)
+		mock.ExpectPrepare(mockSelectMetricQuery)
 		mock.ExpectExec(mockInsertCounterQuery).
 			WithArgs(
 				expected.ID,
@@ -257,6 +260,7 @@ func TestPostgreSQLStorage_Updates(t *testing.T) {
 		mock.ExpectBegin()
 		mock.ExpectPrepare(mockInsertGaugeQuery)
 		mock.ExpectPrepare(mockInsertCounterQuery)
+		mock.ExpectPrepare(mockSelectMetricQuery)
 		for _, metric := range expected {
 			delta := sql.NullInt64{Valid: false}
 			value := sql.NullFloat64{Valid: false}
@@ -322,8 +326,9 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
-		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
+		mock.ExpectPrepare(mockSelectMetricQuery)
 
+		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
 		id := "MetricName"
 		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(id).
@@ -347,9 +352,10 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
+		mock.ExpectPrepare(mockSelectMetricQuery)
+
 		expectedRow := sqlmock.NewRows([]string{"id"}).
 			AddRow("error id")
-
 		id := "MetricName"
 		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(id).
@@ -372,13 +378,14 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
+		mock.ExpectPrepare(mockSelectMetricQuery)
+
 		value := 0.15
 		expectedMetric := model.Metrics{
 			ID:    "gaugeID",
 			MType: model.Gauge,
 			Value: &value,
 		}
-
 		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRow(
 				expectedMetric.ID,
@@ -386,7 +393,6 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 				expectedMetric.Delta,
 				*expectedMetric.Value,
 				expectedMetric.Hash)
-
 		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(expectedMetric.ID).
 			WillReturnRows(expectedRow)
@@ -410,13 +416,14 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
+		mock.ExpectPrepare(mockSelectMetricQuery)
+
 		delta := int64(5)
 		expectedMetric := model.Metrics{
 			ID:    "counterID",
 			MType: model.Counter,
 			Delta: &delta,
 		}
-
 		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRow(
 				expectedMetric.ID,
@@ -424,7 +431,6 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 				*expectedMetric.Delta,
 				expectedMetric.Value,
 				expectedMetric.Hash)
-
 		mock.ExpectQuery(mockSelectMetricQuery).
 			WithArgs(expectedMetric.ID).
 			WillReturnRows(expectedRow)
@@ -452,6 +458,8 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 		require.NoError(t, err)
 		defer db.Close()
 
+		mock.ExpectPrepare(mockSelectAllMetricsQuery)
+
 		expectedRows := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
 		mock.ExpectQuery(mockSelectAllMetricsQuery).
 			WillReturnRows(expectedRows)
@@ -474,6 +482,8 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 		db, mock, err := sqlmock.New()
 		require.NoError(t, err)
 		defer db.Close()
+
+		mock.ExpectPrepare(mockSelectAllMetricsQuery)
 
 		gaugeValue1 := -34.4441
 		gaugeValue2 := 0.1
@@ -505,7 +515,6 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 				Delta: &counterDelta2,
 			},
 		}
-
 		expectedRows := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRows([][]driver.Value{
 				{expectedS[gaugeID1].ID, expectedS[gaugeID1].MType, expectedS[gaugeID1].Delta, *expectedS[gaugeID1].Value, expectedS[gaugeID1].Hash},
