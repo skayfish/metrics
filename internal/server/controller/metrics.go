@@ -211,7 +211,7 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 
 	metric := model.Metrics{}
 	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
-		http.Error(resp, fmt.Sprintf("Failed unmarshall json: %s", err), http.StatusBadRequest)
+		http.Error(resp, fmt.Sprintf("Failed unmarshall json: %v", err), http.StatusBadRequest)
 		return
 	}
 
@@ -256,6 +256,74 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 
 	resp.Header().Set("Content-Type", "application/json")
 	resp.Write(updatedMetricJSON)
+}
+
+// SF TODO
+func (c *MetricsController) Updates(resp http.ResponseWriter, req *http.Request) {
+	const prefix = "controller.MetricsController.Updates"
+
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
+
+		logger.LogS.Debugw(fmt.Sprintf("%s: before", prefix), "metrics", metrics)
+	}
+
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
+		return
+	}
+
+	metrics := []model.Metrics{}
+	if err := json.NewDecoder(req.Body).Decode(&metrics); err != nil {
+		http.Error(resp, fmt.Sprintf("Failed unmarshall json: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	updatedMetrics := []model.Metrics{}
+	for _, metric := range metrics {
+		updatedMetric, err := c.storage.UpdateContext(req.Context(), metric)
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
+				http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+			} else {
+				logger.LogS.Errorf("%s: %v", prefix, err)
+				resp.WriteHeader(http.StatusInternalServerError)
+			}
+
+			return
+		}
+
+		updatedMetrics = append(updatedMetrics, *updatedMetric)
+	}
+
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
+
+		logger.LogS.Debugw(fmt.Sprintf("%s: after", prefix),
+			"metrics", metrics,
+		)
+	}
+
+	updatedMetricsJSON, err := json.Marshal(updatedMetrics)
+	if err != nil {
+		logger.LogS.Errorf("%s: marshaling metrics failed: %v", prefix, err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(updatedMetricsJSON)
 }
 
 // Возвращает значение запрошенной метрики.

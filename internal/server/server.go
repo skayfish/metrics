@@ -85,6 +85,8 @@ func getRouter(
 	router.Post("/update/{type}/{name}/{value}", saveMiddleware(metricsController.UpdateFromURL))
 	router.Post("/update", saveMiddleware(metricsController.UpdateFromJSON))
 	router.Post("/update/", saveMiddleware(metricsController.UpdateFromJSON))
+	router.Post("/updates", saveMiddleware(metricsController.Updates))
+	router.Post("/updates/", saveMiddleware(metricsController.Updates))
 	router.Get("/value/{type}/{name}", metricsController.GetValueFromURL)
 	router.Post("/value", metricsController.GetMetricFromJSON)
 	router.Post("/value/", metricsController.GetMetricFromJSON)
