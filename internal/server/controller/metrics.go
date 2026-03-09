@@ -285,6 +285,11 @@ func (c *MetricsController) Updates(resp http.ResponseWriter, req *http.Request)
 	}
 
 	updatedMetrics, err := c.storage.UpdatesContext(req.Context(), metrics)
+	if err != nil {
+		logger.LogS.Errorf("%s: %v", prefix, err)
+		http.Error(resp, "failed update metrics", http.StatusInternalServerError)
+		return
+	}
 
 	if logger.IsDebug() {
 		metrics, err := c.storage.GetAllContext(req.Context())
