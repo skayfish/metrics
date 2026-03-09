@@ -29,7 +29,7 @@ var (
 	ErrCounterDeltaIsEmpty = errors.New(`counter metric delta is empty`)
 
 	// Ошибка: неизвестный тип метрики
-	ErrUnrecognizedMetricType = errors.New(`unrecognized metric type. Supported types: "gauge", "counter"`)
+	ErrUnrecognizedMetricType = errors.New(`unrecognized metric type (supported types: "gauge", "counter")`)
 )
 
 // Проверяет метрику на валидность

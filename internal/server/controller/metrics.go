@@ -153,7 +153,6 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 
 	updatedMetric, err := c.storage.UpdateContext(req.Context(), metric)
 	if err != nil {
-		logger.LogS.Errorf("%s: %v", prefix, err)
 		if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
 			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		} else {
@@ -216,13 +215,12 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 	}
 
 	if err := metric.Valid(); err != nil {
-		http.Error(resp, err.Error(), http.StatusBadRequest)
+		http.Error(resp, fmt.Sprintf("%v: id=%q", err, metric.ID), http.StatusBadRequest)
 		return
 	}
 
 	updatedMetric, err := c.storage.UpdateContext(req.Context(), metric)
 	if err != nil {
-		logger.LogS.Errorf("%s: %v", prefix, err)
 		if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
 			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		} else {
@@ -284,8 +282,20 @@ func (c *MetricsController) Updates(resp http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	for _, metric := range metrics {
+		if err := metric.Valid(); err != nil {
+			http.Error(resp, fmt.Sprintf("%v: id=%q", err, metric.ID), http.StatusBadRequest)
+			return
+		}
+	}
+
 	updatedMetrics, err := c.storage.UpdatesContext(req.Context(), metrics)
 	if err != nil {
+		if errors.Is(err, storage.ErrFoundNotGaugeMetricType) || errors.Is(err, storage.ErrFoundNotCounterMetricType) {
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+			return
+		}
+
 		logger.LogS.Errorf("%s: %v", prefix, err)
 		http.Error(resp, "failed update metrics", http.StatusInternalServerError)
 		return
