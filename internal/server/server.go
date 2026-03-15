@@ -157,8 +157,12 @@ func createStorage(ctx context.Context, config *Config) (storage.Storage, error)
 			return nil, fmt.Errorf("%s: failed open database: %w", prefix, err)
 		}
 
-		// Пинг к бд
-		// SF LOGIC
+		// Проверка подключения к бд
+		if err := pool.Ping(ctx); err != nil {
+			return nil, fmt.Errorf("%s: failed ping to database: %w", prefix, err)
+		}
+
+		logger.Log.Info("Database connect successful")
 
 		// Установка диалекта
 		if err := goose.SetDialect("postgres"); err != nil {
