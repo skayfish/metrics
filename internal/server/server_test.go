@@ -170,7 +170,7 @@ func TestNewServer(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
-			s, err := NewServer(&tt.config)
+			s, err := NewServer(context.Background(), &tt.config)
 			require.NoError(t, err)
 			assert.Equal(t, tt.config, *s.config)
 			ms, ok := s.storage.(*storage.MemStorage)
@@ -185,7 +185,7 @@ func TestNewServer(t *testing.T) {
 			DatabaseDSN: &databaseDSN,
 		}
 
-		s, err := NewServer(&config)
+		s, err := NewServer(context.Background(), &config)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "failed create storage:")
 		require.Nil(t, s)
@@ -215,12 +215,14 @@ func createServer(t *testing.T, restore bool, fileStoragePath string, storeInter
 	port, err := getFreePort()
 	require.NoError(t, err)
 
-	s, err := NewServer(&Config{
-		Address:         flags.NetAddress{Host: "localhost", Port: port},
-		FileStoragePath: fileStoragePath,
-		ToRestore:       restore,
-		StoreInterval:   storeInterval,
-	})
+	s, err := NewServer(
+		context.Background(),
+		&Config{
+			Address:         flags.NetAddress{Host: "localhost", Port: port},
+			FileStoragePath: fileStoragePath,
+			ToRestore:       restore,
+			StoreInterval:   storeInterval,
+		})
 	require.NoError(t, err)
 
 	return s

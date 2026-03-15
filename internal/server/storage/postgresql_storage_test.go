@@ -2,11 +2,10 @@ package storage
 
 import (
 	"database/sql"
-	"database/sql/driver"
 	"errors"
 	"testing"
 
-	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/pashagolub/pgxmock/v5"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -37,13 +36,13 @@ const (
 
 // Проверяет создание хранилища в виде базы данных PostgreSQL
 func TestNewPostgreSQLStorage(t *testing.T) {
-	db, _, err := sqlmock.New()
+	mock, err := pgxmock.NewPool()
 	require.NoError(t, err)
-	defer db.Close()
+	defer mock.Close()
 
 	tests := []struct {
 		test    string
-		db      *sql.DB
+		db      pgxmock.PgxPoolIface
 		want    *PostgreSQLStorage
 		wantErr bool
 	}{
@@ -55,7 +54,7 @@ func TestNewPostgreSQLStorage(t *testing.T) {
 		},
 		{
 			test:    "success",
-			db:      db,
+			db:      mock,
 			want:    nil,
 			wantErr: false,
 		},
@@ -65,7 +64,7 @@ func TestNewPostgreSQLStorage(t *testing.T) {
 			database, err := NewPostgreSQLStorage(tt.db)
 			if tt.wantErr {
 				require.Error(t, err)
-				assert.Equal(t, "database is nil", err.Error())
+				assert.Equal(t, "database connections pool is nil", err.Error())
 				require.Nil(t, database)
 			} else {
 				require.NoError(t, err)
@@ -85,15 +84,15 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 			Delta: &delta,
 		}
 
-		db, mock, err := sqlmock.New()
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
-		mock.ExpectBegin()
-		mock.ExpectPrepare(mockInsertGaugeQuery)
-		mock.ExpectPrepare(mockInsertCounterQuery)
-		mock.ExpectPrepare(mockSelectMetricQuery)
-		mock.ExpectExec(mockInsertCounterQuery).
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(insertGaugeQueryName, mockInsertGaugeQuery).Times(1)
+		mock.ExpectPrepare(insertCounterQueryName, mockInsertCounterQuery).Times(1)
+		mock.ExpectPrepare(selectMetricQueryName, mockSelectMetricQuery).Times(1)
+		mock.ExpectExec(insertCounterQueryName).
 			WithArgs(
 				expected.ID,
 				expected.MType,
@@ -101,21 +100,23 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 				sql.NullFloat64{Valid: false},
 				expected.Hash,
 			).
-			WillReturnResult(sqlmock.NewResult(1, 1))
+			WillReturnResult(pgxmock.NewResult("INSERT", 1)).
+			Times(1)
 
-		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
+		expectedRow := pgxmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRow(
 				expected.ID,
 				expected.MType,
 				*expected.Delta,
-				expected.Value,
+				nil,
 				expected.Hash)
-		mock.ExpectQuery(mockSelectMetricQuery).
+		mock.ExpectQuery(selectMetricQueryName).
 			WithArgs(expected.ID).
-			WillReturnRows(expectedRow)
-		mock.ExpectCommit()
+			WillReturnRows(expectedRow).
+			Times(1)
+		mock.ExpectCommit().Times(1)
 
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		// Обновление метрики в бд
@@ -125,8 +126,7 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		metricsEqual(t, expected, *metric)
 
 		// Проверка мок вызовов
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
 	t.Run("add gauge", func(t *testing.T) {
 		value := 0.15
@@ -136,15 +136,15 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 			Value: &value,
 		}
 
-		db, mock, err := sqlmock.New()
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
-		mock.ExpectBegin()
-		mock.ExpectPrepare(mockInsertGaugeQuery)
-		mock.ExpectPrepare(mockInsertCounterQuery)
-		mock.ExpectPrepare(mockSelectMetricQuery)
-		mock.ExpectExec(mockInsertGaugeQuery).
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(insertGaugeQueryName, mockInsertGaugeQuery).Times(1)
+		mock.ExpectPrepare(insertCounterQueryName, mockInsertCounterQuery).Times(1)
+		mock.ExpectPrepare(selectMetricQueryName, mockSelectMetricQuery).Times(1)
+		mock.ExpectExec(insertGaugeQueryName).
 			WithArgs(
 				expected.ID,
 				expected.MType,
@@ -152,21 +152,23 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 				sql.NullFloat64{Valid: true, Float64: *expected.Value},
 				expected.Hash,
 			).
-			WillReturnResult(sqlmock.NewResult(1, 1))
+			WillReturnResult(pgxmock.NewResult("INSERT", 1)).
+			Times(1)
 
-		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
+		expectedRow := pgxmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRow(
 				expected.ID,
 				expected.MType,
-				expected.Delta,
+				nil,
 				*expected.Value,
 				expected.Hash)
-		mock.ExpectQuery(mockSelectMetricQuery).
+		mock.ExpectQuery(selectMetricQueryName).
 			WithArgs(expected.ID).
-			WillReturnRows(expectedRow)
-		mock.ExpectCommit()
+			WillReturnRows(expectedRow).
+			Times(1)
+		mock.ExpectCommit().Times(1)
 
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		// Обновление метрики в бд
@@ -176,8 +178,7 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 		metricsEqual(t, expected, *metric)
 
 		// Проверка мок вызовов
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
 	t.Run("rollback", func(t *testing.T) {
 		delta := int64(5)
@@ -187,17 +188,17 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 			Delta: &delta,
 		}
 
-		db, mock, err := sqlmock.New()
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
 		errorMessage := "some error"
 
-		mock.ExpectBegin()
-		mock.ExpectPrepare(mockInsertGaugeQuery)
-		mock.ExpectPrepare(mockInsertCounterQuery)
-		mock.ExpectPrepare(mockSelectMetricQuery)
-		mock.ExpectExec(mockInsertCounterQuery).
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(insertGaugeQueryName, mockInsertGaugeQuery).Times(1)
+		mock.ExpectPrepare(insertCounterQueryName, mockInsertCounterQuery).Times(1)
+		mock.ExpectPrepare(selectMetricQueryName, mockSelectMetricQuery).Times(1)
+		mock.ExpectExec(insertCounterQueryName).
 			WithArgs(
 				expected.ID,
 				expected.MType,
@@ -206,9 +207,9 @@ func TestPostgreSQLStorage_Update(t *testing.T) {
 				expected.Hash,
 			).
 			WillReturnError(errors.New(errorMessage))
-		mock.ExpectRollback()
+		mock.ExpectRollback().Times(1)
 
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		// Обновление метрики в бд
@@ -253,21 +254,21 @@ func TestPostgreSQLStorage_Updates(t *testing.T) {
 			},
 		}
 
-		db, mock, err := sqlmock.New()
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
-		mock.ExpectBegin()
-		mock.ExpectPrepare(mockInsertGaugeQuery)
-		mock.ExpectPrepare(mockInsertCounterQuery)
-		mock.ExpectPrepare(mockSelectMetricQuery)
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(insertGaugeQueryName, mockInsertGaugeQuery).Times(1)
+		mock.ExpectPrepare(insertCounterQueryName, mockInsertCounterQuery).Times(1)
+		mock.ExpectPrepare(selectMetricQueryName, mockSelectMetricQuery).Times(1)
 		for _, metric := range expected {
 			delta := sql.NullInt64{Valid: false}
 			value := sql.NullFloat64{Valid: false}
 			switch metric.MType {
 			case model.Gauge:
 				value = sql.NullFloat64{Valid: true, Float64: *metric.Value}
-				mock.ExpectExec(mockInsertGaugeQuery).
+				mock.ExpectExec(insertGaugeQueryName).
 					WithArgs(
 						metric.ID,
 						metric.MType,
@@ -275,10 +276,11 @@ func TestPostgreSQLStorage_Updates(t *testing.T) {
 						value,
 						metric.Hash,
 					).
-					WillReturnResult(sqlmock.NewResult(1, 1))
+					WillReturnResult(pgxmock.NewResult("INSERT", 1)).
+					Times(1)
 			case model.Counter:
 				delta = sql.NullInt64{Valid: true, Int64: *metric.Delta}
-				mock.ExpectExec(mockInsertCounterQuery).
+				mock.ExpectExec(insertCounterQueryName).
 					WithArgs(
 						metric.ID,
 						metric.MType,
@@ -286,25 +288,27 @@ func TestPostgreSQLStorage_Updates(t *testing.T) {
 						value,
 						metric.Hash,
 					).
-					WillReturnResult(sqlmock.NewResult(1, 1))
+					WillReturnResult(pgxmock.NewResult("INSERT", 1)).
+					Times(1)
 			}
 
-			expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
+			expectedRow := pgxmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
 			switch metric.MType {
 			case model.Gauge:
-				expectedRow.AddRow(metric.ID, metric.MType, metric.Delta, *metric.Value, metric.Hash)
+				expectedRow.AddRow(metric.ID, metric.MType, nil, *metric.Value, metric.Hash)
 			case model.Counter:
-				expectedRow.AddRow(metric.ID, metric.MType, *metric.Delta, metric.Value, metric.Hash)
+				expectedRow.AddRow(metric.ID, metric.MType, *metric.Delta, nil, metric.Hash)
 			}
 
-			mock.ExpectQuery(mockSelectMetricQuery).
+			mock.ExpectQuery(selectMetricQueryName).
 				WithArgs(metric.ID).
-				WillReturnRows(expectedRow)
+				WillReturnRows(expectedRow).
+				Times(1)
 		}
 
 		mock.ExpectCommit()
 
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		// Обновление метрики в бд
@@ -314,27 +318,29 @@ func TestPostgreSQLStorage_Updates(t *testing.T) {
 		storagesEqual(t, storageByMetricsArray(expected), storageByMetricsArray(updatedMetric))
 
 		// Проверка мок вызовов
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
 }
 
 // Проверяет получение метрики из хранилища PostgreSQL
 func TestPostgreSQLStorage_Get(t *testing.T) {
 	t.Run("not found", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
-		mock.ExpectPrepare(mockSelectMetricQuery)
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(selectMetricQueryName, mockSelectMetricQuery).Times(1)
 
-		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
+		expectedRow := pgxmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
 		id := "MetricName"
-		mock.ExpectQuery(mockSelectMetricQuery).
+		mock.ExpectQuery(selectMetricQueryName).
 			WithArgs(id).
-			WillReturnRows(expectedRow)
+			WillReturnRows(expectedRow).
+			Times(1)
+		mock.ExpectRollback().Times(1)
 
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		// Получение метрики из бд
@@ -344,24 +350,26 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 		require.Nil(t, metric)
 
 		// Проверка мок вызовов
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
 	t.Run("failed scan", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
-		mock.ExpectPrepare(mockSelectMetricQuery)
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(selectMetricQueryName, mockSelectMetricQuery)
 
-		expectedRow := sqlmock.NewRows([]string{"id"}).
+		expectedRow := pgxmock.NewRows([]string{"id"}).
 			AddRow("error id")
 		id := "MetricName"
-		mock.ExpectQuery(mockSelectMetricQuery).
+		mock.ExpectQuery(selectMetricQueryName).
 			WithArgs(id).
-			WillReturnRows(expectedRow)
+			WillReturnRows(expectedRow).
+			Times(1)
+		mock.ExpectRollback().Times(1)
 
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		// Получение метрики из бд
@@ -370,15 +378,15 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 		require.Nil(t, metric)
 
 		// Проверка мок вызовов
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
 	t.Run("found gauge", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
-		mock.ExpectPrepare(mockSelectMetricQuery)
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(selectMetricQueryName, mockSelectMetricQuery).Times(1)
 
 		value := 0.15
 		expectedMetric := model.Metrics{
@@ -386,18 +394,20 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 			MType: model.Gauge,
 			Value: &value,
 		}
-		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
+		expectedRow := pgxmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRow(
 				expectedMetric.ID,
 				expectedMetric.MType,
-				expectedMetric.Delta,
+				nil,
 				*expectedMetric.Value,
 				expectedMetric.Hash)
-		mock.ExpectQuery(mockSelectMetricQuery).
+		mock.ExpectQuery(selectMetricQueryName).
 			WithArgs(expectedMetric.ID).
-			WillReturnRows(expectedRow)
+			WillReturnRows(expectedRow).
+			Times(1)
+		mock.ExpectCommit().Times(1)
 
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		// Получение метрики из бд
@@ -408,15 +418,15 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 		metricsEqual(t, expectedMetric, *metric)
 
 		// Проверка мок вызовов
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
 	t.Run("found counter", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
-		mock.ExpectPrepare(mockSelectMetricQuery)
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(selectMetricQueryName, mockSelectMetricQuery).Times(1)
 
 		delta := int64(5)
 		expectedMetric := model.Metrics{
@@ -424,18 +434,20 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 			MType: model.Counter,
 			Delta: &delta,
 		}
-		expectedRow := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
+		expectedRow := pgxmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRow(
 				expectedMetric.ID,
 				expectedMetric.MType,
 				*expectedMetric.Delta,
-				expectedMetric.Value,
+				nil,
 				expectedMetric.Hash)
-		mock.ExpectQuery(mockSelectMetricQuery).
+		mock.ExpectQuery(selectMetricQueryName).
 			WithArgs(expectedMetric.ID).
-			WillReturnRows(expectedRow)
+			WillReturnRows(expectedRow).
+			Times(1)
+		mock.ExpectCommit().Times(1)
 
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		// Получение метрики из бд
@@ -446,25 +458,27 @@ func TestPostgreSQLStorage_Get(t *testing.T) {
 		metricsEqual(t, expectedMetric, *metric)
 
 		// Проверка мок вызовов
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
 }
 
 // Проверяет получение всех метрик из хранилища PostgreSQL
 func TestPostgreSQLStorage_GetAll(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
-		mock.ExpectPrepare(mockSelectAllMetricsQuery)
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(selectAllMetricsQueryName, mockSelectAllMetricsQuery).Times(1)
 
-		expectedRows := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
-		mock.ExpectQuery(mockSelectAllMetricsQuery).
-			WillReturnRows(expectedRows)
+		expectedRows := pgxmock.NewRows([]string{"id", "type", "delta", "value", "hash"})
+		mock.ExpectQuery(selectAllMetricsQueryName).
+			WillReturnRows(expectedRows).
+			Times(1)
+		mock.ExpectCommit().Times(1)
 
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		// Получение метрик из бд
@@ -475,15 +489,15 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 		storagesEqual(t, NewMemStorage(), storageByMetricsArray(metrics))
 
 		// Проверка мок вызовов
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
-	t.Run("get all", func(t *testing.T) {
-		db, mock, err := sqlmock.New()
+	t.Run("not empty", func(t *testing.T) {
+		mock, err := pgxmock.NewPool()
 		require.NoError(t, err)
-		defer db.Close()
+		defer mock.Close()
 
-		mock.ExpectPrepare(mockSelectAllMetricsQuery)
+		mock.ExpectBegin().Times(1)
+		mock.ExpectPrepare(selectAllMetricsQueryName, mockSelectAllMetricsQuery).Times(1)
 
 		gaugeValue1 := -34.4441
 		gaugeValue2 := 0.1
@@ -515,18 +529,20 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 				Delta: &counterDelta2,
 			},
 		}
-		expectedRows := sqlmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
-			AddRows([][]driver.Value{
-				{expectedS[gaugeID1].ID, expectedS[gaugeID1].MType, expectedS[gaugeID1].Delta, *expectedS[gaugeID1].Value, expectedS[gaugeID1].Hash},
-				{expectedS[gaugeID2].ID, expectedS[gaugeID2].MType, expectedS[gaugeID2].Delta, *expectedS[gaugeID2].Value, expectedS[gaugeID2].Hash},
-				{expectedS[counterID1].ID, expectedS[counterID1].MType, *expectedS[counterID1].Delta, expectedS[counterID1].Value, expectedS[counterID1].Hash},
-				{expectedS[counterID2].ID, expectedS[counterID2].MType, *expectedS[counterID2].Delta, expectedS[counterID2].Value, expectedS[counterID2].Hash},
+		expectedRows := pgxmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
+			AddRows([][]any{
+				{expectedS[gaugeID1].ID, expectedS[gaugeID1].MType, nil, *expectedS[gaugeID1].Value, expectedS[gaugeID1].Hash},
+				{expectedS[gaugeID2].ID, expectedS[gaugeID2].MType, nil, *expectedS[gaugeID2].Value, expectedS[gaugeID2].Hash},
+				{expectedS[counterID1].ID, expectedS[counterID1].MType, *expectedS[counterID1].Delta, nil, expectedS[counterID1].Hash},
+				{expectedS[counterID2].ID, expectedS[counterID2].MType, *expectedS[counterID2].Delta, nil, expectedS[counterID2].Hash},
 			}...)
-		mock.ExpectQuery(mockSelectAllMetricsQuery).
-			WillReturnRows(expectedRows)
+		mock.ExpectQuery(selectAllMetricsQueryName).
+			WillReturnRows(expectedRows).
+			Times(1)
+		mock.ExpectCommit().Times(1)
 
 		// Получение метрик из бд
-		storage, err := NewPostgreSQLStorage(db)
+		storage, err := NewPostgreSQLStorage(mock)
 		require.NoError(t, err)
 
 		metrics, err := storage.GetAll()
@@ -535,7 +551,6 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 		storagesEqual(t, expectedS, storageByMetricsArray(metrics))
 
 		// Проверка мок вызовов
-		err = mock.ExpectationsWereMet()
-		require.NoError(t, err)
+		require.NoError(t, mock.ExpectationsWereMet())
 	})
 }

@@ -7,30 +7,36 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/skayfish/metrics/internal/model"
 )
 
 const (
-	insertGaugeQuery = `INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
-						VALUES ($1, $2, $3, $4, $5)
-						ON CONFLICT (id)
-						DO UPDATE SET
-							delta = EXCLUDED.delta,
-							value = EXCLUDED.value,
-							hash = EXCLUDED.hash;`
+	insertGaugeQueryName = "insert_gauge"
+	insertGaugeQuery     = `INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
+							VALUES ($1, $2, $3, $4, $5)
+							ON CONFLICT (id)
+							DO UPDATE SET
+								delta = EXCLUDED.delta,
+								value = EXCLUDED.value,
+								hash = EXCLUDED.hash;`
 
-	insertCounterQuery = `INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
-						VALUES ($1, $2, $3, $4, $5)
-						ON CONFLICT (id)
-						DO UPDATE SET
-							delta = metrics_schema.metrics.delta + EXCLUDED.delta,
-							value = EXCLUDED.value,
-							hash = EXCLUDED.hash;`
+	insertCounterQueryName = "insert_counter"
+	insertCounterQuery     = `INSERT INTO metrics_schema.metrics (id, "type", delta, value, hash)
+							VALUES ($1, $2, $3, $4, $5)
+							ON CONFLICT (id)
+							DO UPDATE SET
+								delta = metrics_schema.metrics.delta + EXCLUDED.delta,
+								value = EXCLUDED.value,
+								hash = EXCLUDED.hash;`
 
-	selectMetricQuery = `SELECT * FROM metrics_schema.metrics
-						WHERE id = $1;`
+	selectMetricQueryName = "select_metric"
+	selectMetricQuery     = `SELECT * FROM metrics_schema.metrics
+							WHERE id = $1;`
 
-	selectAllMetricsQuery = `SELECT * FROM metrics_schema.metrics;`
+	selectAllMetricsQueryName = "select_all_metrics"
+	selectAllMetricsQuery     = `SELECT * FROM metrics_schema.metrics;`
 )
 
 // Выполняет переданную функцию с повторениями c linear возрастающей по времени задержкой.
@@ -64,37 +70,52 @@ func ExecuteWithRetry(execute func() error) error {
 	return fmt.Errorf("execution aborted after %d attempts: %w", maxRetries, lastErr)
 }
 
+// SF LOGIC
+type PgxIface interface {
+	Begin(context.Context) (pgx.Tx, error)
+	Ping(ctx context.Context) error
+	Close()
+}
+
 // Хранилище, в виде базы данных PostgreSQL
 type PostgreSQLStorage struct {
-	*sql.DB
+	conn PgxIface
 }
 
 // Создаёт новое хранилище, в виде базы данных PostgreSQL
 //
-//	@param db база данных PostgreSQL
+//	@param conn пул соединений к базе данных PostgreSQL
 //	@returns *PostgreSQLStorage хранилище, в виде базы данных PostgreSQL
 //	@returns error              ошибку, если не удалось создать хранилище
-func NewPostgreSQLStorage(db *sql.DB) (*PostgreSQLStorage, error) {
-	if db == nil {
-		return nil, fmt.Errorf("database is nil")
+func NewPostgreSQLStorage(conn PgxIface) (*PostgreSQLStorage, error) {
+	if conn == nil {
+		return nil, fmt.Errorf("database connections pool is nil")
 	}
 
-	return &PostgreSQLStorage{DB: db}, nil
+	return &PostgreSQLStorage{conn: conn}, nil
+}
+
+// Интерфейс с запросами к базе данных PostgreSQL
+type postgreSQLExecutor interface {
+	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
+	Prepare(ctx context.Context, name, sql string) (*pgconn.StatementDescription, error)
 }
 
 // Конфигурация для запроса в PostgreSQL
 type config struct {
-	ctx context.Context // Контекст для завершения работы
-	db  SQLExecutor     // База данных
+	ctx context.Context    // Контекст для завершения работы
+	db  postgreSQLExecutor // База данных PostgreSQL
 }
 
 // Конфигурация для обновления/добавления метрики
 type updateConfig struct {
 	config
 
-	sGauge   *sql.Stmt // Подготовленный запрос для обновления/добавления метрики типа gauge
-	sCounter *sql.Stmt // Подготовленный запрос для обновления/добавления метрики типа counter
-	sGet     *sql.Stmt // Подготовленный запрос для получения конкретной метрики
+	sGauge   *pgconn.StatementDescription // Подготовленный запрос для обновления/добавления метрики типа gauge
+	sCounter *pgconn.StatementDescription // Подготовленный запрос для обновления/добавления метрики типа counter
+	sGet     *pgconn.StatementDescription // Подготовленный запрос для получения конкретной метрики
 }
 
 // Добавляет/обновляет метрику в базе данных
@@ -106,7 +127,7 @@ type updateConfig struct {
 func updateContext(cfg updateConfig, metric model.Metrics) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.updateContext"
 
-	var stmt *sql.Stmt
+	var stmt *pgconn.StatementDescription
 	switch metric.MType {
 	case model.Gauge:
 		stmt = cfg.sGauge
@@ -129,7 +150,7 @@ func updateContext(cfg updateConfig, metric model.Metrics) (*model.Metrics, erro
 	}
 
 	err := ExecuteWithRetry(func() error {
-		_, err := stmt.ExecContext(cfg.ctx, metric.ID, metric.MType, delta, value, metric.Hash)
+		_, err := cfg.db.Exec(cfg.ctx, stmt.Name, metric.ID, metric.MType, delta, value, metric.Hash)
 		return err
 	})
 	if err != nil {
@@ -155,33 +176,33 @@ func updateContext(cfg updateConfig, metric model.Metrics) (*model.Metrics, erro
 func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.UpdateContext"
 
-	tx, err := s.BeginTx(ctx, nil)
+	tx, err := s.conn.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			tx.Rollback(ctx)
 		}
 	}()
 
 	cfg := updateConfig{config: config{ctx: ctx, db: tx}}
 
-	var stmt *sql.Stmt
-	stmt, err = tx.PrepareContext(ctx, insertGaugeQuery)
+	var stmt *pgconn.StatementDescription
+	stmt, err = tx.Prepare(ctx, insertGaugeQueryName, insertGaugeQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 	cfg.sGauge = stmt
 
-	stmt, err = tx.PrepareContext(ctx, insertCounterQuery)
+	stmt, err = tx.Prepare(ctx, insertCounterQueryName, insertCounterQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 	cfg.sCounter = stmt
 
-	stmt, err = tx.PrepareContext(ctx, selectMetricQuery)
+	stmt, err = tx.Prepare(ctx, selectMetricQueryName, selectMetricQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
@@ -192,7 +213,7 @@ func (s PostgreSQLStorage) UpdateContext(ctx context.Context, metric model.Metri
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 
-	err = tx.Commit()
+	err = tx.Commit(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
@@ -218,33 +239,33 @@ func (s PostgreSQLStorage) Update(metric model.Metrics) (*model.Metrics, error) 
 func (s PostgreSQLStorage) UpdatesContext(ctx context.Context, m []model.Metrics) ([]model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.UpdatesContext"
 
-	tx, err := s.BeginTx(ctx, nil)
+	tx, err := s.conn.Begin(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 
 	defer func() {
 		if err != nil {
-			tx.Rollback()
+			tx.Rollback(ctx)
 		}
 	}()
 
 	cfg := updateConfig{config: config{ctx: ctx, db: tx}}
 
-	var stmt *sql.Stmt
-	stmt, err = tx.PrepareContext(ctx, insertGaugeQuery)
+	var stmt *pgconn.StatementDescription
+	stmt, err = tx.Prepare(ctx, insertGaugeQueryName, insertGaugeQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 	cfg.sGauge = stmt
 
-	stmt, err = tx.PrepareContext(ctx, insertCounterQuery)
+	stmt, err = tx.Prepare(ctx, insertCounterQueryName, insertCounterQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 	cfg.sCounter = stmt
 
-	stmt, err = tx.PrepareContext(ctx, selectMetricQuery)
+	stmt, err = tx.Prepare(ctx, selectMetricQueryName, selectMetricQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
@@ -260,7 +281,7 @@ func (s PostgreSQLStorage) UpdatesContext(ctx context.Context, m []model.Metrics
 		updatedMetrics = append(updatedMetrics, *updatedMetric)
 	}
 
-	err = tx.Commit()
+	err = tx.Commit(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
@@ -281,7 +302,7 @@ func (s PostgreSQLStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
 type getConfig struct {
 	config
 
-	sGet *sql.Stmt // Подготовленный запрос для получения конкретной метрики
+	sGet *pgconn.StatementDescription // Подготовленный запрос для получения конкретной метрики
 }
 
 // Возвращает конкретную метрику из хранилища
@@ -300,8 +321,8 @@ func getContext(cfg getConfig, id string) (*model.Metrics, error) {
 		hash      string
 	)
 	err := ExecuteWithRetry(func() error {
-		row := cfg.sGet.QueryRowContext(cfg.ctx, id)
-		return row.Scan(&id, &mType, &deltaNull, &valueNull, &hash)
+		return cfg.db.QueryRow(cfg.ctx, cfg.sGet.Name, id).
+			Scan(&id, &mType, &deltaNull, &valueNull, &hash)
 	})
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -339,15 +360,39 @@ func getContext(cfg getConfig, id string) (*model.Metrics, error) {
 func (s PostgreSQLStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.GetContext"
 
-	cfg := getConfig{config: config{ctx: ctx, db: s.DB}}
+	// Создание транзакции
+	tx, err := s.conn.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
 
-	stmt, err := s.PrepareContext(ctx, selectMetricQuery)
+	defer func() {
+		if err != nil {
+			tx.Rollback(ctx)
+		}
+	}()
+
+	// Подготовка конфигурации для запроса
+	cfg := getConfig{config: config{ctx: ctx, db: tx}}
+
+	stmt, err := tx.Prepare(ctx, selectMetricQueryName, selectMetricQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 	cfg.sGet = stmt
 
-	return getContext(cfg, id)
+	metric, err := getContext(cfg, id)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", prefix, err)
+	}
+
+	// Подтверждение транзакции
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	return metric, nil
 }
 
 // Возвращает конкретную метрику из хранилища
@@ -363,7 +408,7 @@ func (s PostgreSQLStorage) Get(id string) (*model.Metrics, error) {
 type getAllConfig struct {
 	config
 
-	sGetAll *sql.Stmt // Подготовленный запрос для получения всех метрик
+	sGetAll *pgconn.StatementDescription // Подготовленный запрос для получения всех метрик
 }
 
 // Возвращает все метрики из хранилища
@@ -376,7 +421,7 @@ func getAllContext(cfg getAllConfig) (result []model.Metrics, err error) {
 
 	err = ExecuteWithRetry(func() error {
 		result = make([]model.Metrics, 0)
-		rows, err := cfg.sGetAll.QueryContext(cfg.ctx)
+		rows, err := cfg.db.Query(cfg.ctx, cfg.sGetAll.Name)
 		if err != nil {
 			return err
 		}
@@ -434,15 +479,40 @@ func getAllContext(cfg getAllConfig) (result []model.Metrics, err error) {
 func (s PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
 	const prefix = "storage.PostgreSQLStorage.GetAllContext"
 
-	cfg := getAllConfig{config: config{ctx: ctx, db: s.DB}}
+	// Создание транзакции
+	tx, err := s.conn.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
 
-	stmt, err := s.PrepareContext(ctx, selectAllMetricsQuery)
+	defer func() {
+		if err != nil {
+			tx.Rollback(ctx)
+		}
+	}()
+
+	// Подготовка конфигурации для запроса
+	cfg := getAllConfig{config: config{ctx: ctx, db: tx}}
+
+	stmt, err := tx.Prepare(ctx, selectAllMetricsQueryName, selectAllMetricsQuery)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %v", prefix, err)
 	}
 	cfg.sGetAll = stmt
 
-	return getAllContext(cfg)
+	// Получение всех метрик из бд
+	metrics, err := getAllContext(cfg)
+	if err != nil {
+		return []model.Metrics{}, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	// Подтверждение транзакции
+	err = tx.Commit(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %v", prefix, err)
+	}
+
+	return metrics, nil
 }
 
 // Возвращает все метрики из хранилища
@@ -451,6 +521,16 @@ func (s PostgreSQLStorage) GetAllContext(ctx context.Context) ([]model.Metrics, 
 //	@returns error           ошибку, если возникли проблемы при получении всех метрик
 func (s PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
 	return s.GetAllContext(context.Background())
+}
+
+// SF TODO
+func (s *PostgreSQLStorage) Close() error {
+	s.conn.Close()
+	return nil
+}
+
+func (s PostgreSQLStorage) PingContext(ctx context.Context) error {
+	return s.conn.Ping(ctx)
 }
 
 // Проверка, что [PostgreSQLStorage] удовлетворяет интерфейсу [DatabaseStorage]

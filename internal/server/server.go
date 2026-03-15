@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,7 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose"
 
 	"github.com/go-chi/chi/v5"
@@ -126,29 +126,53 @@ func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 // Если передана database dsn, то хранилище создаётся как база данных.
 // В ином случае создаётся хранилище в памяти.
 //
+//	@param ctx    контекст для завершения работы
 //	@param config конфигурация сервера
 //	@returns storage.Storage созданное хранилище данных
 //	@returns error ошибку, если не удалось создать хранилище данных
-func createStorage(config *Config) (storage.Storage, error) {
+func createStorage(ctx context.Context, config *Config) (storage.Storage, error) {
 	const prefix = "server.createStorage"
 
 	// Подключение к серверу базы данных, если есть данные для соединения
 	if config.DatabaseDSN != nil {
-		var db *sql.DB
-		err := storage.ExecuteWithRetry(func() (err error) {
-			db, err = sql.Open("pgx", *config.DatabaseDSN)
-			return
+		// Парсинг dsn базы данных
+		poolConfig, err := pgxpool.ParseConfig(*config.DatabaseDSN)
+		if err != nil {
+			return nil, fmt.Errorf("%s: failed parse database dsn: %w", prefix, err)
+		}
+
+		// Настройка пула
+		poolConfig.MinConns = 5
+		poolConfig.MaxConns = 25
+		poolConfig.MaxConnLifetime = 30 * time.Minute
+		poolConfig.MaxConnIdleTime = 5 * time.Minute
+
+		// Подключение к бд
+		var pool *pgxpool.Pool
+		err = storage.ExecuteWithRetry(func() (err error) {
+			pool, err = pgxpool.NewWithConfig(ctx, poolConfig)
+			return err
 		})
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed open database: %w", prefix, err)
 		}
 
-		err = goose.Up(db, config.MigrationsPath)
-		if err != nil {
-			return nil, fmt.Errorf("%s: migrations failed: %w", prefix, err)
+		// Пинг к бд
+		// SF LOGIC
+
+		// Установка диалекта
+		if err := goose.SetDialect("postgres"); err != nil {
+			return nil, fmt.Errorf("%s: failed to set dialect for migrations: %w", prefix, err)
 		}
 
-		storage, err := storage.NewPostgreSQLStorage(db)
+		// Запуск миграций
+		db := stdlib.OpenDBFromPool(pool)
+		if err := goose.Up(db, config.MigrationsPath); err != nil {
+			return nil, fmt.Errorf("%s: migrations up failed: %w", prefix, err)
+		}
+
+		// Создание хранилища
+		storage, err := storage.NewPostgreSQLStorage(pool)
 		if err != nil {
 			return nil, fmt.Errorf("%s: failed create PostgreSQL instance: %w", prefix, err)
 		}
@@ -189,14 +213,14 @@ func createStorage(config *Config) (storage.Storage, error) {
 
 // Создаёт новый сервер по переданной конфигурации
 //
-//	@param config   конфигурация сервера
-//	@param database база данных
+//	@param ctx    контекст для завершения работы
+//	@param config конфигурация сервера
 //	@returns *Server новый сервер
 //	@returns error ошибку, если не удалось создать сервер
-func NewServer(config *Config) (*Server, error) {
+func NewServer(ctx context.Context, config *Config) (*Server, error) {
 	const prefix = "server.NewServer"
 
-	storage, err := createStorage(config)
+	storage, err := createStorage(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed create storage: %v", prefix, err)
 	}
