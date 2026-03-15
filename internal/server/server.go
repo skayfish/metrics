@@ -113,10 +113,8 @@ func createStorageFromJSON(filePath string) (*storage.MemStorage, error) {
 		return nil, fmt.Errorf("%s: failed unmarshal metrics from file %q: %w", prefix, filePath, err)
 	}
 
-	storage := make(storage.MemStorage, len(metrics))
-	for _, metric := range metrics {
-		storage[metric.ID] = metric
-	}
+	storage := storage.NewMemStorage()
+	storage.Updates(metrics)
 
 	return &storage, nil
 }

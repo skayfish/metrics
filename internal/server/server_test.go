@@ -16,6 +16,7 @@ import (
 	"github.com/skayfish/metrics/internal/flags"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
+	"github.com/skayfish/metrics/internal/test_utils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -41,69 +42,72 @@ func Test_getRouter(t *testing.T) {
 }
 
 // Возвращает непустое хранилище с валидными данными
-func newSuccessMemStorage() storage.MemStorage {
+func newSuccessMemStorage() *storage.MemStorage {
 	var delta1 int64 = 1298476200
 	var value1 float64 = 131072
 	var value2 float64 = 15288
 
-	return storage.MemStorage{
-		"GetSet92": model.Metrics{
-			ID:    "GetSet92",
-			MType: model.Counter,
-			Delta: &delta1,
-		},
-		"StackInuse": model.Metrics{
-			ID:    "StackInuse",
-			MType: model.Gauge,
-			Value: &value1,
-		},
-		"MCacheSys": model.Metrics{
-			ID:    "MCacheSys",
-			MType: model.Gauge,
-			Value: &value2,
-		},
-	}
+	storage := storage.NewMemStorage()
+	storage.Update(model.Metrics{
+		ID:    "StackInuse",
+		MType: model.Gauge,
+		Value: &value1,
+	})
+	storage.Update(model.Metrics{
+		ID:    "MCacheSys",
+		MType: model.Gauge,
+		Value: &value2,
+	})
+	storage.Update(model.Metrics{
+		ID:    "GetSet92",
+		MType: model.Counter,
+		Delta: &delta1,
+	})
+
+	return &storage
 }
 
 // Проверяет создание хранилища метрик из json файла
 func Test_createStorageFromJSON(t *testing.T) {
 	const prefix = "server.createStorageFromJSON"
+	successStorage := newSuccessMemStorage()
+	emptyStorage := storage.NewMemStorage()
 
 	tests := []struct {
 		test        string
 		filePath    string
-		want        storage.MemStorage
+		want        *storage.MemStorage
 		wantErr     bool
 		errorPrefix string
 	}{
 		{
 			test:        "file does not exist",
 			filePath:    "./testdata/unknown.json",
-			want:        storage.MemStorage{},
+			want:        &emptyStorage,
 			wantErr:     true,
 			errorPrefix: fmt.Sprintf("%s: failed read from file %q:", prefix, "./testdata/unknown.json"),
 		},
 		{
 			test:        "failed unmarshal",
 			filePath:    "./testdata/errorJSON.json",
-			want:        storage.MemStorage{},
+			want:        &emptyStorage,
 			wantErr:     true,
 			errorPrefix: fmt.Sprintf("%s: failed unmarshal metrics from file %q:", prefix, "./testdata/errorJSON.json"),
 		},
 		{
 			test:     "success",
 			filePath: "./testdata/success.json",
-			want:     newSuccessMemStorage(),
+			want:     successStorage,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
-			metrics, err := createStorageFromJSON(tt.filePath)
+			storage, err := createStorageFromJSON(tt.filePath)
 			if tt.wantErr {
 				require.True(t, strings.HasPrefix(err.Error(), tt.errorPrefix), err.Error())
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.want, *metrics)
+				test_utils.StoragesEqual(t, tt.want, storage)
 			}
 		})
 	}
@@ -117,7 +121,7 @@ func TestNewServer(t *testing.T) {
 	tests := []struct {
 		test   string
 		config Config
-		want   storage.MemStorage
+		want   *storage.MemStorage
 	}{
 		{
 			test: "restore and empty file storage path",
@@ -125,7 +129,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "",
 				ToRestore:       true,
 			},
-			want: emptyMemStorage,
+			want: &emptyMemStorage,
 		},
 		{
 			test: "failed restore",
@@ -133,7 +137,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/errorJSON.json",
 				ToRestore:       true,
 			},
-			want: emptyMemStorage,
+			want: &emptyMemStorage,
 		},
 		{
 			test: "success restore",
@@ -149,7 +153,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/success.json",
 				ToRestore:       false,
 			},
-			want: emptyMemStorage,
+			want: &emptyMemStorage,
 		},
 		{
 			test: "no restore",
@@ -157,7 +161,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/errorJSON.json",
 				ToRestore:       false,
 			},
-			want: emptyMemStorage,
+			want: &emptyMemStorage,
 		},
 		{
 			test: "no restore",
@@ -165,7 +169,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "",
 				ToRestore:       false,
 			},
-			want: emptyMemStorage,
+			want: &emptyMemStorage,
 		},
 	}
 	for _, tt := range tests {
@@ -175,7 +179,7 @@ func TestNewServer(t *testing.T) {
 			assert.Equal(t, tt.config, *s.config)
 			ms, ok := s.storage.(*storage.MemStorage)
 			require.True(t, ok)
-			assert.Equal(t, tt.want, *ms)
+			test_utils.StoragesEqual(t, tt.want, ms)
 		})
 	}
 
@@ -278,7 +282,7 @@ func TestServer_Listen(t *testing.T) {
 		notEmptyStorage := newSuccessMemStorage()
 
 		s := createServer(t, true, "", 0)
-		s.storage = &notEmptyStorage
+		s.storage = notEmptyStorage
 
 		// Инициализация роутера
 		handlerNoSave := func(resp http.ResponseWriter, req *http.Request) {}
@@ -333,12 +337,8 @@ func TestServer_Listen(t *testing.T) {
 		err = json.Unmarshal(data, &metrics)
 		require.NoError(t, err)
 
-		storage := make(storage.MemStorage)
-		for _, metric := range metrics {
-			storage[metric.ID] = metric
-		}
-
-		assert.Equal(t, notEmptyStorage, storage)
+		storage := test_utils.StorageByMetricsArray(metrics)
+		test_utils.StoragesEqual(t, notEmptyStorage, storage)
 
 		// Завершаем сервер
 		select {
@@ -353,7 +353,7 @@ func TestServer_Listen(t *testing.T) {
 		notEmptyStorage := newSuccessMemStorage()
 
 		s := createServer(t, true, "./unknown directory/unknown.json", 0)
-		s.storage = &notEmptyStorage
+		s.storage = notEmptyStorage
 
 		// Инициализация роутера
 		saveMiddleware := s.getSaveMiddleware()
@@ -419,7 +419,7 @@ func TestServer_Listen(t *testing.T) {
 		notEmptyStorage := newSuccessMemStorage()
 
 		s := createServer(t, true, "", 500*time.Millisecond)
-		s.storage = &notEmptyStorage
+		s.storage = notEmptyStorage
 
 		// Инициализация роутера
 		handler := func(resp http.ResponseWriter, req *http.Request) {}
@@ -479,12 +479,8 @@ func TestServer_Listen(t *testing.T) {
 		err = json.Unmarshal(data, &metrics)
 		require.NoError(t, err)
 
-		storage := make(storage.MemStorage)
-		for _, metric := range metrics {
-			storage[metric.ID] = metric
-		}
-
-		assert.Equal(t, notEmptyStorage, storage)
+		storage := test_utils.StorageByMetricsArray(metrics)
+		test_utils.StoragesEqual(t, notEmptyStorage, storage)
 
 		// Завершаем сервер
 		select {

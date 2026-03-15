@@ -486,7 +486,8 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, metrics)
 
-		storagesEqual(t, NewMemStorage(), storageByMetricsArray(metrics))
+		expectedStorage := NewMemStorage()
+		storagesEqual(t, &expectedStorage, storageByMetricsArray(metrics))
 
 		// Проверка мок вызовов
 		require.NoError(t, mock.ExpectationsWereMet())
@@ -507,34 +508,35 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 		gaugeID2 := "MetricNameGauge2"
 		counterID1 := "MetricNameCounter1"
 		counterID2 := "MetricNameCounter2"
-		expectedS := MemStorage{
-			gaugeID1: {
-				ID:    gaugeID1,
-				MType: model.Gauge,
-				Value: &gaugeValue1,
-			},
-			gaugeID2: {
-				ID:    gaugeID2,
-				MType: model.Gauge,
-				Value: &gaugeValue2,
-			},
-			counterID1: {
-				ID:    counterID1,
-				MType: model.Counter,
-				Delta: &counterDelta1,
-			},
-			counterID2: {
-				ID:    counterID2,
-				MType: model.Counter,
-				Delta: &counterDelta2,
-			},
+
+		expectedS := NewMemStorage()
+		expectedS.metrics[gaugeID1] = model.Metrics{
+			ID:    gaugeID1,
+			MType: model.Gauge,
+			Value: &gaugeValue1,
 		}
+		expectedS.metrics[gaugeID2] = model.Metrics{
+			ID:    gaugeID2,
+			MType: model.Gauge,
+			Value: &gaugeValue2,
+		}
+		expectedS.metrics[counterID1] = model.Metrics{
+			ID:    counterID1,
+			MType: model.Counter,
+			Delta: &counterDelta1,
+		}
+		expectedS.metrics[counterID2] = model.Metrics{
+			ID:    counterID2,
+			MType: model.Counter,
+			Delta: &counterDelta2,
+		}
+		expectedM := expectedS.metrics
 		expectedRows := pgxmock.NewRows([]string{"id", "type", "delta", "value", "hash"}).
 			AddRows([][]any{
-				{expectedS[gaugeID1].ID, expectedS[gaugeID1].MType, nil, *expectedS[gaugeID1].Value, expectedS[gaugeID1].Hash},
-				{expectedS[gaugeID2].ID, expectedS[gaugeID2].MType, nil, *expectedS[gaugeID2].Value, expectedS[gaugeID2].Hash},
-				{expectedS[counterID1].ID, expectedS[counterID1].MType, *expectedS[counterID1].Delta, nil, expectedS[counterID1].Hash},
-				{expectedS[counterID2].ID, expectedS[counterID2].MType, *expectedS[counterID2].Delta, nil, expectedS[counterID2].Hash},
+				{expectedM[gaugeID1].ID, expectedM[gaugeID1].MType, nil, *expectedM[gaugeID1].Value, expectedM[gaugeID1].Hash},
+				{expectedM[gaugeID2].ID, expectedM[gaugeID2].MType, nil, *expectedM[gaugeID2].Value, expectedM[gaugeID2].Hash},
+				{expectedM[counterID1].ID, expectedM[counterID1].MType, *expectedM[counterID1].Delta, nil, expectedM[counterID1].Hash},
+				{expectedM[counterID2].ID, expectedM[counterID2].MType, *expectedM[counterID2].Delta, nil, expectedM[counterID2].Hash},
 			}...)
 		mock.ExpectQuery(selectAllMetricsQueryName).
 			WillReturnRows(expectedRows).
@@ -548,7 +550,7 @@ func TestPostgreSQLStorage_GetAll(t *testing.T) {
 		metrics, err := storage.GetAll()
 		require.NoError(t, err)
 
-		storagesEqual(t, expectedS, storageByMetricsArray(metrics))
+		storagesEqual(t, &expectedS, storageByMetricsArray(metrics))
 
 		// Проверка мок вызовов
 		require.NoError(t, mock.ExpectationsWereMet())
