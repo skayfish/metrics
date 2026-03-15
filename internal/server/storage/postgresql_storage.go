@@ -38,7 +38,7 @@ const (
 //	@param execute функция, которую нужно будет повторять, если возникает ошибка
 //	@returns error возможную ошибку или nil, при отсутствии
 func ExecuteWithRetry(execute func() error) error {
-	const maxRetries = 5
+	const maxRetries = 4
 	var lastErr error
 
 	retryDuration := time.Second
