@@ -42,8 +42,13 @@ func (ms *MemStorage) Update(metric model.Metrics) (*model.Metrics, error) {
 	return ms.UpdateContext(context.Background(), metric)
 }
 
-// SF TODO
-func (ms *MemStorage) update(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
+// Обновляет/добавляет метрику в хранилище
+//
+//	@param ctx    контекст для завершения работы
+//	@param metric метрика для добавления/обновления
+//	@returns *model.Metrics добавленную/обновленную метрику
+//	@returns error ошибку, если добавить/обновить метрику не удалось
+func (ms *MemStorage) update(_ context.Context, metric model.Metrics) (*model.Metrics, error) {
 	const prefix = "storage.MemStorage.update"
 
 	foundMetric, found := ms.metrics[metric.ID]

@@ -70,8 +70,8 @@ func ExecuteWithRetry(execute func() error) error {
 	return fmt.Errorf("execution aborted after %d attempts: %w", maxRetries, lastErr)
 }
 
-// SF LOGIC
-type PgxIface interface {
+// Интерфейс пула соединений к базе данных PostgreSQL
+type iPgxPool interface {
 	Begin(context.Context) (pgx.Tx, error)
 	Ping(ctx context.Context) error
 	Close()
@@ -79,7 +79,7 @@ type PgxIface interface {
 
 // Хранилище, в виде базы данных PostgreSQL
 type PostgreSQLStorage struct {
-	conn PgxIface
+	conn iPgxPool // Пул соединений к базе данных PostgreSQL
 }
 
 // Создаёт новое хранилище, в виде базы данных PostgreSQL
@@ -87,7 +87,7 @@ type PostgreSQLStorage struct {
 //	@param conn пул соединений к базе данных PostgreSQL
 //	@returns *PostgreSQLStorage хранилище, в виде базы данных PostgreSQL
 //	@returns error              ошибку, если не удалось создать хранилище
-func NewPostgreSQLStorage(conn PgxIface) (*PostgreSQLStorage, error) {
+func NewPostgreSQLStorage(conn iPgxPool) (*PostgreSQLStorage, error) {
 	if conn == nil {
 		return nil, fmt.Errorf("database connections pool is nil")
 	}
@@ -96,7 +96,7 @@ func NewPostgreSQLStorage(conn PgxIface) (*PostgreSQLStorage, error) {
 }
 
 // Интерфейс с запросами к базе данных PostgreSQL
-type postgreSQLExecutor interface {
+type psqlExecutor interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 	Exec(ctx context.Context, sql string, args ...any) (pgconn.CommandTag, error)
@@ -105,17 +105,17 @@ type postgreSQLExecutor interface {
 
 // Конфигурация для запроса в PostgreSQL
 type config struct {
-	ctx context.Context    // Контекст для завершения работы
-	db  postgreSQLExecutor // База данных PostgreSQL
+	ctx context.Context // Контекст для завершения работы
+	db  psqlExecutor    // База данных PostgreSQL
 }
 
 // Конфигурация для обновления/добавления метрики
 type updateConfig struct {
 	config
 
-	sGauge   *pgconn.StatementDescription // Подготовленный запрос для обновления/добавления метрики типа gauge
-	sCounter *pgconn.StatementDescription // Подготовленный запрос для обновления/добавления метрики типа counter
-	sGet     *pgconn.StatementDescription // Подготовленный запрос для получения конкретной метрики
+	sGauge   *pgconn.StatementDescription // Описание подготовленного запроса для обновления/добавления метрики типа gauge
+	sCounter *pgconn.StatementDescription // Описание подготовленного запроса для обновления/добавления метрики типа counter
+	sGet     *pgconn.StatementDescription // Описание подготовленного запроса для получения конкретной метрики
 }
 
 // Добавляет/обновляет метрику в базе данных
@@ -302,7 +302,7 @@ func (s PostgreSQLStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
 type getConfig struct {
 	config
 
-	sGet *pgconn.StatementDescription // Подготовленный запрос для получения конкретной метрики
+	sGet *pgconn.StatementDescription // Описание подготовленного запроса для получения конкретной метрики
 }
 
 // Возвращает конкретную метрику из хранилища
@@ -408,7 +408,7 @@ func (s PostgreSQLStorage) Get(id string) (*model.Metrics, error) {
 type getAllConfig struct {
 	config
 
-	sGetAll *pgconn.StatementDescription // Подготовленный запрос для получения всех метрик
+	sGetAll *pgconn.StatementDescription // Описание подготовленного запроса для получения всех метрик
 }
 
 // Возвращает все метрики из хранилища
@@ -523,12 +523,18 @@ func (s PostgreSQLStorage) GetAll() ([]model.Metrics, error) {
 	return s.GetAllContext(context.Background())
 }
 
-// SF TODO
+// Завершает работу хранилища в виде базы данных PostgreSQL
+//
+//	@returns error nil
 func (s *PostgreSQLStorage) Close() error {
 	s.conn.Close()
 	return nil
 }
 
+// Проверяет связь с базой данных PostgreSQL
+//
+//	@param ctx контекст для завершения работы
+//	@returns error ошибку, в случае если связь нарушена
 func (s PostgreSQLStorage) PingContext(ctx context.Context) error {
 	return s.conn.Ping(ctx)
 }

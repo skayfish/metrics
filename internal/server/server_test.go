@@ -16,7 +16,7 @@ import (
 	"github.com/skayfish/metrics/internal/flags"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
-	"github.com/skayfish/metrics/internal/test_utils"
+	"github.com/skayfish/metrics/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -107,7 +107,7 @@ func Test_createStorageFromJSON(t *testing.T) {
 				require.True(t, strings.HasPrefix(err.Error(), tt.errorPrefix), err.Error())
 			} else {
 				require.NoError(t, err)
-				test_utils.StoragesEqual(t, tt.want, storage)
+				testutil.StoragesEqual(t, tt.want, storage)
 			}
 		})
 	}
@@ -179,7 +179,7 @@ func TestNewServer(t *testing.T) {
 			assert.Equal(t, tt.config, *s.config)
 			ms, ok := s.storage.(*storage.MemStorage)
 			require.True(t, ok)
-			test_utils.StoragesEqual(t, tt.want, ms)
+			testutil.StoragesEqual(t, tt.want, ms)
 		})
 	}
 
@@ -337,8 +337,8 @@ func TestServer_Listen(t *testing.T) {
 		err = json.Unmarshal(data, &metrics)
 		require.NoError(t, err)
 
-		storage := test_utils.StorageByMetricsArray(metrics)
-		test_utils.StoragesEqual(t, notEmptyStorage, storage)
+		storage := testutil.StorageByMetricsArray(metrics)
+		testutil.StoragesEqual(t, notEmptyStorage, storage)
 
 		// Завершаем сервер
 		select {
@@ -479,8 +479,8 @@ func TestServer_Listen(t *testing.T) {
 		err = json.Unmarshal(data, &metrics)
 		require.NoError(t, err)
 
-		storage := test_utils.StorageByMetricsArray(metrics)
-		test_utils.StoragesEqual(t, notEmptyStorage, storage)
+		storage := testutil.StorageByMetricsArray(metrics)
+		testutil.StoragesEqual(t, notEmptyStorage, storage)
 
 		// Завершаем сервер
 		select {
