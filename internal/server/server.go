@@ -72,13 +72,17 @@ func getRouter(
 ) (chi.Router, error) {
 	const prefix = "server.getRouter"
 
-	hmacMiddleware, err := middleware.NewHMACMiddleware(keyEncryption)
-	if err != nil {
-		return nil, fmt.Errorf("%s: failed create hmac middleware: %v", prefix, err)
+	router := chi.NewRouter()
+	if keyEncryption != nil {
+		hmacMiddleware, err := middleware.NewHMACMiddleware(keyEncryption)
+		if err != nil {
+			return nil, fmt.Errorf("%s: failed create hmac middleware: %v", prefix, err)
+		}
+
+		router.Use(hmacMiddleware.F)
 	}
 
-	router := chi.NewRouter()
-	router.Use(hmacMiddleware.F, middleware.CompressingMiddleware, middleware.LoggingMiddleware)
+	router.Use(middleware.CompressingMiddleware, middleware.LoggingMiddleware)
 
 	// Base
 
