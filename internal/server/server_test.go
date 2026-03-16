@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -15,6 +16,7 @@ import (
 	"github.com/skayfish/metrics/internal/flags"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
+	"github.com/skayfish/metrics/internal/testutil"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -40,67 +42,72 @@ func Test_getRouter(t *testing.T) {
 }
 
 // Возвращает непустое хранилище с валидными данными
-func newSuccessMemStorage() storage.MemStorage {
+func newSuccessMemStorage() *storage.MemStorage {
 	var delta1 int64 = 1298476200
 	var value1 float64 = 131072
 	var value2 float64 = 15288
 
-	return storage.MemStorage{
-		"GetSet92": model.Metrics{
-			ID:    "GetSet92",
-			MType: model.Counter,
-			Delta: &delta1,
-		},
-		"StackInuse": model.Metrics{
-			ID:    "StackInuse",
-			MType: model.Gauge,
-			Value: &value1,
-		},
-		"MCacheSys": model.Metrics{
-			ID:    "MCacheSys",
-			MType: model.Gauge,
-			Value: &value2,
-		},
-	}
+	storage := storage.NewMemStorage()
+	storage.Update(model.Metrics{
+		ID:    "StackInuse",
+		MType: model.Gauge,
+		Value: &value1,
+	})
+	storage.Update(model.Metrics{
+		ID:    "MCacheSys",
+		MType: model.Gauge,
+		Value: &value2,
+	})
+	storage.Update(model.Metrics{
+		ID:    "GetSet92",
+		MType: model.Counter,
+		Delta: &delta1,
+	})
+
+	return &storage
 }
 
 // Проверяет создание хранилища метрик из json файла
 func Test_createStorageFromJSON(t *testing.T) {
+	const prefix = "server.createStorageFromJSON"
+	successStorage := newSuccessMemStorage()
+	emptyStorage := storage.NewMemStorage()
+
 	tests := []struct {
 		test        string
 		filePath    string
-		want        storage.MemStorage
+		want        *storage.MemStorage
 		wantErr     bool
 		errorPrefix string
 	}{
 		{
 			test:        "file does not exist",
 			filePath:    "./testdata/unknown.json",
-			want:        storage.MemStorage{},
+			want:        &emptyStorage,
 			wantErr:     true,
-			errorPrefix: fmt.Sprintf("failed read from file %q:", "./testdata/unknown.json"),
+			errorPrefix: fmt.Sprintf("%s: failed read from file %q:", prefix, "./testdata/unknown.json"),
 		},
 		{
 			test:        "failed unmarshal",
 			filePath:    "./testdata/errorJSON.json",
-			want:        storage.MemStorage{},
+			want:        &emptyStorage,
 			wantErr:     true,
-			errorPrefix: fmt.Sprintf("failed unmarshal metrics from file %q:", "./testdata/errorJSON.json"),
+			errorPrefix: fmt.Sprintf("%s: failed unmarshal metrics from file %q:", prefix, "./testdata/errorJSON.json"),
 		},
 		{
 			test:     "success",
 			filePath: "./testdata/success.json",
-			want:     newSuccessMemStorage(),
+			want:     successStorage,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
-			metrics, err := createStorageFromJSON(tt.filePath)
+			storage, err := createStorageFromJSON(tt.filePath)
 			if tt.wantErr {
-				require.True(t, strings.HasPrefix(err.Error(), tt.errorPrefix))
+				require.True(t, strings.HasPrefix(err.Error(), tt.errorPrefix), err.Error())
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.want, *metrics)
+				testutil.StoragesEqual(t, tt.want, storage)
 			}
 		})
 	}
@@ -108,10 +115,13 @@ func Test_createStorageFromJSON(t *testing.T) {
 
 // Проверяет создание сервера по переданной конфигурации
 func TestNewServer(t *testing.T) {
+	emptyMemStorage := storage.NewMemStorage()
+	notEmptyMemStorage := newSuccessMemStorage()
+
 	tests := []struct {
 		test   string
 		config Config
-		want   storage.MemStorage
+		want   *storage.MemStorage
 	}{
 		{
 			test: "restore and empty file storage path",
@@ -119,7 +129,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "",
 				ToRestore:       true,
 			},
-			want: storage.NewMemStorage(),
+			want: &emptyMemStorage,
 		},
 		{
 			test: "failed restore",
@@ -127,7 +137,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/errorJSON.json",
 				ToRestore:       true,
 			},
-			want: storage.NewMemStorage(),
+			want: &emptyMemStorage,
 		},
 		{
 			test: "success restore",
@@ -135,7 +145,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/success.json",
 				ToRestore:       true,
 			},
-			want: newSuccessMemStorage(),
+			want: notEmptyMemStorage,
 		},
 		{
 			test: "no restore",
@@ -143,7 +153,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/success.json",
 				ToRestore:       false,
 			},
-			want: storage.NewMemStorage(),
+			want: &emptyMemStorage,
 		},
 		{
 			test: "no restore",
@@ -151,7 +161,7 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "./testdata/errorJSON.json",
 				ToRestore:       false,
 			},
-			want: storage.NewMemStorage(),
+			want: &emptyMemStorage,
 		},
 		{
 			test: "no restore",
@@ -159,85 +169,30 @@ func TestNewServer(t *testing.T) {
 				FileStoragePath: "",
 				ToRestore:       false,
 			},
-			want: storage.NewMemStorage(),
+			want: &emptyMemStorage,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
-			s, err := NewServer(&tt.config)
+			s, err := NewServer(context.Background(), &tt.config)
 			require.NoError(t, err)
 			assert.Equal(t, tt.config, *s.config)
-			assert.Equal(t, tt.want, *s.storage)
-		})
-	}
-}
-
-// Проверяет сохранение в файл данных хранилища метрик
-func TestServer_saveStorageToFile(t *testing.T) {
-	emptyStorage := storage.NewMemStorage()
-	notEmptyStorage := newSuccessMemStorage()
-	tests := []struct {
-		test            string
-		server          Server
-		expectedStorage storage.MemStorage
-		wantErr         bool
-		errPrefix       string
-	}{
-		{
-			test: "empty storage",
-			server: Server{
-				storage: &emptyStorage,
-				config:  &Config{},
-			},
-			expectedStorage: emptyStorage,
-		},
-		{
-			test: "not empty storage",
-			server: Server{
-				storage: &notEmptyStorage,
-				config:  &Config{},
-			},
-			expectedStorage: notEmptyStorage,
-		},
-	}
-	for i := range tests {
-		tt := &tests[i]
-		t.Run(tt.test, func(t *testing.T) {
-			file, err := os.CreateTemp(os.TempDir(), "storage*.json")
-			require.NoError(t, err)
-			defer os.Remove(file.Name())
-
-			tt.server.config.FileStoragePath = file.Name()
-
-			err = tt.server.saveStorageToFile()
-			require.NoError(t, err)
-
-			data, err := os.ReadFile(tt.server.config.FileStoragePath)
-			require.NoError(t, err)
-
-			var metrics []model.Metrics
-			err = json.Unmarshal(data, &metrics)
-			require.NoError(t, err)
-
-			storage := make(storage.MemStorage)
-			for _, metric := range metrics {
-				storage[metric.ID] = metric
-			}
-
-			assert.Equal(t, tt.expectedStorage, storage)
+			ms, ok := s.storage.(*storage.MemStorage)
+			require.True(t, ok)
+			testutil.StoragesEqual(t, tt.want, ms)
 		})
 	}
 
-	t.Run("failed write to file", func(t *testing.T) {
-		s := Server{
-			storage: &notEmptyStorage,
-			config:  &Config{},
+	t.Run("database creation failed", func(t *testing.T) {
+		databaseDSN := "host=unknown user=unknown dbname=unknown password=unknown sslmode=disable"
+		config := Config{
+			DatabaseDSN: &databaseDSN,
 		}
-		s.config.FileStoragePath = "./unknown directory/unknown.json"
-		err := s.saveStorageToFile()
+
+		s, err := NewServer(context.Background(), &config)
 		require.Error(t, err)
-		require.True(t, strings.HasPrefix(err.Error(),
-			fmt.Sprintf("failed write to file %q:", s.config.FileStoragePath)))
+		assert.Contains(t, err.Error(), "failed create storage:")
+		require.Nil(t, s)
 	})
 }
 
@@ -264,12 +219,14 @@ func createServer(t *testing.T, restore bool, fileStoragePath string, storeInter
 	port, err := getFreePort()
 	require.NoError(t, err)
 
-	s, err := NewServer(&Config{
-		Address:         flags.NetAddress{Host: "localhost", Port: port},
-		FileStoragePath: fileStoragePath,
-		ToRestore:       restore,
-		StoreInterval:   storeInterval,
-	})
+	s, err := NewServer(
+		context.Background(),
+		&Config{
+			Address:         flags.NetAddress{Host: "localhost", Port: port},
+			FileStoragePath: fileStoragePath,
+			ToRestore:       restore,
+			StoreInterval:   storeInterval,
+		})
 	require.NoError(t, err)
 
 	return s
@@ -279,7 +236,7 @@ func createServer(t *testing.T, restore bool, fileStoragePath string, storeInter
 func listenServer(s *Server) chan error {
 	errChan := make(chan error)
 	go func() {
-		err := s.Listen()
+		err := s.Listen(context.Background())
 		errChan <- err
 	}()
 	return errChan
@@ -325,7 +282,7 @@ func TestServer_Listen(t *testing.T) {
 		notEmptyStorage := newSuccessMemStorage()
 
 		s := createServer(t, true, "", 0)
-		s.storage = &notEmptyStorage
+		s.storage = notEmptyStorage
 
 		// Инициализация роутера
 		handlerNoSave := func(resp http.ResponseWriter, req *http.Request) {}
@@ -380,12 +337,8 @@ func TestServer_Listen(t *testing.T) {
 		err = json.Unmarshal(data, &metrics)
 		require.NoError(t, err)
 
-		storage := make(storage.MemStorage)
-		for _, metric := range metrics {
-			storage[metric.ID] = metric
-		}
-
-		assert.Equal(t, notEmptyStorage, storage)
+		storage := testutil.StorageByMetricsArray(metrics)
+		testutil.StoragesEqual(t, notEmptyStorage, storage)
 
 		// Завершаем сервер
 		select {
@@ -400,7 +353,7 @@ func TestServer_Listen(t *testing.T) {
 		notEmptyStorage := newSuccessMemStorage()
 
 		s := createServer(t, true, "./unknown directory/unknown.json", 0)
-		s.storage = &notEmptyStorage
+		s.storage = notEmptyStorage
 
 		// Инициализация роутера
 		saveMiddleware := s.getSaveMiddleware()
@@ -466,7 +419,7 @@ func TestServer_Listen(t *testing.T) {
 		notEmptyStorage := newSuccessMemStorage()
 
 		s := createServer(t, true, "", 500*time.Millisecond)
-		s.storage = &notEmptyStorage
+		s.storage = notEmptyStorage
 
 		// Инициализация роутера
 		handler := func(resp http.ResponseWriter, req *http.Request) {}
@@ -480,7 +433,7 @@ func TestServer_Listen(t *testing.T) {
 		// Запуск сервера
 		errChan := listenServer(s)
 		defer close(errChan)
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(100 * time.Millisecond) // (~0 миллисекунд прошло до)
 
 		// Делаем запрос к серверу
 		client := resty.New()
@@ -492,7 +445,7 @@ func TestServer_Listen(t *testing.T) {
 		assert.Empty(t, resp.String())
 		assert.Equal(t, http.StatusOK, resp.StatusCode())
 
-		// Ожидаем запись в файл (но её быть не должно)
+		// Ожидаем запись в файл (но её быть не должно) (~100 миллисекунд прошло до)
 		time.Sleep(100 * time.Millisecond)
 
 		// Проверка файла с данными хранилища
@@ -507,7 +460,7 @@ func TestServer_Listen(t *testing.T) {
 		assert.Empty(t, resp.String())
 		assert.Equal(t, http.StatusOK, resp.StatusCode())
 
-		// Ожидаем запись в файл (но её быть не должно)
+		// Ожидаем запись в файл (но её быть не должно) (~200 миллисекунд прошло до)
 		time.Sleep(100 * time.Millisecond)
 
 		// Проверка файла с данными хранилища
@@ -515,8 +468,8 @@ func TestServer_Listen(t *testing.T) {
 		require.NoError(t, err)
 		assert.Empty(t, data)
 
-		// Ждём ещё время, чтобы прошло пол секунды в сумме (~300 миллисекунд прошло)
-		time.Sleep(400 * time.Millisecond) // ~700 миллисекунд
+		// Ждём ещё время, чтобы прошло пол секунды в сумме (~300 миллисекунд прошло до)
+		time.Sleep(400 * time.Millisecond) // ~700 миллисекунд в сумме
 
 		// Проверка файла с данными хранилища
 		data, err = os.ReadFile(s.config.FileStoragePath)
@@ -526,12 +479,8 @@ func TestServer_Listen(t *testing.T) {
 		err = json.Unmarshal(data, &metrics)
 		require.NoError(t, err)
 
-		storage := make(storage.MemStorage)
-		for _, metric := range metrics {
-			storage[metric.ID] = metric
-		}
-
-		assert.Equal(t, notEmptyStorage, storage)
+		storage := testutil.StorageByMetricsArray(metrics)
+		testutil.StoragesEqual(t, notEmptyStorage, storage)
 
 		// Завершаем сервер
 		select {

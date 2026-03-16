@@ -1,7 +1,9 @@
 package main
 
 import (
+	"context"
 	"log"
+	"time"
 
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/server"
@@ -24,12 +26,18 @@ func main() {
 	logger.LogS.Debugw("Server configuration", "config", config)
 
 	// Запуск сервера
-	server, err := server.NewServer(config)
+	createServerContext, createServerCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer createServerCancel()
+	server, err := server.NewServer(createServerContext, config)
 	if err != nil {
 		logger.LogS.Fatal(err)
 	}
 
-	if err = server.Listen(); err != nil {
+	defer server.Close()
+
+	startListenContext, startListenCancel := context.WithCancel(context.Background())
+	defer startListenCancel()
+	if err = server.Listen(startListenContext); err != nil {
 		logger.LogS.Fatal(err)
 	}
 }

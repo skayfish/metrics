@@ -13,6 +13,9 @@ import (
 
 // Переменные окружения
 type environments struct {
+	// Уровень логирования
+	LogLevel *string `env:"LOG_LEVEL" example:"debug"`
+
 	// Сетевой адрес
 	Address *flags.NetAddress `env:"ADDRESS" example:"localhost:8080"`
 
@@ -24,6 +27,9 @@ type environments struct {
 
 	// Булево значение (true/false), определяющее, следует ли загружать ранее сохранённые значения из указанного файла при старте сервера
 	ToRestore *bool `env:"RESTORE" example:"true"`
+
+	// Строка с адресом подключения к базе данных
+	DatabaseDSN *string `env:"DATABASE_DSN" example:"host=localhost port=5432 user=username password=XXXX dbname=databasename sslmode=disable,postgres://username:XXXX@localhost:5432/databasename?sslmode=disable"`
 }
 
 // Парсит флаги, указанные при запуске программы и переменные окружения
@@ -42,6 +48,10 @@ func parseConfig() (*server.Config, error) {
 		"File system path to which current storage data is persisted")
 	toRestore := pflag.BoolP("restore", "r", false,
 		"Read saved values from the \"--file-storage-path\" file when the server starts (default false)")
+	databaseDSN := pflag.StringP("database-dsn", "d", "",
+		`Connection string for database access, structured as: "host=<host> port=<port> user=<username> password=<pass> dbname=<database name>" or
+		                                                       "postgres://<username>:<password>@<host>:<port>/<database name>?sslmode=disable"`)
+	migrationsPath := pflag.StringP("migrations-path", "m", "migrations", "Directory path containing database migration files")
 
 	pflag.Parse()
 
@@ -50,6 +60,10 @@ func parseConfig() (*server.Config, error) {
 	err := env.Parse(&envs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse environment variables: %v", err)
+	}
+
+	if envs.LogLevel != nil {
+		logLevel.Set(*envs.LogLevel)
 	}
 
 	if envs.Address != nil {
@@ -68,12 +82,23 @@ func parseConfig() (*server.Config, error) {
 		*toRestore = *envs.ToRestore
 	}
 
+	if envs.DatabaseDSN != nil {
+		*databaseDSN = *envs.DatabaseDSN
+	}
+
+	// Формирование результата
+	if *databaseDSN == "" {
+		databaseDSN = nil
+	}
+
 	result := server.Config{
 		Address:         addr,
 		LogLevel:        logLevel,
 		StoreInterval:   time.Duration(*storeInterval) * time.Second,
 		FileStoragePath: *fileStoragePath,
 		ToRestore:       *toRestore,
+		DatabaseDSN:     databaseDSN,
+		MigrationsPath:  *migrationsPath,
 	}
 
 	return &result, nil

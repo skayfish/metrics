@@ -17,8 +17,8 @@ import (
 
 // Контроллер обработки запросов, связанных с метриками
 type MetricsController struct {
-	storage           *storage.MemStorage // Хранилище метрик
-	tableHTMLTemplate *template.Template  // Шаблон html таблицы метрик
+	storage           storage.Storage    // Хранилище метрик
+	tableHTMLTemplate *template.Template // Шаблон html таблицы метрик
 }
 
 // HTML шаблон таблицы метрик
@@ -82,19 +82,15 @@ const templateHTML = `
 </html>
 `
 
-// Ошибка во время создания контроллера метрик
-var ErrCreateMetricsController = errors.New("controller: metrics controller creation failed")
-
-// Создаёт новый контроллер метрик
+// Создаёт новый контроллер обработки запросов, связанных с метриками
 //
-//	@param storage хранилище метрик
+//	@param storage хранилище данных
 //	@returns *MetricsController контроллер метрик, в случае успеха
 //	@returns error ошибка создания, в ином случае
-func NewMetricsController(storage *storage.MemStorage) (*MetricsController, error) {
-	// Парсинг шаблона html
+func NewMetricsController(storage storage.Storage) (*MetricsController, error) {
 	tmpl, err := template.New("metrics-table").Parse(templateHTML)
 	if err != nil {
-		return nil, fmt.Errorf("%w: %s", ErrCreateMetricsController, err)
+		return nil, fmt.Errorf("controller.NewMetricsController: creation failed: %v", err)
 	}
 
 	return &MetricsController{storage: storage, tableHTMLTemplate: tmpl}, nil
@@ -105,14 +101,24 @@ func NewMetricsController(storage *storage.MemStorage) (*MetricsController, erro
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
 func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Request) {
+	const prefix = "controller.MetricsController.UpdateFromURL"
+
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
 	mValue := chi.URLParam(req, "value")
 
-	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL: before",
-		"metrics", c.storage.GetMetrics(),
-	)
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
 
+		logger.LogS.Debugw(fmt.Sprintf("%s: before", prefix), "metrics", metrics)
+	}
+
+	var metric model.Metrics
 	switch mType {
 	case model.Gauge:
 		value, err := strconv.ParseFloat(mValue, 64)
@@ -121,20 +127,22 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 			return
 		}
 
-		if err = c.storage.UpdateGauge(mName, value); err != nil {
-			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
-			return
+		metric = model.Metrics{
+			ID:    mName,
+			MType: model.Gauge,
+			Value: &value,
 		}
 	case model.Counter:
-		value, err := strconv.ParseInt(mValue, 10, 64)
+		delta, err := strconv.ParseInt(mValue, 10, 64)
 		if err != nil {
 			http.Error(resp, "Metric`s value must be int64", http.StatusBadRequest)
 			return
 		}
 
-		if err = c.storage.UpdateCounter(mName, value); err != nil {
-			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
-			return
+		metric = model.Metrics{
+			ID:    mName,
+			MType: model.Counter,
+			Delta: &delta,
 		}
 	default:
 		http.Error(resp,
@@ -143,9 +151,38 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 		return
 	}
 
-	logger.LogS.Debugw("controller: MetricsController.UpdateFromURL: after",
-		"metrics", c.storage.GetMetrics(),
-	)
+	updatedMetric, err := c.storage.UpdateContext(req.Context(), metric)
+	if err != nil {
+		if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		} else {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			resp.WriteHeader(http.StatusInternalServerError)
+		}
+
+		return
+	}
+
+	updatedMetricJSON, err := json.Marshal(updatedMetric)
+	if err != nil {
+		logger.LogS.Errorf("%s: marshaling metric failed: %v", prefix, err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(updatedMetricJSON)
+
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
+
+		logger.LogS.Debugw(fmt.Sprintf("%s: after", prefix), "metrics", metrics)
+	}
 }
 
 // Обновляет/добавляет метрику в хранилище. Берёт данные из тела в формате JSON
@@ -153,6 +190,19 @@ func (c *MetricsController) UpdateFromURL(resp http.ResponseWriter, req *http.Re
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
 func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.Request) {
+	const prefix = "controller.MetricsController.UpdateFromJSON"
+
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
+
+		logger.LogS.Debugw(fmt.Sprintf("%s: before", prefix), "metrics", metrics)
+	}
+
 	if req.Header.Get("Content-Type") != "application/json" {
 		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
 		return
@@ -160,36 +210,132 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 
 	metric := model.Metrics{}
 	if err := json.NewDecoder(req.Body).Decode(&metric); err != nil {
-		http.Error(resp, fmt.Sprintf("Failed unmarshall json: %s", err), http.StatusBadRequest)
+		http.Error(resp, fmt.Sprintf("Failed unmarshall json: %v", err), http.StatusBadRequest)
 		return
 	}
 
-	logger.LogS.Debugw("controller: MetricsController.UpdateFromJSON: before",
-		"metrics", c.storage.GetMetrics(),
-	)
+	if err := metric.Valid(); err != nil {
+		http.Error(resp, fmt.Sprintf("%v: id=%q", err, metric.ID), http.StatusBadRequest)
+		return
+	}
 
-	updatedMetric, err := c.storage.Update(metric)
+	updatedMetric, err := c.storage.UpdateContext(req.Context(), metric)
 	if err != nil {
-		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		if errors.Is(err, storage.ErrFoundNotCounterMetricType) || errors.Is(err, storage.ErrFoundNotGaugeMetricType) {
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+		} else {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			resp.WriteHeader(http.StatusInternalServerError)
+		}
+
 		return
 	}
 
-	logger.LogS.Debugw("controller: MetricsController.UpdateFromJSON: after",
-		"metrics", c.storage.GetMetrics(),
-		"updated metric", updatedMetric,
-	)
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
+
+		logger.LogS.Debugw(fmt.Sprintf("%s: after", prefix),
+			"metrics", metrics,
+			"updated metric", updatedMetric,
+		)
+	}
 
 	updatedMetricJSON, err := json.Marshal(updatedMetric)
 	if err != nil {
-		logger.LogS.Errorw("controller: MetricsController.UpdateFromJSON",
-			"error", http.StatusText(http.StatusInternalServerError),
-		)
-		http.Error(resp, errors.Unwrap(err).Error(), http.StatusInternalServerError)
+		logger.LogS.Errorf("%s: marshaling metric failed: %v", prefix, err)
+		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
 	resp.Header().Set("Content-Type", "application/json")
 	resp.Write(updatedMetricJSON)
+}
+
+// Обновляет/добавляет метрики в хранилище. Берёт данные из тела в формате JSON
+//
+//	@param resp объект для записи ответа
+//	@param req  объект запроса
+func (c *MetricsController) Updates(resp http.ResponseWriter, req *http.Request) {
+	const prefix = "controller.MetricsController.Updates"
+
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
+
+		logger.LogS.Debugw(fmt.Sprintf("%s: before", prefix), "metrics", metrics)
+	}
+
+	if req.Header.Get("Content-Type") != "application/json" {
+		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
+		return
+	}
+
+	metrics := []model.Metrics{}
+	if err := json.NewDecoder(req.Body).Decode(&metrics); err != nil {
+		http.Error(resp, fmt.Sprintf("Failed unmarshall json: %v", err), http.StatusBadRequest)
+		return
+	}
+
+	validationErrors := []error{}
+	for _, metric := range metrics {
+		if err := metric.Valid(); err != nil {
+			validationErrors = append(validationErrors, fmt.Errorf("%v: id=%q", err, metric.ID))
+		}
+	}
+
+	if len(validationErrors) > 0 {
+		errMessage := ""
+		for _, err := range validationErrors {
+			errMessage += fmt.Sprintln(err)
+		}
+
+		http.Error(resp, errMessage, http.StatusBadRequest)
+		return
+	}
+
+	updatedMetrics, err := c.storage.UpdatesContext(req.Context(), metrics)
+	if err != nil {
+		if errors.Is(err, storage.ErrFoundNotGaugeMetricType) || errors.Is(err, storage.ErrFoundNotCounterMetricType) {
+			http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
+			return
+		}
+
+		logger.LogS.Errorf("%s: %v", prefix, err)
+		http.Error(resp, "failed update metrics", http.StatusInternalServerError)
+		return
+	}
+
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
+
+		logger.LogS.Debugw(fmt.Sprintf("%s: after", prefix),
+			"metrics", metrics,
+		)
+	}
+
+	updatedMetricsJSON, err := json.Marshal(updatedMetrics)
+	if err != nil {
+		logger.LogS.Errorf("%s: marshaling metrics failed: %v", prefix, err)
+		resp.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(updatedMetricsJSON)
 }
 
 // Возвращает значение запрошенной метрики.
@@ -198,20 +344,47 @@ func (c *MetricsController) UpdateFromJSON(resp http.ResponseWriter, req *http.R
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
 func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.Request) {
+	const prefix = "controller.MetricsController.GetValueFromURL"
+
 	mType := chi.URLParam(req, "type")
 	mName := chi.URLParam(req, "name")
 
-	logger.LogS.Debugw("controller: MetricsController.GetValueFromURL",
-		"metrics", c.storage.GetMetrics(),
-	)
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
 
-	var value interface{}
+		logger.LogS.Debugw(prefix, "metrics", metrics)
+	}
+
+	var metric *model.Metrics
 	var err error
 	switch mType {
 	case model.Gauge:
-		value, err = c.storage.GetGauge(mName)
+		metric, err = c.storage.GetContext(req.Context(), mName)
+		if err == nil {
+			if metric.Value != nil {
+				fmt.Fprint(resp, *metric.Value)
+			} else {
+				http.Error(resp, `found not "gauge" metric type`, http.StatusBadRequest)
+			}
+
+			return
+		}
 	case model.Counter:
-		value, err = c.storage.GetCounter(mName)
+		metric, err = c.storage.GetContext(req.Context(), mName)
+		if err == nil {
+			if metric.Delta != nil {
+				fmt.Fprint(resp, *metric.Delta)
+			} else {
+				http.Error(resp, `found not "counter" metric type`, http.StatusBadRequest)
+			}
+
+			return
+		}
 	default:
 		http.Error(resp,
 			fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", mType),
@@ -220,9 +393,7 @@ func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.
 	}
 
 	switch {
-	case err == nil:
-		fmt.Fprint(resp, value)
-	case errors.Is(err, storage.ErrNotFound):
+	case errors.Is(err, storage.ErrMetricNotFound):
 		http.Error(resp, fmt.Sprintf("Metric with id %q, type %q not found", mName, mType),
 			http.StatusNotFound)
 		return
@@ -230,12 +401,11 @@ func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.
 		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		return
 	default:
-		logger.LogS.Errorw("controller: MetricsController.GetValueFromURL: unknown error while accessing the storage",
-			"err", err,
+		logger.LogS.Errorw(fmt.Sprintf("%s: unknown error while accessing the storage: %v", prefix, err),
 			"metric type", mType,
 			"metric name", mName,
 		)
-		http.Error(resp, fmt.Sprint("Unknown error while accessing the storage: ", err), http.StatusInternalServerError)
+		http.Error(resp, "Unknown error while accessing the storage", http.StatusInternalServerError)
 		return
 	}
 }
@@ -245,7 +415,9 @@ func (c *MetricsController) GetValueFromURL(resp http.ResponseWriter, req *http.
 //
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
-func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http.Request) {
+func (c *MetricsController) GetMetricFromJSON(resp http.ResponseWriter, req *http.Request) {
+	const prefix = "controller.MetricsController.GetMetricFromJSON"
+
 	if req.Header.Get("Content-Type") != "application/json" {
 		http.Error(resp, "Expected application/json content type", http.StatusBadRequest)
 		return
@@ -257,17 +429,32 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 		return
 	}
 
-	logger.LogS.Debugw("controller: MetricsController.GetValueFromJSON",
-		"metrics", c.storage.GetMetrics(),
-	)
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
 
-	var value interface{}
+		logger.LogS.Debugw(prefix, "metrics", metrics)
+	}
+
+	var storageMetric *model.Metrics
 	var err error
 	switch metric.MType {
 	case model.Gauge:
-		value, err = c.storage.GetGauge(metric.ID)
+		storageMetric, err = c.storage.GetContext(req.Context(), metric.ID)
+		if err == nil && storageMetric.Value == nil {
+			http.Error(resp, `found not "gauge" metric type`, http.StatusBadRequest)
+			return
+		}
 	case model.Counter:
-		value, err = c.storage.GetCounter(metric.ID)
+		storageMetric, err = c.storage.GetContext(req.Context(), metric.ID)
+		if err == nil && storageMetric.Delta == nil {
+			http.Error(resp, `found not "counter" metric type`, http.StatusBadRequest)
+			return
+		}
 	default:
 		http.Error(resp,
 			fmt.Sprintf("Unknown metric`s type \"%s\" [counter, gauge]", metric.MType),
@@ -275,10 +462,11 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 		return
 	}
 
+	// Проверка ошибки
 	switch {
 	case err == nil:
 		break
-	case errors.Is(err, storage.ErrNotFound):
+	case errors.Is(err, storage.ErrMetricNotFound):
 		http.Error(resp, fmt.Sprintf("Metric with id %q, type %q not found", metric.ID, metric.MType),
 			http.StatusNotFound)
 		return
@@ -286,63 +474,26 @@ func (c *MetricsController) GetValueFromJSON(resp http.ResponseWriter, req *http
 		http.Error(resp, errors.Unwrap(err).Error(), http.StatusBadRequest)
 		return
 	default:
-		logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: unknown error while accessing the storage",
+		logger.LogS.Errorw(fmt.Sprintf("%s: unknown error while accessing the storage", prefix),
 			"err", err,
 			"metric type", metric.MType,
 			"metric name", metric.ID,
 		)
-		http.Error(resp, fmt.Sprint("Unknown error while accessing the storage: ", err), http.StatusInternalServerError)
+		http.Error(resp, "Unknown error while accessing the storage: ", http.StatusInternalServerError)
 		return
 	}
 
-	switch metric.MType {
-	case model.Gauge:
-		gaugeValue, ok := value.(float64)
-		if !ok {
-			http.Error(resp, "Error converting to float64", http.StatusInternalServerError)
-			logger.LogS.DPanicw("controller: MetricsController.GetValueFromJSON: error converting to float64:", "value", value)
-			return
-		}
-
-		metricJSON, err := json.MarshalIndent(model.Metrics{
-			ID:    metric.ID,
-			MType: metric.MType,
-			Value: &gaugeValue,
-		}, "", "    ")
-		if err != nil {
-			logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: failed marshal gauge metric response", "error", err)
-			http.Error(resp, "Failed marshal gauge metric response", http.StatusInternalServerError)
-			return
-		}
-
-		resp.Header().Set("Content-Type", "application/json")
-		resp.Write(metricJSON)
-	case model.Counter:
-		counterValue, ok := value.(int64)
-		if !ok {
-			http.Error(resp, "Error converting to int64", http.StatusInternalServerError)
-			logger.LogS.DPanicw("controller: MetricsController.GetValueFromJSON: error converting to int64:", "value", value)
-			return
-		}
-
-		metricJSON, err := json.MarshalIndent(model.Metrics{
-			ID:    metric.ID,
-			MType: metric.MType,
-			Delta: &counterValue,
-		}, "", "    ")
-		if err != nil {
-			logger.LogS.Errorw("controller: MetricsController.GetValueFromJSON: failed marshal counter metric response", "error", err)
-			http.Error(resp, "Failed marshal counter metric response", http.StatusInternalServerError)
-			return
-		}
-
-		resp.Header().Set("Content-Type", "application/json")
-		resp.Write(metricJSON)
+	// Формирование ответа
+	metricJSON, err := json.MarshalIndent(*storageMetric, "", "    ")
+	if err != nil {
+		logger.LogS.Errorf("%s: failed marshal metric: %v", prefix, err)
+		http.Error(resp, "Failed marshal metric", http.StatusInternalServerError)
+		return
 	}
-}
 
-// Ошибка обработки запроса на получение данных всех метрик
-const getAllMetricsError = "controller: MetricsController.GetAllMetrics: an error occurred while retrieving all metrics"
+	resp.Header().Set("Content-Type", "application/json")
+	resp.Write(metricJSON)
+}
 
 // Структура метрики для HTML таблицы
 type metricHTML struct {
@@ -355,29 +506,43 @@ type metricHTML struct {
 //	@param resp объект для записи ответа
 //	@param req  объект запроса
 func (c *MetricsController) GetAllMetrics(resp http.ResponseWriter, req *http.Request) {
-	logger.LogS.Debugw("controller: MetricsController.GetAllMetrics",
-		"metrics", c.storage.GetMetrics(),
-	)
+	const prefix = "controller.MetricsController.GetAllMetrics"
 
-	metrics := []metricHTML{}
-	for id, metric := range c.storage.GetMetrics() {
+	if logger.IsDebug() {
+		metrics, err := c.storage.GetAllContext(req.Context())
+		if err != nil {
+			logger.LogS.Errorf("%s: %v", prefix, err)
+			http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+			return
+		}
+
+		logger.LogS.Debugw(prefix, "metrics", metrics)
+	}
+
+	metricsHTML := []metricHTML{}
+	metrics, err := c.storage.GetAllContext(req.Context())
+	if err != nil {
+		logger.LogS.Errorf("%s: %v", prefix, err)
+		http.Error(resp, "failed get all metrics", http.StatusInternalServerError)
+		return
+	}
+
+	for _, metric := range metrics {
 		switch metric.MType {
 		case model.Counter:
-			metrics = append(metrics, metricHTML{ID: id, Value: *metric.Delta})
+			metricsHTML = append(metricsHTML, metricHTML{ID: metric.ID, Value: *metric.Delta})
 		case model.Gauge:
-			metrics = append(metrics, metricHTML{ID: id, Value: *metric.Value})
+			metricsHTML = append(metricsHTML, metricHTML{ID: metric.ID, Value: *metric.Value})
 		default:
-			logger.LogS.Warnw("controller: MetricsController.GetAllMetrics: unknown metric type", "type", metric.MType)
+			logger.LogS.Warnw(fmt.Sprintf("%s: unknown metric type", prefix), "type", metric.MType)
 		}
 	}
 
 	resultTableBuf := new(bytes.Buffer)
-	err := c.tableHTMLTemplate.Execute(resultTableBuf, metrics)
+	err = c.tableHTMLTemplate.Execute(resultTableBuf, metricsHTML)
 	if err != nil {
-		logger.LogS.Errorw(getAllMetricsError,
-			"error", http.StatusText(http.StatusInternalServerError),
-		)
-		http.Error(resp, err.Error(), http.StatusInternalServerError)
+		logger.LogS.Errorf("%s: failed create html table for metrics: %v", prefix, err)
+		resp.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 

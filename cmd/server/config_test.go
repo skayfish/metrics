@@ -26,6 +26,8 @@ func Test_parseConfig(t *testing.T) {
 			StoreInterval:   300 * time.Second,
 			FileStoragePath: "",
 			ToRestore:       false,
+			DatabaseDSN:     nil,
+			MigrationsPath:  "migrations",
 		}, *config)
 	})
 }

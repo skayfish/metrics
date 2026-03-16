@@ -1,0 +1,241 @@
+package storage
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"sync"
+
+	"github.com/skayfish/metrics/internal/logger"
+	"github.com/skayfish/metrics/internal/model"
+)
+
+// Хранилище данных в памяти приложения
+type MemStorage struct {
+	metrics      map[string]model.Metrics // Метрики
+	metricsMutex sync.RWMutex             // Примитив синхронизации для работы с метриками
+}
+
+// Создаёт пустое хранилище данных в памяти приложения
+//
+//	@returns пустое хранилище данных в памяти приложения
+func NewMemStorage() MemStorage {
+	return MemStorage{metrics: make(map[string]model.Metrics, 0)}
+}
+
+var (
+	// Ошибка: найден не gauge тип метрики в хранилище
+	ErrFoundNotGaugeMetricType = errors.New(`found not "gauge" metric type`)
+
+	// Ошибка: найден не counter тип метрики в хранилище
+	ErrFoundNotCounterMetricType = errors.New(`found not "counter" metric type`)
+)
+
+// Обновляет/добавляет метрику в хранилище
+//
+//	@param metric метрика для добавления/обновления
+//	@returns *model.Metrics обновленную метрику, в случае успеха
+//	@returns error возможную ошибку
+func (ms *MemStorage) Update(metric model.Metrics) (*model.Metrics, error) {
+	return ms.UpdateContext(context.Background(), metric)
+}
+
+// Обновляет/добавляет метрику в хранилище
+//
+//	@param ctx    контекст для завершения работы
+//	@param metric метрика для добавления/обновления
+//	@returns *model.Metrics добавленную/обновленную метрику
+//	@returns error ошибку, если добавить/обновить метрику не удалось
+func (ms *MemStorage) update(_ context.Context, metric model.Metrics) (*model.Metrics, error) {
+	const prefix = "storage.MemStorage.update"
+
+	foundMetric, found := ms.metrics[metric.ID]
+	if found {
+		switch metric.MType {
+		case model.Gauge:
+			if foundMetric.MType != model.Gauge {
+				return nil, fmt.Errorf("%s: %w", prefix, ErrFoundNotGaugeMetricType)
+			}
+		case model.Counter:
+			if foundMetric.MType != model.Counter {
+				return nil, fmt.Errorf("%s: %w", prefix, ErrFoundNotCounterMetricType)
+			}
+
+			*metric.Delta += *foundMetric.Delta
+		}
+	}
+
+	ms.metrics[metric.ID] = metric
+
+	return &metric, nil
+}
+
+// Обновляет/добавляет метрику в хранилище
+//
+//	@param ctx    контекст для завершения работы
+//	@param metric метрика для добавления/обновления
+//	@returns *model.Metrics добавленную/обновленную метрику
+//	@returns error ошибку, если добавить/обновить метрику не удалось
+func (ms *MemStorage) UpdateContext(ctx context.Context, metric model.Metrics) (*model.Metrics, error) {
+	ms.metricsMutex.Lock()
+	defer ms.metricsMutex.Unlock()
+
+	return ms.update(ctx, metric)
+}
+
+// Обновляет/добавляет метрики в хранилище.
+//
+//	@param m метрики для добавления/обновления
+//	@returns []model.Metrics добавленные/обновленные метрики
+//	@returns error ошибку, если добавить/обновить метрики не удалось
+func (ms *MemStorage) Updates(m []model.Metrics) ([]model.Metrics, error) {
+	return ms.UpdatesContext(context.Background(), m)
+}
+
+// Обновляет/добавляет метрики в хранилище.
+//
+//	@param ctx контекст для завершения работы
+//	@param m   метрики для добавления/обновления
+//	@returns []model.Metrics добавленные/обновленные метрики
+//	@returns error ошибку, если добавить/обновить метрики не удалось
+func (ms *MemStorage) UpdatesContext(ctx context.Context, m []model.Metrics) ([]model.Metrics, error) {
+	const prefix = "storage.MemStorage.UpdatesContext"
+
+	ms.metricsMutex.Lock()
+	defer ms.metricsMutex.Unlock()
+
+	for _, metric := range m {
+		foundMetric, found := ms.metrics[metric.ID]
+		if !found {
+			continue
+		}
+
+		switch metric.MType {
+		case model.Gauge:
+			if foundMetric.MType != model.Gauge {
+				return nil, fmt.Errorf("%s: %w", prefix, ErrFoundNotGaugeMetricType)
+			}
+		case model.Counter:
+			if foundMetric.MType != model.Counter {
+				return nil, fmt.Errorf("%s: %w", prefix, ErrFoundNotCounterMetricType)
+			}
+		}
+	}
+
+	updatedMetrics := []model.Metrics{}
+	for _, metric := range m {
+		updatedMetric, err := ms.update(ctx, metric)
+		if err != nil {
+			return []model.Metrics{}, fmt.Errorf("%s: %w", prefix, err)
+		}
+
+		updatedMetrics = append(updatedMetrics, *updatedMetric)
+	}
+
+	return updatedMetrics, nil
+}
+
+// Ищет метрику в хранилище
+//
+//	@param id идентификатор метрики
+//	@returns *model.Metrics метрика из хранилища
+//	@returns error ошибку, если не удалось найти метрику
+func (ms *MemStorage) Get(id string) (*model.Metrics, error) {
+	return ms.GetContext(context.Background(), id)
+}
+
+// Ищет метрику в хранилище
+//
+//	@param ctx контекст для завершения работы
+//	@param id  идентификатор метрики
+//	@returns *model.Metrics метрика из хранилища
+//	@returns error ошибку, если не удалось найти метрику
+func (ms *MemStorage) GetContext(ctx context.Context, id string) (*model.Metrics, error) {
+	ms.metricsMutex.RLock()
+	defer ms.metricsMutex.RUnlock()
+
+	metric, found := ms.metrics[id]
+	if !found {
+		return nil, fmt.Errorf("storage.MemStorage.GetContext: %w", ErrMetricNotFound)
+	}
+
+	return &metric, nil
+}
+
+// Возвращает все метрики в хранилище
+//
+//	@returns []model.Metrics метрики в хранилище
+//	@returns error возвращает nil, нужно для удовлетворению интерфейса Storage
+func (ms *MemStorage) GetAll() ([]model.Metrics, error) {
+	ms.metricsMutex.RLock()
+	defer ms.metricsMutex.RUnlock()
+
+	result := make([]model.Metrics, 0)
+	for _, metric := range ms.metrics {
+		result = append(result, metric)
+	}
+
+	return result, nil
+}
+
+// Возвращает все метрики в хранилище
+//
+//	@param ctx контекст для завершения работы
+//	@returns []model.Metrics метрики в хранилище
+//	@returns error ошибку, если контекст стал ошибочным
+func (ms *MemStorage) GetAllContext(ctx context.Context) ([]model.Metrics, error) {
+	const prefix = "storage.MemStorage.GetAllContext"
+
+	ms.metricsMutex.RLock()
+	defer ms.metricsMutex.RUnlock()
+
+	result := make([]model.Metrics, 0)
+	for _, metric := range ms.metrics {
+		if err := ctx.Err(); err != nil {
+			return []model.Metrics{}, fmt.Errorf("%s: %w", prefix, err)
+		}
+
+		result = append(result, metric)
+	}
+
+	return result, nil
+}
+
+// Сохраняет данные хранилища метрик в json файл
+//
+//	@param filePath путь к json файлу
+//	@returns error ошибку, если возникли проблемы при сохранении
+func (ms *MemStorage) SaveStorageToFile(filePath string) error {
+	logger.LogS.Debugw("Save metrics storage to file", "file", filePath, "metrics storage", ms.metrics)
+
+	ms.metricsMutex.RLock()
+	defer ms.metricsMutex.RUnlock()
+
+	metrics := make([]model.Metrics, 0, len(ms.metrics))
+	for _, metric := range ms.metrics {
+		metrics = append(metrics, metric)
+	}
+
+	metricsJSON, err := json.MarshalIndent(metrics, "", "    ")
+	if err != nil {
+		return fmt.Errorf("failed marshal metrics: %w", err)
+	}
+
+	if err = os.WriteFile(filePath, metricsJSON, 0644); err != nil {
+		return fmt.Errorf("failed write to file %q: %w", filePath, err)
+	}
+
+	return nil
+}
+
+// Ничего не делает. Необходимо для удовлетворения интерфейсу [Storage]
+//
+//	@returns error nil
+func (ms *MemStorage) Close() error {
+	return nil
+}
+
+// Проверка, что [MemStorage] удовлетворяет интерфейсу [Storage]
+var _ Storage = (*MemStorage)(nil)

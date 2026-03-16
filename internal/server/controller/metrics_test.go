@@ -9,11 +9,34 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-resty/resty/v2"
+	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// Заполняет хранилище данных метриками
+func updateMetrics(t *testing.T, storage storage.Storage, gaugeMetrics map[string]float64, counterMetrics map[string]int64) {
+	for name, value := range counterMetrics {
+		_, err := storage.Update(model.Metrics{ID: name, Delta: &value, MType: model.Counter})
+		require.NoError(t, err)
+	}
+
+	for name, value := range gaugeMetrics {
+		_, err := storage.Update(model.Metrics{ID: name, Value: &value, MType: model.Gauge})
+		require.NoError(t, err)
+	}
+}
+
+// Устанавливает уровень логирования для всего тестирования.
+// @warning всегда возвращать через defer setLogLevel(t, "info")
+func setLogLevel(t *testing.T, level string) {
+	var logLevel logger.Level
+	err := logLevel.Set(level)
+	require.NoError(t, err)
+	logger.Init(logLevel)
+}
 
 // Проверяет работу обработчика обновления метрики через URL
 func TestMetricsController_UpdateFromURL(t *testing.T) {
@@ -35,7 +58,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Unknown metric`s type \"unknown\" [counter, gauge]\n",
+				body:        "Unknown metric`s type \"unknown\" [counter, gauge]",
 			},
 		},
 		{
@@ -44,7 +67,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric`s value must be int64\n",
+				body:        "Metric`s value must be int64",
 			},
 		},
 		{
@@ -53,7 +76,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric`s value must be float64\n",
+				body:        "Metric`s value must be float64",
 			},
 		},
 		{
@@ -63,8 +86,8 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			requestURL:     "/update/gauge/GaugeMetricName/0.233000024133",
 			want: want{
 				status:      http.StatusOK,
-				contentType: "",
-				body:        "",
+				contentType: "application/json",
+				body:        `{"id":"GaugeMetricName","type":"gauge","value":0.233000024133}`,
 			},
 		},
 		{
@@ -74,8 +97,8 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			requestURL:     "/update/counter/CounterMetricName/11",
 			want: want{
 				status:      http.StatusOK,
-				contentType: "",
-				body:        "",
+				contentType: "application/json",
+				body:        `{"id":"CounterMetricName","type":"counter","delta":4323}`,
 			},
 		},
 		{
@@ -86,7 +109,7 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"gauge\" metric type\n",
+				body:        "found not \"gauge\" metric type",
 			},
 		},
 		{
@@ -97,37 +120,47 @@ func TestMetricsController_UpdateFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"counter\" metric type\n",
+				body:        "found not \"counter\" metric type",
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
+				require.NoError(t, err)
 
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
+				router := chi.NewRouter()
+				router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
+				server := httptest.NewServer(router)
+				defer server.Close()
 
-			router := chi.NewRouter()
-			router.Post("/update/{type}/{name}/{value}", controller.UpdateFromURL)
-			server := httptest.NewServer(router)
-			defer server.Close()
+				request := resty.New().R()
+				resp, err := request.Post(server.URL + tt.requestURL)
+				require.NoError(t, err)
 
-			request := resty.New().R()
-			resp, err := request.Post(server.URL + tt.requestURL)
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			assert.Equal(t, tt.want.body, string(resp.Body()))
-		})
+				assert.Equal(t, tt.want.status, resp.StatusCode(), resp.String())
+				assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"), resp.String())
+				switch tt.want.contentType {
+				case "text/plain; charset=utf-8":
+					assert.Equal(t, tt.want.body, resp.String())
+				case "application/json":
+					expectedMetric := model.Metrics{}
+					buf := bytes.NewBuffer([]byte(tt.want.body))
+					require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
+					expectedMetricJSON, err := json.Marshal(expectedMetric)
+					require.NoError(t, err)
+					assert.Equal(t, string(expectedMetricJSON), resp.String())
+				default:
+					t.Error("Unexpected content type", tt.want.contentType)
+				}
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
 
@@ -155,7 +188,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Expected application/json content type\n",
+				body:        "Expected application/json content type",
 			},
 		},
 		{
@@ -166,7 +199,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Failed unmarshall json: unexpected EOF\n",
+				body:        "Failed unmarshall json: unexpected EOF",
 			},
 		},
 		{
@@ -177,7 +210,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "unrecognized metric type. Supported types: \"gauge\", \"counter\"\n",
+				body:        `unrecognized metric type (supported types: "gauge", "counter"): id="MetricName"`,
 			},
 		},
 		{
@@ -216,7 +249,7 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"gauge\" metric type\n",
+				body:        `found not "gauge" metric type`,
 			},
 		},
 		{
@@ -229,54 +262,270 @@ func TestMetricsController_UpdateFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"counter\" metric type\n",
+				body:        `found not "counter" metric type`,
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
-
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
-
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
-
-			router := chi.NewRouter()
-			router.Post("/update/", controller.UpdateFromJSON)
-			router.Post("/update", controller.UpdateFromJSON)
-			server := httptest.NewServer(router)
-			defer server.Close()
-
-			resp, err := resty.New().R().
-				SetBody(tt.requestBody).
-				SetHeader("Content-Type", tt.requestContentType).
-				SetHeader("Accept", "application/json").
-				Post(server.URL + tt.requestURL)
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-
-			switch tt.want.contentType {
-			case "text/plain; charset=utf-8":
-				assert.Equal(t, tt.want.body, string(resp.Body()))
-			case "application/json":
-				expectedMetric := model.Metrics{}
-				buf := bytes.NewBuffer([]byte(tt.want.body))
-				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
-				expectedMetricJSON, err := json.Marshal(expectedMetric)
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
 				require.NoError(t, err)
-				assert.Equal(t, string(expectedMetricJSON), string(resp.Body()))
-			default:
-				t.Error("Unexpected content type", tt.want.contentType)
-			}
-		})
+
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
+
+				router := chi.NewRouter()
+				router.Post("/update/", controller.UpdateFromJSON)
+				router.Post("/update", controller.UpdateFromJSON)
+				server := httptest.NewServer(router)
+				defer server.Close()
+
+				resp, err := resty.New().R().
+					SetBody(tt.requestBody).
+					SetHeader("Content-Type", tt.requestContentType).
+					SetHeader("Accept", "application/json").
+					Post(server.URL + tt.requestURL)
+				require.NoError(t, err)
+
+				assert.Equal(t, tt.want.status, resp.StatusCode())
+				require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+
+				switch tt.want.contentType {
+				case "text/plain; charset=utf-8":
+					assert.Equal(t, tt.want.body, resp.String())
+				case "application/json":
+					expectedMetric := model.Metrics{}
+					buf := bytes.NewBuffer([]byte(tt.want.body))
+					require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
+					expectedMetricJSON, err := json.Marshal(expectedMetric)
+					require.NoError(t, err)
+					assert.Equal(t, string(expectedMetricJSON), resp.String())
+				default:
+					t.Error("Unexpected content type", tt.want.contentType)
+				}
+			})
+		}
+		setLogLevel(t, "info")
+	}
+}
+
+// Проверяет работу обработчика запроса на обновление метрик, переданных списком в формате JSON
+func TestMetricsController_Updates(t *testing.T) {
+	type want struct {
+		status      int
+		contentType string
+		body        string
+	}
+	tests := []struct {
+		testName           string
+		gaugeMetrics       map[string]float64
+		counterMetrics     map[string]int64
+		requestURL         string
+		requestBody        string
+		requestContentType string
+		want               want
+	}{
+		{
+			testName:           "expected json in request",
+			requestURL:         "/updates/",
+			requestBody:        `[{"id":"MetricName", "type":"unknown"}]`,
+			requestContentType: `text/plain`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Expected application/json content type",
+			},
+		},
+		{
+			testName:           "invalid json",
+			requestURL:         "/updates/",
+			requestBody:        `{"id":"MetricName", "type":"counter"}`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Failed unmarshall json: json: cannot unmarshal object into Go value of type []model.Metrics",
+			},
+		},
+		{
+			testName:           "invalid json",
+			requestURL:         "/updates/",
+			requestBody:        `[`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        "Failed unmarshall json: unexpected EOF",
+			},
+		},
+		{
+			testName:           "unrecognized type",
+			requestURL:         "/updates/",
+			requestBody:        `[{"id":"MetricName", "type":"unknown"}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        `unrecognized metric type (supported types: "gauge", "counter"): id="MetricName"`,
+			},
+		},
+		{
+			testName:           "unrecognized type",
+			requestURL:         "/updates/",
+			requestBody:        `[{"id":"MetricName", "type":"unknown"}, {"id":"MetricName", "type":"unknown"}, {"id":"MetricName1", "type":"unknown"}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body: "unrecognized metric type (supported types: \"gauge\", \"counter\"): id=\"MetricName\"\n" +
+					"unrecognized metric type (supported types: \"gauge\", \"counter\"): id=\"MetricName\"\n" +
+					"unrecognized metric type (supported types: \"gauge\", \"counter\"): id=\"MetricName1\"",
+			},
+		},
+		{
+			testName:           "gauge value is empty",
+			requestURL:         "/updates/",
+			requestBody:        `[{"id":"MetricName", "type":"gauge"}, {"id":"MetricName1", "type":"gauge"}, {"id":"MetricName2", "type":"gauge"}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body: "gauge metric value is empty: id=\"MetricName\"\n" +
+					"gauge metric value is empty: id=\"MetricName1\"\n" +
+					"gauge metric value is empty: id=\"MetricName2\"",
+			},
+		},
+		{
+			testName:           "counter delta is empty",
+			requestURL:         "/updates/",
+			requestBody:        `[{"id":"MetricName", "type":"counter"}, {"id":"MetricName1", "type":"counter"}, {"id":"MetricName2", "type":"counter"}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body: "counter metric delta is empty: id=\"MetricName\"\n" +
+					"counter metric delta is empty: id=\"MetricName1\"\n" +
+					"counter metric delta is empty: id=\"MetricName2\"",
+			},
+		},
+		{
+			testName:           "some value or delta are empty",
+			requestURL:         "/updates/",
+			requestBody:        `[{"id":"MetricName", "type":"counter"}, {"id":"MetricName1", "type":"gauge"}, {"id":"MetricName2", "type":"gauge"}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body: "counter metric delta is empty: id=\"MetricName\"\n" +
+					"gauge metric value is empty: id=\"MetricName1\"\n" +
+					"gauge metric value is empty: id=\"MetricName2\"",
+			},
+		},
+		{
+			testName:       "update gauge metric",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/updates",
+			requestBody: `[{"id":"GaugeMetricName", "type":"gauge", "value": 0.233000024133},
+							{"id":"GaugeMetricName1", "type":"gauge", "value": 15.12},
+							{"id":"GaugeMetricName", "type":"gauge", "value": -15.12}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusOK,
+				contentType: "application/json",
+				body: `[{"id":"GaugeMetricName", "type":"gauge", "value": 0.233000024133},
+						{"id":"GaugeMetricName1", "type":"gauge", "value": 15.12},
+						{"id":"GaugeMetricName", "type":"gauge", "value": -15.12}]`,
+			},
+		},
+		{
+			testName:       "update counter metric",
+			gaugeMetrics:   map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics: map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:     "/updates/",
+			requestBody: `[{"id":"CounterMetricName", "type":"counter", "delta": 11},
+							{"id":"CounterMetricName1", "type":"counter", "delta": 4312},
+							{"id":"CounterMetricName", "type":"counter", "delta": -4323}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusOK,
+				contentType: "application/json",
+				body: `[{"id":"CounterMetricName", "type":"counter", "delta": 4323},
+						{"id":"CounterMetricName1", "type":"counter", "delta": 0},
+						{"id":"CounterMetricName", "type":"counter", "delta": 0}]`,
+			},
+		},
+		{
+			testName:           "found not gauge metric type",
+			gaugeMetrics:       map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics:     map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:         "/updates",
+			requestBody:        `[{"id":"CounterMetricName", "type":"gauge", "value": 0.233000024133}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        `found not "gauge" metric type`,
+			},
+		},
+		{
+			testName:           "found not counter metric type",
+			gaugeMetrics:       map[string]float64{"GaugeMetricName": -43.12257, "GaugeMetricName1": 413.127},
+			counterMetrics:     map[string]int64{"CounterMetricName": 4312, "CounterMetricName1": -4312, "CounterMetricName2": 12},
+			requestURL:         "/updates",
+			requestBody:        `[{"id":"GaugeMetricName", "type":"counter", "delta": 11}]`,
+			requestContentType: `application/json`,
+			want: want{
+				status:      http.StatusBadRequest,
+				contentType: "text/plain; charset=utf-8",
+				body:        `found not "counter" metric type`,
+			},
+		},
+	}
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
+				require.NoError(t, err)
+
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
+
+				router := chi.NewRouter()
+				router.Post("/updates/", controller.Updates)
+				router.Post("/updates", controller.Updates)
+				server := httptest.NewServer(router)
+				defer server.Close()
+
+				resp, err := resty.New().R().
+					SetBody(tt.requestBody).
+					SetHeader("Content-Type", tt.requestContentType).
+					SetHeader("Accept", "application/json").
+					Post(server.URL + tt.requestURL)
+				require.NoError(t, err)
+
+				assert.Equal(t, tt.want.status, resp.StatusCode())
+				require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+
+				switch tt.want.contentType {
+				case "text/plain; charset=utf-8":
+					assert.Equal(t, tt.want.body, resp.String())
+				case "application/json":
+					expectedMetrics := []model.Metrics{}
+					buf := bytes.NewBuffer([]byte(tt.want.body))
+					require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetrics))
+					expectedMetricsJSON, err := json.Marshal(expectedMetrics)
+					require.NoError(t, err)
+					assert.Equal(t, string(expectedMetricsJSON), resp.String())
+				default:
+					t.Error("Unexpected content type", tt.want.contentType)
+				}
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
 
@@ -300,7 +549,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Unknown metric`s type \"unknown\" [counter, gauge]\n",
+				body:        "Unknown metric`s type \"unknown\" [counter, gauge]",
 			},
 		},
 		{
@@ -309,7 +558,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric with id \"MetricName\", type \"gauge\" not found\n",
+				body:        "Metric with id \"MetricName\", type \"gauge\" not found",
 			},
 		},
 		{
@@ -318,7 +567,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric with id \"MetricName\", type \"counter\" not found\n",
+				body:        "Metric with id \"MetricName\", type \"counter\" not found",
 			},
 		},
 		{
@@ -348,7 +597,7 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"gauge\" metric type\n",
+				body:        "found not \"gauge\" metric type",
 			},
 		},
 		{
@@ -358,42 +607,40 @@ func TestMetricsController_GetValueFromURL(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"counter\" metric type\n",
+				body:        "found not \"counter\" metric type",
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
+				require.NoError(t, err)
 
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
+				router := chi.NewRouter()
+				router.Get("/value/{type}/{name}", controller.GetValueFromURL)
+				server := httptest.NewServer(router)
+				defer server.Close()
 
-			router := chi.NewRouter()
-			router.Get("/value/{type}/{name}", controller.GetValueFromURL)
-			server := httptest.NewServer(router)
-			defer server.Close()
+				request := resty.New().R()
+				resp, err := request.Get(server.URL + tt.requestURL)
+				require.NoError(t, err)
 
-			request := resty.New().R()
-			resp, err := request.Get(server.URL + tt.requestURL)
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			assert.Equal(t, tt.want.body, string(resp.Body()))
-		})
+				assert.Equal(t, tt.want.status, resp.StatusCode())
+				assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+				assert.Equal(t, tt.want.body, resp.String())
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
 
-// Проверяет работу обработчика получения конкретной метрики через JSON
-func TestMetricsController_GetValueFromJSON(t *testing.T) {
+// Проверяет работу обработчика получения конкретной метрики через json
+func TestMetricsController_GetMetricFromJSON(t *testing.T) {
 	type want struct {
 		status      int
 		contentType string
@@ -416,7 +663,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Expected application/json content type\n",
+				body:        "Expected application/json content type",
 			},
 		},
 		{
@@ -427,7 +674,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Unknown metric`s type \"unknown\" [counter, gauge]\n",
+				body:        "Unknown metric`s type \"unknown\" [counter, gauge]",
 			},
 		},
 		{
@@ -438,7 +685,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric with id \"MetricName\", type \"gauge\" not found\n",
+				body:        "Metric with id \"MetricName\", type \"gauge\" not found",
 			},
 		},
 		{
@@ -449,7 +696,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusNotFound,
 				contentType: "text/plain; charset=utf-8",
-				body:        "Metric with id \"MetricName\", type \"counter\" not found\n",
+				body:        "Metric with id \"MetricName\", type \"counter\" not found",
 			},
 		},
 		{
@@ -485,7 +732,7 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"gauge\" metric type\n",
+				body:        "found not \"gauge\" metric type",
 			},
 		},
 		{
@@ -497,54 +744,52 @@ func TestMetricsController_GetValueFromJSON(t *testing.T) {
 			want: want{
 				status:      http.StatusBadRequest,
 				contentType: "text/plain; charset=utf-8",
-				body:        "found not \"counter\" metric type\n",
+				body:        "found not \"counter\" metric type",
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
-
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
-
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
-
-			router := chi.NewRouter()
-			router.Post("/value/", controller.GetValueFromJSON)
-			router.Post("/value", controller.GetValueFromJSON)
-			server := httptest.NewServer(router)
-			defer server.Close()
-
-			resp, err := resty.New().R().
-				SetBody(tt.requestBody).
-				SetHeader("Content-Type", tt.requestContentType).
-				SetHeader("Accept", "application/json").
-				Post(server.URL + tt.requestURL)
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-
-			switch tt.want.contentType {
-			case "text/plain; charset=utf-8":
-				assert.Equal(t, tt.want.body, string(resp.Body()))
-			case "application/json":
-				expectedMetric := model.Metrics{}
-				buf := bytes.NewBuffer([]byte(tt.want.body))
-				require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
-				expectedMetricJSON, err := json.MarshalIndent(expectedMetric, "", "    ")
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
 				require.NoError(t, err)
-				assert.Equal(t, string(expectedMetricJSON), string(resp.Body()))
-			default:
-				t.Error("Unexpected content type", tt.want.contentType)
-			}
-		})
+
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
+
+				router := chi.NewRouter()
+				router.Post("/value/", controller.GetMetricFromJSON)
+				router.Post("/value", controller.GetMetricFromJSON)
+				server := httptest.NewServer(router)
+				defer server.Close()
+
+				resp, err := resty.New().R().
+					SetBody(tt.requestBody).
+					SetHeader("Content-Type", tt.requestContentType).
+					SetHeader("Accept", "application/json").
+					Post(server.URL + tt.requestURL)
+				require.NoError(t, err)
+
+				assert.Equal(t, tt.want.status, resp.StatusCode(), resp.String())
+				require.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"), resp.String())
+
+				switch tt.want.contentType {
+				case "text/plain; charset=utf-8":
+					assert.Equal(t, tt.want.body, resp.String())
+				case "application/json":
+					expectedMetric := model.Metrics{}
+					buf := bytes.NewBuffer([]byte(tt.want.body))
+					require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
+					expectedMetricJSON, err := json.MarshalIndent(expectedMetric, "", "    ")
+					require.NoError(t, err)
+					assert.Equal(t, string(expectedMetricJSON), resp.String())
+				default:
+					t.Error("Unexpected content type", tt.want.contentType)
+				}
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
 
@@ -581,32 +826,30 @@ func TestMetricsController_GetAllMetrics(t *testing.T) {
 			},
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.testName, func(t *testing.T) {
-			storage := storage.NewMemStorage()
-			controller, err := NewMetricsController(&storage)
-			require.NoError(t, err)
+	for _, logLevel := range []string{"debug", "info"} {
+		setLogLevel(t, logLevel)
+		for _, tt := range tests {
+			t.Run(tt.testName, func(t *testing.T) {
+				storage := storage.NewMemStorage()
+				controller, err := NewMetricsController(&storage)
+				require.NoError(t, err)
 
-			for name, value := range tt.counterMetrics {
-				storage.UpdateCounter(name, value)
-			}
+				updateMetrics(t, &storage, tt.gaugeMetrics, tt.counterMetrics)
 
-			for name, value := range tt.gaugeMetrics {
-				storage.UpdateGauge(name, value)
-			}
+				router := chi.NewRouter()
+				router.Get("/", controller.GetAllMetrics)
+				server := httptest.NewServer(router)
+				defer server.Close()
 
-			router := chi.NewRouter()
-			router.Get("/", controller.GetAllMetrics)
-			server := httptest.NewServer(router)
-			defer server.Close()
+				request := resty.New().R()
+				resp, err := request.Get(server.URL + tt.requestURL)
+				require.NoError(t, err)
 
-			request := resty.New().R()
-			resp, err := request.Get(server.URL + tt.requestURL)
-			require.NoError(t, err)
-
-			assert.Equal(t, tt.want.status, resp.StatusCode())
-			assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
-			assert.False(t, len(resp.Body()) == 0, string(resp.Body()))
-		})
+				assert.Equal(t, tt.want.status, resp.StatusCode())
+				assert.Equal(t, tt.want.contentType, resp.Header().Get("Content-Type"))
+				assert.False(t, len(resp.Body()) == 0, resp.String())
+			})
+		}
+		setLogLevel(t, "info")
 	}
 }
