@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/skayfish/metrics/internal/encryption"
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 )
@@ -221,13 +223,23 @@ func (s *sender) send(metrics []model.Metrics) error {
 		return fmt.Errorf("%s: %v", prefix, err)
 	}
 
+	requestHeaders := map[string]string{
+		"Content-Type":     "application/json",
+		"Content-Encoding": "gzip",
+	}
+	if s.config.KeyEncryption != nil {
+		hmac, err := encryption.SignHMAC(compressedMetricsJSON, []byte(*s.config.KeyEncryption), sha256.New)
+		if err != nil {
+			return fmt.Errorf("%s: %v", prefix, err)
+		}
+
+		requestHeaders["HashSHA256"] = string(hmac)
+	}
+
 	url := fmt.Sprintf("%s://%s:%d/updates", s.config.getConnectionType(), s.config.Host, s.config.Port)
 	request := s.client.R().
 		SetBody(compressedMetricsJSON).
-		SetHeaders(map[string]string{
-			"Content-Type":     "application/json",
-			"Content-Encoding": "gzip",
-		})
+		SetHeaders(requestHeaders)
 
 	response, err := request.Post(url)
 	if err != nil {

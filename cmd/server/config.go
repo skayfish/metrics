@@ -30,6 +30,9 @@ type environments struct {
 
 	// Строка с адресом подключения к базе данных
 	DatabaseDSN *string `env:"DATABASE_DSN" example:"host=localhost port=5432 user=username password=XXXX dbname=databasename sslmode=disable,postgres://username:XXXX@localhost:5432/databasename?sslmode=disable"`
+
+	//SF TODO
+	KeyEncryption *string `env:"KEY" example:"somekey554%!@#$"`
 }
 
 // Парсит флаги, указанные при запуске программы и переменные окружения
@@ -52,6 +55,7 @@ func parseConfig() (*server.Config, error) {
 		`Connection string for database access, structured as: "host=<host> port=<port> user=<username> password=<pass> dbname=<database name>" or
 		                                                       "postgres://<username>:<password>@<host>:<port>/<database name>?sslmode=disable"`)
 	migrationsPath := pflag.StringP("migrations-path", "m", "migrations", "Directory path containing database migration files")
+	keyEncryption := pflag.StringP("key-hash", "k", "", "") // SF TODO
 
 	pflag.Parse()
 
@@ -86,9 +90,17 @@ func parseConfig() (*server.Config, error) {
 		*databaseDSN = *envs.DatabaseDSN
 	}
 
+	if envs.KeyEncryption != nil {
+		*keyEncryption = *envs.KeyEncryption
+	}
+
 	// Формирование результата
 	if *databaseDSN == "" {
 		databaseDSN = nil
+	}
+
+	if *keyEncryption == "" {
+		keyEncryption = nil
 	}
 
 	result := server.Config{
@@ -99,6 +111,7 @@ func parseConfig() (*server.Config, error) {
 		ToRestore:       *toRestore,
 		DatabaseDSN:     databaseDSN,
 		MigrationsPath:  *migrationsPath,
+		KeyEncryption:   keyEncryption,
 	}
 
 	return &result, nil

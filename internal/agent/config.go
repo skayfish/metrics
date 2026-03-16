@@ -31,6 +31,9 @@ type Config struct {
 
 	// Уровень логирования
 	LogLevel logger.Level
+
+	// SF TODO
+	KeyEncryption *string
 }
 
 // Возвращает тип соединения

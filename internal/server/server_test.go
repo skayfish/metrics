@@ -30,14 +30,20 @@ func getEmptyMiddleware() func(http.HandlerFunc) http.HandlerFunc {
 
 // Проверяет настройку маршрутизатора запросов
 func Test_getRouter(t *testing.T) {
+	key := "some encryption key"
 	t.Run("success", func(t *testing.T) {
 		s := storage.NewMemStorage()
-		_, err := getRouter(&s, getEmptyMiddleware())
+		_, err := getRouter(&s, getEmptyMiddleware(), &key)
 		assert.NoError(t, err)
 	})
 	t.Run("success", func(t *testing.T) {
-		_, err := getRouter(nil, getEmptyMiddleware())
+		_, err := getRouter(nil, getEmptyMiddleware(), &key)
 		assert.NoError(t, err)
+	})
+	t.Run("key encryption is nil", func(t *testing.T) {
+		_, err := getRouter(nil, getEmptyMiddleware(), nil)
+		require.Error(t, err)
+		assert.ErrorContains(t, err, "key encryption is nil")
 	})
 }
 

@@ -60,14 +60,25 @@ func (s *Server) getSaveMiddleware() func(handler http.HandlerFunc) http.Handler
 //
 //	@param storage        хранилище данных
 //	@param saveMiddleware middleware-обёртка для отправки сигнала на сохранение данных хранилища метрик в файл
+//
+// SF TODO
+//
 //	@returns chi.Router маршрутизатор запросов в случае успеха
 //	@returns error ошибку в ином случае
 func getRouter(
 	storage storage.Storage,
 	saveMiddleware func(http.HandlerFunc) http.HandlerFunc,
+	keyEncryption *string,
 ) (chi.Router, error) {
+	const prefix = "server.getRouter"
+
+	hmacMiddleware, err := middleware.NewHMACMiddleware(keyEncryption)
+	if err != nil {
+		return nil, fmt.Errorf("%s: failed create hmac middleware: %v", prefix, err)
+	}
+
 	router := chi.NewRouter()
-	router.Use(middleware.CompressingMiddleware, middleware.LoggingMiddleware)
+	router.Use(hmacMiddleware.F, middleware.CompressingMiddleware, middleware.LoggingMiddleware)
 
 	// Base
 
@@ -79,7 +90,7 @@ func getRouter(
 
 	metricsController, err := controller.NewMetricsController(storage)
 	if err != nil {
-		return nil, fmt.Errorf("failed create metric controller: %w", err)
+		return nil, fmt.Errorf("%s: failed create metric controller: %w", prefix, err)
 	}
 
 	router.Post("/update/{type}/{name}/{value}", saveMiddleware(metricsController.UpdateFromURL))
@@ -237,7 +248,7 @@ func NewServer(ctx context.Context, config *Config) (*Server, error) {
 		result.saveStorageChan = make(chan struct{})
 	}
 
-	router, err := getRouter(storage, result.getSaveMiddleware())
+	router, err := getRouter(storage, result.getSaveMiddleware(), config.KeyEncryption)
 	if err != nil {
 		return nil, fmt.Errorf("%s: failed create router: %v", prefix, err)
 	}

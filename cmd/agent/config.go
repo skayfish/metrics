@@ -21,6 +21,9 @@ type environments struct {
 
 	// Частота обновления метрик (например, раз в 2 секунды)
 	PollInterval *uint `env:"POLL_INTERVAL" example:"2"`
+
+	//SF TODO
+	KeyEncryption *string `env:"KEY" example:"somekey554%!@#$"`
 }
 
 // Парсит флаги, указанные при запуске программы и переменные окружения
@@ -43,6 +46,7 @@ func parseConfig() (*agent.Config, error) {
 		"Connection retry interval, in seconds")
 	var logLevel logger.Level
 	pflag.VarP(&logLevel, "log-level", "l", "Logging level")
+	keyEncryption := pflag.StringP("key-hash", "k", "", "") // SF TODO
 
 	pflag.Parse()
 
@@ -65,6 +69,15 @@ func parseConfig() (*agent.Config, error) {
 		*reportInterval = *envs.ReportInterval
 	}
 
+	if envs.KeyEncryption != nil {
+		*keyEncryption = *envs.KeyEncryption
+	}
+
+	// Формирование результата
+	if *keyEncryption == "" {
+		keyEncryption = nil
+	}
+
 	return &agent.Config{
 		SecureConnection: *isSecure,
 		Host:             addr.Host,
@@ -74,5 +87,6 @@ func parseConfig() (*agent.Config, error) {
 		PollInterval:     time.Duration(*pollInterval) * time.Second,
 		ReportInterval:   time.Duration(*reportInterval) * time.Second,
 		LogLevel:         logLevel,
+		KeyEncryption:    keyEncryption,
 	}, nil
 }
