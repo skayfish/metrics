@@ -3,7 +3,7 @@ package middleware
 import (
 	"bytes"
 	"crypto/sha256"
-	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/http"
@@ -72,11 +72,11 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 		defer req.Body.Close()
 		req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		requestHMACBase64 := req.Header.Get("HashSHA256")
-		requestHMAC, err := base64.StdEncoding.DecodeString(requestHMACBase64)
+		requestHMACHex := req.Header.Get("HashSHA256")
+		requestHMAC, err := hex.DecodeString(requestHMACHex)
 		if err != nil {
-			logger.LogS.Errorw(fmt.Sprintf("%s: failed decode base64 hmac: %v", prefix, err), "hmac", requestHMACBase64)
-			resp.WriteHeader(http.StatusInternalServerError)
+			logger.LogS.Errorw(fmt.Sprintf("%s: failed decode hex hmac: %v", prefix, err), "hmac", requestHMACHex)
+			http.Error(resp, fmt.Sprintf("failed decode hex hmac: %v", err), http.StatusBadRequest)
 			return
 		}
 
@@ -98,7 +98,7 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 			return
 		}
 
-		tmpResponse.headers.Add("HashSHA256", base64.StdEncoding.EncodeToString(encryptedBody))
+		tmpResponse.headers.Add("HashSHA256", hex.EncodeToString(encryptedBody))
 
 		for key, values := range tmpResponse.Header() {
 			for _, value := range values {
