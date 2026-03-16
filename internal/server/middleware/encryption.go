@@ -22,6 +22,7 @@ type hmacResponseWriter struct {
 func newHMACResponseWriter() hmacResponseWriter {
 	return hmacResponseWriter{
 		headers: make(http.Header),
+		status:  -1,
 	}
 }
 
@@ -93,7 +94,10 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 			}
 		}
 
-		resp.WriteHeader(tmpResponse.status)
+		if tmpResponse.status != -1 {
+			resp.WriteHeader(tmpResponse.status)
+		}
+
 		resp.Write([]byte(tmpResponse.body))
 	}
 	return http.HandlerFunc(fn)
