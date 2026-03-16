@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -233,7 +234,7 @@ func (s *sender) send(metrics []model.Metrics) error {
 			return fmt.Errorf("%s: %v", prefix, err)
 		}
 
-		requestHeaders["HashSHA256"] = string(hmac)
+		requestHeaders["HashSHA256"] = base64.StdEncoding.EncodeToString(hmac)
 	}
 
 	url := fmt.Sprintf("%s://%s:%d/updates", s.config.getConnectionType(), s.config.Host, s.config.Port)

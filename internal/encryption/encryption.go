@@ -17,8 +17,12 @@ func SignHMAC(data, key []byte, f func() hash.Hash) ([]byte, error) {
 }
 
 // SF TODO
-func CheckHMAC(data, key []byte, f func() hash.Hash) error {
+func EqualHMAC(data, key, target []byte, f func() hash.Hash) (bool, error) {
 	h := hmac.New(f, key)
 	_, err := h.Write(data)
-	return err
+	if err != nil {
+		return false, err
+	}
+
+	return hmac.Equal(h.Sum(nil), target), nil
 }

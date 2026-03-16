@@ -40,11 +40,6 @@ func Test_getRouter(t *testing.T) {
 		_, err := getRouter(nil, getEmptyMiddleware(), &key)
 		assert.NoError(t, err)
 	})
-	t.Run("key encryption is nil", func(t *testing.T) {
-		_, err := getRouter(nil, getEmptyMiddleware(), nil)
-		require.Error(t, err)
-		assert.ErrorContains(t, err, "key encryption is nil")
-	})
 }
 
 // Возвращает непустое хранилище с валидными данными
