@@ -214,7 +214,7 @@ func (s *sender) send(metrics []model.Metrics) error {
 
 	logger.LogS.Debugw(fmt.Sprintf("%s: send metrics", prefix), "metrics", metrics)
 
-	metricsJSON, err := json.MarshalIndent(metrics, "", "    ")
+	metricsJSON, err := json.Marshal(metrics)
 	if err != nil {
 		return fmt.Errorf("%s: failed marshal metrics: %w", prefix, err)
 	}

@@ -79,7 +79,7 @@ func getRouter(
 			return nil, fmt.Errorf("%s: failed create hmac middleware: %v", prefix, err)
 		}
 
-		router.Use(hmacMiddleware.F)
+		router.Use(middleware.LoggingMiddleware, hmacMiddleware.F)
 	}
 
 	router.Use(middleware.CompressingMiddleware, middleware.LoggingMiddleware)

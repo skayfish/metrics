@@ -63,19 +63,24 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 	fn := func(resp http.ResponseWriter, req *http.Request) {
 		const prefix = "middleware.hmacMiddleware.f"
 
+		requestHMACHex := req.Header.Get("HashSHA256")
+		if requestHMACHex == "" {
+			handler.ServeHTTP(resp, req)
+			return
+		}
+
 		bodyBytes, err := io.ReadAll(req.Body)
 		if err != nil {
 			http.Error(resp, "middleware: LoggingMiddleware: failed to read body", http.StatusInternalServerError)
 			return
 		}
 
-		defer req.Body.Close()
+		req.Body.Close()
 		req.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		requestHMACHex := req.Header.Get("HashSHA256")
 		requestHMAC, err := hex.DecodeString(requestHMACHex)
 		if err != nil {
-			logger.LogS.Errorw(fmt.Sprintf("%s: failed decode hex hmac: %v", prefix, err), "hmac", requestHMACHex)
+			logger.LogS.Errorw(fmt.Sprintf("%s: failed decode hex hmac: %v", prefix, err), "HashSHA256 in request", requestHMACHex)
 			http.Error(resp, fmt.Sprintf("failed decode hex hmac: %v", err), http.StatusBadRequest)
 			return
 		}
