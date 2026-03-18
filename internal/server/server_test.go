@@ -179,7 +179,13 @@ func TestNewServer(t *testing.T) {
 			},
 			want: &emptyMemStorage,
 		},
-		// SF LOGIC key is empty
+		{
+			test: "key is nil",
+			config: Config{
+				KeyEncryption: nil,
+			},
+			want: &emptyMemStorage,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
