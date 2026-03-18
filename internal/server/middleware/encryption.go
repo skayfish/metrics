@@ -13,34 +13,7 @@ import (
 )
 
 // SF TODO
-type hmacResponseWriter struct {
-	headers http.Header // SF TODO
-	status  int         // SF TODO
-	body    string      // SF TODO
-}
-
-// SF TODO
-func newHMACResponseWriter() hmacResponseWriter {
-	return hmacResponseWriter{
-		headers: make(http.Header),
-		status:  -1,
-	}
-}
-
-// SF TODO
-func (rw *hmacResponseWriter) Header() http.Header {
-	return rw.headers
-}
-
-// SF TODO
-func (rw *hmacResponseWriter) Write(data []byte) (int, error) {
-	rw.body += string(data)
-	return len(data), nil
-}
-
-func (rw *hmacResponseWriter) WriteHeader(statusCode int) {
-	rw.status = statusCode
-}
+const hmacHeaderKey = "HashSHA256"
 
 // SF TODO
 type hmacMiddleware struct {
@@ -61,9 +34,9 @@ func NewHMACMiddleware(key *string) (*hmacMiddleware, error) {
 // SF TODO
 func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 	fn := func(resp http.ResponseWriter, req *http.Request) {
-		const prefix = "middleware.hmacMiddleware.f"
+		const prefix = "middleware.hmacMiddleware.F"
 
-		requestHMACHex := req.Header.Get("HashSHA256")
+		requestHMACHex := req.Header.Get(hmacHeaderKey)
 		if requestHMACHex == "" {
 			handler.ServeHTTP(resp, req)
 			return
@@ -80,20 +53,21 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 
 		requestHMAC, err := hex.DecodeString(requestHMACHex)
 		if err != nil {
-			logger.LogS.Errorw(fmt.Sprintf("%s: failed decode hex hmac: %v", prefix, err), "HashSHA256 in request", requestHMACHex)
+			logger.LogS.Errorw(fmt.Sprintf("%s: failed decode hex hmac: %v", prefix, err), "hmac in request", requestHMACHex)
 			http.Error(resp, fmt.Sprintf("failed decode hex hmac: %v", err), http.StatusBadRequest)
 			return
 		}
 
 		if ok, err := encryption.EqualHMAC(bodyBytes, []byte(*m.keyEncryption), requestHMAC, sha256.New); err != nil {
+			logger.LogS.Errorf("%s: failed equal hmac hash: %v", prefix, err)
 			resp.WriteHeader(http.StatusInternalServerError)
 			return
 		} else if !ok {
-			http.Error(resp, "unexpected hmac", http.StatusBadRequest)
+			http.Error(resp, "Invalid hmac for this body", http.StatusBadRequest)
 			return
 		}
 
-		tmpResponse := newHMACResponseWriter()
+		tmpResponse := newDefaultResponseWriter()
 		handler.ServeHTTP(&tmpResponse, req)
 
 		encryptedBody, err := encryption.SignHMAC([]byte(tmpResponse.body), []byte(*m.keyEncryption), sha256.New)
@@ -103,7 +77,7 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 			return
 		}
 
-		tmpResponse.headers.Add("HashSHA256", hex.EncodeToString(encryptedBody))
+		tmpResponse.headers.Add(hmacHeaderKey, hex.EncodeToString(encryptedBody))
 
 		for key, values := range tmpResponse.Header() {
 			for _, value := range values {

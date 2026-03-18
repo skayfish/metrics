@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"math"
+	"net/http"
 	"reflect"
 	"testing"
 
@@ -91,4 +92,9 @@ func StoragesEqual(t *testing.T, expected, storage *storage.MemStorage) {
 
 		MetricsEqual(t, metric, metricRHS)
 	}
+}
+
+// SF TODO
+func HeadersEqual(t *testing.T, expected map[string][]string, actual http.Header) {
+	assert.True(t, reflect.DeepEqual(http.Header(expected), actual))
 }
