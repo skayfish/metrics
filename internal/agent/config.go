@@ -31,6 +31,9 @@ type Config struct {
 
 	// Уровень логирования
 	LogLevel logger.Level
+
+	// Ключ для подписи запросов и ответов
+	KeyEncryption *string
 }
 
 // Возвращает тип соединения

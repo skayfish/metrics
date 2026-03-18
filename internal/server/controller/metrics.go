@@ -484,7 +484,7 @@ func (c *MetricsController) GetMetricFromJSON(resp http.ResponseWriter, req *htt
 	}
 
 	// Формирование ответа
-	metricJSON, err := json.MarshalIndent(*storageMetric, "", "    ")
+	metricJSON, err := json.Marshal(*storageMetric)
 	if err != nil {
 		logger.LogS.Errorf("%s: failed marshal metric: %v", prefix, err)
 		http.Error(resp, "Failed marshal metric", http.StatusInternalServerError)

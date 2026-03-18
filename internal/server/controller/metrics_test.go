@@ -781,7 +781,7 @@ func TestMetricsController_GetMetricFromJSON(t *testing.T) {
 					expectedMetric := model.Metrics{}
 					buf := bytes.NewBuffer([]byte(tt.want.body))
 					require.NoError(t, json.NewDecoder(buf).Decode(&expectedMetric))
-					expectedMetricJSON, err := json.MarshalIndent(expectedMetric, "", "    ")
+					expectedMetricJSON, err := json.Marshal(expectedMetric)
 					require.NoError(t, err)
 					assert.Equal(t, string(expectedMetricJSON), resp.String())
 				default:
