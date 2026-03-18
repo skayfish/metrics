@@ -12,26 +12,26 @@ import (
 	"github.com/skayfish/metrics/internal/logger"
 )
 
-// SF TODO
+// Ключ заголовка с hmac подписью
 const hmacHeaderKey = "HashSHA256"
 
-// SF TODO
+// Middleware обёртка для запросов с hmac подписью
 type hmacMiddleware struct {
-	keyEncryption *string // SF TODO
+	keyEncryption string // Ключ к подписи
 }
 
-// SF TODO
-func NewHMACMiddleware(key *string) (*hmacMiddleware, error) {
-	const prefix = "middleware.NewHMACMiddleware"
-
-	if key == nil {
-		return nil, fmt.Errorf("%s: key encryption is nil", prefix)
-	}
-
-	return &hmacMiddleware{keyEncryption: key}, nil
+// Создаёт новую middleware обёртку для запросов с hmac подписью
+//
+//	@param key ключ к подписи
+//	@returns *hmacMiddleware middleware обёртка для запросов с hmac подписью
+func NewHMACMiddleware(key string) hmacMiddleware {
+	return hmacMiddleware{keyEncryption: key}
 }
 
-// SF TODO
+// Middleware функция-обёртка для запросов с hmac подписью
+//
+//	@param handler обработчик запросов, который нужно обернуть
+//	@returns http.Handler обёрнутый обработчик запросов
 func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 	fn := func(resp http.ResponseWriter, req *http.Request) {
 		const prefix = "middleware.hmacMiddleware.F"
@@ -58,7 +58,7 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 			return
 		}
 
-		if ok, err := encryption.EqualHMAC(bodyBytes, []byte(*m.keyEncryption), requestHMAC, sha256.New); err != nil {
+		if ok, err := encryption.EqualHMAC(bodyBytes, []byte(m.keyEncryption), requestHMAC, sha256.New); err != nil {
 			logger.LogS.Errorf("%s: failed equal hmac hash: %v", prefix, err)
 			resp.WriteHeader(http.StatusInternalServerError)
 			return
@@ -70,7 +70,7 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 		tmpResponse := newDefaultResponseWriter()
 		handler.ServeHTTP(&tmpResponse, req)
 
-		encryptedBody, err := encryption.SignHMAC([]byte(tmpResponse.body), []byte(*m.keyEncryption), sha256.New)
+		encryptedBody, err := encryption.SignHMAC([]byte(tmpResponse.body), []byte(m.keyEncryption), sha256.New)
 		if err != nil {
 			logger.LogS.Errorw(fmt.Sprintf("%s: failed hmac sign: %v", prefix, err), "body", tmpResponse.body, "key", m.keyEncryption)
 			resp.WriteHeader(http.StatusInternalServerError)

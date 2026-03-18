@@ -30,6 +30,6 @@ type Config struct {
 	// Путь к файлам миграции базы данных
 	MigrationsPath string
 
-	// SF TODO
+	// Ключ для подписи запросов и ответов
 	KeyEncryption *string
 }

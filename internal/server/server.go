@@ -60,9 +60,7 @@ func (s *Server) getSaveMiddleware() func(handler http.HandlerFunc) http.Handler
 //
 //	@param storage        хранилище данных
 //	@param saveMiddleware middleware-обёртка для отправки сигнала на сохранение данных хранилища метрик в файл
-//
-// SF TODO
-//
+//	@param keyEncryption  ключ для подписи запросов и ответов
 //	@returns chi.Router маршрутизатор запросов в случае успеха
 //	@returns error ошибку в ином случае
 func getRouter(
@@ -74,11 +72,7 @@ func getRouter(
 
 	router := chi.NewRouter()
 	if keyEncryption != nil {
-		hmacMiddleware, err := middleware.NewHMACMiddleware(keyEncryption)
-		if err != nil {
-			return nil, fmt.Errorf("%s: failed create hmac middleware: %v", prefix, err)
-		}
-
+		hmacMiddleware := middleware.NewHMACMiddleware(*keyEncryption)
 		router.Use(middleware.LoggingMiddleware, hmacMiddleware.F)
 	}
 

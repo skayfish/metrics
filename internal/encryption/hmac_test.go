@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
+// Проверяет создание подписи hmac
 func TestSignHMAC(t *testing.T) {
 	tests := []struct {
 		test string
@@ -46,7 +46,7 @@ func TestSignHMAC(t *testing.T) {
 	}
 }
 
-// SF TODO
+// Проверяет функцию проверки на равенство двух hmac подписей
 func TestEqualHMAC(t *testing.T) {
 	tests := []struct {
 		test string

@@ -15,26 +15,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
+// Проверяет создание middleware обёртки для запросов с hmac подписью
 func TestNewHMACMiddleware(t *testing.T) {
-	t.Run("nil", func(t *testing.T) {
-		mid, err := NewHMACMiddleware(nil)
-		require.Error(t, err)
-		assert.Nil(t, mid)
-
-		require.ErrorContains(t, err, "key encryption is nil")
-	})
-	t.Run("success", func(t *testing.T) {
-		key := "some key"
-		mid, err := NewHMACMiddleware(&key)
-		assert.NoError(t, err)
-		require.NotNil(t, mid)
-		require.NotNil(t, mid.keyEncryption)
-		assert.Equal(t, key, *mid.keyEncryption)
-	})
+	key := "some key"
+	mid := NewHMACMiddleware(key)
+	require.NotNil(t, mid)
+	require.NotNil(t, mid.keyEncryption)
+	assert.Equal(t, key, mid.keyEncryption)
 }
 
-// SF TODO
+// Проверяет вызов middleware обёртки для запросов с hmac подписью
 func Test_hmacMiddleware_F(t *testing.T) {
 	checkRequest := func(r *http.Request, expected string) {
 		data, err := io.ReadAll(r.Body)
@@ -130,7 +120,7 @@ func Test_hmacMiddleware_F(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
-			mid, _ := NewHMACMiddleware(&key)
+			mid := NewHMACMiddleware(key)
 			handlerUsed := false
 
 			handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

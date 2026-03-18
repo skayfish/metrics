@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// SF TODO
+// Проверяет создание объекта записи http ответов
 func Test_newDefaultResponseWriter(t *testing.T) {
 	rw := newDefaultResponseWriter()
 	require.Empty(t, rw.headers)
@@ -17,7 +17,7 @@ func Test_newDefaultResponseWriter(t *testing.T) {
 	assert.Equal(t, -1, rw.status)
 }
 
-// SF TODO
+// Проверяет возврат заголовков объекта записи http ответов
 func Test_defaultResponseWriter_Header(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		rw := newDefaultResponseWriter()
@@ -32,7 +32,7 @@ func Test_defaultResponseWriter_Header(t *testing.T) {
 	})
 }
 
-// SF TODO
+// Проверяет запись тела для объекта записи http ответов
 func Test_defaultResponseWriter_Write(t *testing.T) {
 	tests := []struct {
 		test string
@@ -95,7 +95,7 @@ func Test_defaultResponseWriter_Write(t *testing.T) {
 	})
 }
 
-// SF TODO
+// Проверяет запись заголовков для объекта записи http ответов
 func Test_defaultResponseWriter_WriteHeader(t *testing.T) {
 	tests := []struct {
 		test       string

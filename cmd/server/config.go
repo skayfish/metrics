@@ -31,7 +31,7 @@ type environments struct {
 	// Строка с адресом подключения к базе данных
 	DatabaseDSN *string `env:"DATABASE_DSN" example:"host=localhost port=5432 user=username password=XXXX dbname=databasename sslmode=disable,postgres://username:XXXX@localhost:5432/databasename?sslmode=disable"`
 
-	//SF TODO
+	// Ключ для подписи запросов и ответов
 	KeyEncryption *string `env:"KEY" example:"somekey554%!@#$"`
 }
 
@@ -55,7 +55,7 @@ func parseConfig() (*server.Config, error) {
 		`Connection string for database access, structured as: "host=<host> port=<port> user=<username> password=<pass> dbname=<database name>" or
 		                                                       "postgres://<username>:<password>@<host>:<port>/<database name>?sslmode=disable"`)
 	migrationsPath := pflag.StringP("migrations-path", "m", "migrations", "Directory path containing database migration files")
-	keyEncryption := pflag.StringP("key-hash", "k", "", "") // SF TODO
+	keyEncryption := pflag.StringP("key-hash", "k", "", "Cryptographic key pair component used to sign HTTP requests and responses")
 
 	pflag.Parse()
 

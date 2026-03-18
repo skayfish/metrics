@@ -32,7 +32,7 @@ type Config struct {
 	// Уровень логирования
 	LogLevel logger.Level
 
-	// SF TODO
+	// Ключ для подписи запросов и ответов
 	KeyEncryption *string
 }
 

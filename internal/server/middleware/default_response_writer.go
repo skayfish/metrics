@@ -2,14 +2,14 @@ package middleware
 
 import "net/http"
 
-// SF TODO
+// Базовый объект записи http ответов
 type defaultResponseWriter struct {
-	headers http.Header // SF TODO
-	status  int         // SF TODO
-	body    string      // SF TODO
+	headers http.Header // Заголовки ответа
+	status  int         // Статус ответа
+	body    string      // Тело ответа
 }
 
-// SF TODO
+// Создаёт новый базовый объект записи http ответов
 func newDefaultResponseWriter() defaultResponseWriter {
 	return defaultResponseWriter{
 		headers: make(http.Header),
@@ -17,12 +17,16 @@ func newDefaultResponseWriter() defaultResponseWriter {
 	}
 }
 
-// SF TODO
+// Возвращает заголовки ответа
+//	@returns http.Header заголовки ответа
 func (rw *defaultResponseWriter) Header() http.Header {
 	return rw.headers
 }
 
-// SF TODO
+// Сохраняет данные тела ответа
+//	@param data данные тела ответа
+//	@returns int размер данных, которые удалось записать
+//	@returns error nil, необходимо для поддержки интерфейса http.ResponseWriter
 func (rw *defaultResponseWriter) Write(data []byte) (int, error) {
 	rw.body += string(data)
 	if rw.status == -1 {
@@ -32,6 +36,8 @@ func (rw *defaultResponseWriter) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
+// Сохраняет статус ответа
+//	@param statusCode статус ответа
 func (rw *defaultResponseWriter) WriteHeader(statusCode int) {
 	rw.status = statusCode
 }

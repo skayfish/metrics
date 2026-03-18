@@ -22,7 +22,7 @@ type environments struct {
 	// Частота обновления метрик (например, раз в 2 секунды)
 	PollInterval *uint `env:"POLL_INTERVAL" example:"2"`
 
-	//SF TODO
+	// Ключ для подписи запросов и ответов
 	KeyEncryption *string `env:"KEY" example:"somekey554%!@#$"`
 }
 
@@ -46,7 +46,7 @@ func parseConfig() (*agent.Config, error) {
 		"Connection retry interval, in seconds")
 	var logLevel logger.Level
 	pflag.VarP(&logLevel, "log-level", "l", "Logging level")
-	keyEncryption := pflag.StringP("key-hash", "k", "", "") // SF TODO
+	keyEncryption := pflag.StringP("key-hash", "k", "", "Cryptographic key component used to sign HTTP requests and responses")
 
 	pflag.Parse()
 

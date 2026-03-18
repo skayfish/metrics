@@ -94,7 +94,11 @@ func StoragesEqual(t *testing.T, expected, storage *storage.MemStorage) {
 	}
 }
 
-// SF TODO
+// Сравнивает в глубину два словаря с заголовками
+//
+//	@param t        экземпляр теста
+//	@param expected ожидаемый словарь с заголовками
+//	@param actual   фактический словарь с заголовками
 func HeadersEqual(t *testing.T, expected map[string][]string, actual http.Header) {
 	assert.True(t, reflect.DeepEqual(http.Header(expected), actual))
 }
