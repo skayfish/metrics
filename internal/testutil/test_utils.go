@@ -6,10 +6,12 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 )
 
 // Формирует хранилище по метрикам
@@ -101,4 +103,11 @@ func StoragesEqual(t *testing.T, expected, storage *storage.MemStorage) {
 //	@param actual   фактический словарь с заголовками
 func HeadersEqual(t *testing.T, expected map[string][]string, actual http.Header) {
 	assert.True(t, reflect.DeepEqual(http.Header(expected), actual))
+}
+
+// SF TODO
+// Рекомендация по использованию: defer testutil.DebugLogsOn(t)()
+func DebugLogsOn(t *testing.T) func() {
+	require.NoError(t, logger.Init(logger.Level(zapcore.DebugLevel)))
+	return logger.Close
 }

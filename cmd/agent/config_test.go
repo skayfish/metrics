@@ -23,6 +23,7 @@ func Test_parseConfig(t *testing.T) {
 			PollInterval:     2 * time.Second,
 			ReportInterval:   10 * time.Second,
 			KeyEncryption:    nil,
+			RateLimit:        1,
 		}, *config)
 	})
 }

@@ -34,6 +34,9 @@ type Config struct {
 
 	// Ключ для подписи запросов и ответов
 	KeyEncryption *string
+
+	// SF TODO
+	RateLimit uint
 }
 
 // Возвращает тип соединения

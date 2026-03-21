@@ -24,6 +24,9 @@ type environments struct {
 
 	// Ключ для подписи запросов и ответов
 	KeyEncryption *string `env:"KEY" example:"somekey554%!@#$"`
+
+	// SF TODO
+	RateLimit *uint `env:"RATE_LIMIT" example:"10"`
 }
 
 // Парсит флаги, указанные при запуске программы и переменные окружения
@@ -45,8 +48,9 @@ func parseConfig() (*agent.Config, error) {
 	retryWaitTime := pflag.Uint("retry-wait-time", 2,
 		"Connection retry interval, in seconds")
 	var logLevel logger.Level
-	pflag.VarP(&logLevel, "log-level", "l", "Logging level")
+	pflag.Var(&logLevel, "log-level", "Logging level")
 	keyEncryption := pflag.StringP("key-hash", "k", "", "Cryptographic key component used to sign HTTP requests and responses")
+	rateLimit := pflag.UintP("rate-limit", "l", 1, "") // SF TODO
 
 	pflag.Parse()
 
@@ -73,6 +77,10 @@ func parseConfig() (*agent.Config, error) {
 		*keyEncryption = *envs.KeyEncryption
 	}
 
+	if envs.RateLimit != nil {
+		*rateLimit = *envs.RateLimit
+	}
+
 	// Формирование результата
 	if *keyEncryption == "" {
 		keyEncryption = nil
@@ -88,5 +96,6 @@ func parseConfig() (*agent.Config, error) {
 		ReportInterval:   time.Duration(*reportInterval) * time.Second,
 		LogLevel:         logLevel,
 		KeyEncryption:    keyEncryption,
+		RateLimit:        *rateLimit,
 	}, nil
 }

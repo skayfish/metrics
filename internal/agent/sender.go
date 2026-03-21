@@ -17,15 +17,13 @@ import (
 	"github.com/skayfish/metrics/internal/encryption"
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
+	"golang.org/x/sync/errgroup"
 )
 
 // Менеджер отправки метрик серверу
 type sender struct {
 	// Конфигурация работы системы
 	config Config
-
-	// Количество обновлений метрик за время работы программы
-	pollCount int64
 
 	// Клиент для отправки запросов серверу
 	client *resty.Client
@@ -47,18 +45,10 @@ func NewSender(config Config) sender {
 	return sender{config: config, client: client}
 }
 
-// Получает метрики из системы
-//
-//	@returns метрики из системы
-func (sender) getMetrics() (res runtime.MemStats) {
-	runtime.ReadMemStats(&res)
-	return
-}
-
 // Генерирует случайное вещественное число
 //
 //	@returns случайное вещественное число
-func (sender) generateFloat64() float64 {
+func generateFloat64() float64 {
 	min := -math.MaxFloat32
 	max := math.MaxFloat32
 
@@ -72,8 +62,8 @@ func (sender) generateFloat64() float64 {
 //
 //	@param metrics метрики системы
 //	@returns отфильтрованные метрики системы
-func (sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
-	res = make(map[string]float64)
+func filtrate(metrics *runtime.MemStats) map[string]float64 {
+	res := make(map[string]float64)
 
 	res["Alloc"] = float64(metrics.Alloc)
 	res["BuckHashSys"] = float64(metrics.BuckHashSys)
@@ -103,7 +93,205 @@ func (sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 	res["Sys"] = float64(metrics.Sys)
 	res["TotalAlloc"] = float64(metrics.TotalAlloc)
 
-	return
+	return res
+}
+
+// SF TODO
+func updateMS(ctx context.Context, signal <-chan struct{}) <-chan runtime.MemStats {
+	const prefix = "sender.updateMS"
+
+	out := make(chan runtime.MemStats)
+
+	go func() {
+		logger.LogS.Debugf("%s: started", prefix)
+
+		defer close(out)
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: terminated by context", prefix)
+				return
+			case _, ok := <-signal:
+				if !ok {
+					logger.LogS.Debugf("%s: signal channel is closed", prefix)
+					return
+				}
+
+				var ms runtime.MemStats
+				runtime.ReadMemStats(&ms)
+				out <- ms
+			}
+		}
+	}()
+
+	return out
+}
+
+// SF TODO
+type updateChannels struct {
+	// SF LOGIC ps <- chan ...
+	ms        <-chan runtime.MemStats // SF TODO
+	pollCount <-chan struct{}         // SF TODO
+	first     <-chan struct{}         // SF TODO
+}
+
+// SF TODO
+func update(ctx context.Context, interval time.Duration) updateChannels {
+	const prefix = "sender.update"
+
+	// Каналы для внутренней работы функции
+	msSignal := make(chan struct{})
+	// SF LOGIC psSignal := make(chan struct{})
+	pollCountSignal := make(chan struct{})
+
+	// Каналы для отправки наружу
+	firstCh := make(chan struct{})
+	msCh := updateMS(ctx, msSignal)
+	// SF LOGIC psCh := updatePS(ctx, psSignal)
+
+	sendSignals := func() {
+		msSignal <- struct{}{}
+		// SF LOGIC psSignal <- struct{}{}
+		pollCountSignal <- struct{}{}
+	}
+
+	go func() {
+		logger.LogS.Debugf("%s: started", prefix)
+
+		// Сразу обновляем и отправляем метрики
+		sendSignals()
+		firstCh <- struct{}{}
+		defer close(firstCh)
+
+		// Запуск таймера
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		defer close(msSignal)
+		// SF LOGIC defer close(psSignal)
+		defer close(pollCountSignal)
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: terminated by context", prefix)
+				return
+			case <-ticker.C:
+				sendSignals()
+			}
+		}
+	}()
+
+	return updateChannels{
+		ms:        msCh,
+		pollCount: pollCountSignal,
+		first:     firstCh,
+	}
+}
+
+// SF TODO
+func collect(ctx context.Context, chs updateChannels, interval time.Duration) <-chan []model.Metrics {
+	const prefix = "sender.collect"
+
+	out := make(chan []model.Metrics)
+
+	go func() {
+		logger.LogS.Debugf("%s: started", prefix)
+
+		defer close(out)
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		pollCounter := int64(0)
+		lastMS := make([]model.Metrics, 0)
+
+		sendMetrics := func() {
+			metrics := make([]model.Metrics, len(lastMS))
+			copy(metrics, lastMS)
+
+			pc := pollCounter
+			metrics = append(metrics, model.Metrics{
+				ID:    "PollCount",
+				MType: model.Counter,
+				Delta: &pc,
+			})
+
+			out <- metrics
+
+			lastMS = make([]model.Metrics, 0)
+			pollCounter = 0
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: terminated by context", prefix)
+				return
+			case ms, ok := <-chs.ms:
+				if !ok {
+					logger.LogS.Debugf("%s: memory stats channel is closed", prefix)
+					return
+				}
+
+				logger.LogS.Debugf("%s: got memory stats", prefix)
+
+				filtered := filtrate(&ms)
+				// Добавление дополнительных gauge метрик
+				filtered["RandomValue"] = generateFloat64()
+
+				lastMS = make([]model.Metrics, 0)
+				for id, value := range filtered {
+					lastMS = append(lastMS, model.Metrics{
+						ID:    id,
+						MType: model.Gauge,
+						Value: &value,
+					})
+				}
+			// SF LOGIC case ps, ok := <-chs.ps:
+			case _, ok := <-chs.pollCount:
+				if !ok {
+					logger.LogS.Debugf("%s: poll count channel is closed", prefix)
+					return
+				}
+
+				logger.LogS.Debugf("%s: got poll count signal", prefix)
+
+				pollCounter++
+			case <-chs.first:
+				logger.LogS.Debugf(`%s: got "first" signal`, prefix)
+				sendMetrics()
+			case <-ticker.C:
+				sendMetrics()
+			}
+		}
+	}()
+
+	return out
+}
+
+// SF TODO
+func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) error {
+	const prefix = "sender.sender.report"
+
+	errg := new(errgroup.Group)
+	for m := range in {
+		metrics := m
+		errg.Go(func() error {
+			return s.send(ctx, metrics)
+		})
+	}
+
+	if err := errg.Wait(); err != nil {
+		return fmt.Errorf("%s: %w", prefix, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("%s: %w", prefix, err)
+	}
+
+	return nil
 }
 
 // Запускает обновление метрик и отправку их серверу
@@ -113,71 +301,14 @@ func (sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 func (s *sender) Run(ctx context.Context) error {
 	const prefix = "agent.sender.Run"
 
-	var metrics runtime.MemStats
-	updateMetrics := func() {
-		metrics = s.getMetrics()
-		s.pollCount++
-	}
-	collectMetrics := func() (result []model.Metrics) {
-		result = make([]model.Metrics, 0)
-
-		// Фильтрация метрик, полученных из системы
-		filteredMetrics := s.filtrate(metrics)
-		// Добавление дополнительных gauge метрик
-		filteredMetrics["RandomValue"] = s.generateFloat64()
-
-		for id, value := range filteredMetrics {
-			result = append(result, model.Metrics{
-				ID:    id,
-				MType: model.Gauge,
-				Value: &value,
-			})
-		}
-
-		result = append(result, model.Metrics{
-			ID:    "PollCount",
-			MType: model.Counter,
-			Delta: &s.pollCount,
-		})
-
-		return result
-	}
-	reportMetrics := func() error {
-		err := s.send(collectMetrics())
-		if err != nil {
-			return err
-		}
-
-		s.pollCount = 0
-
-		return nil
+	updateChs := update(ctx, s.config.PollInterval)
+	collectCh := collect(ctx, updateChs, s.config.ReportInterval)
+	err := s.report(ctx, collectCh)
+	if err != nil {
+		return fmt.Errorf("%s: %w", prefix, err)
 	}
 
-	// Сразу обновляются и отправляются метрики
-	updateMetrics()
-	if err := reportMetrics(); err != nil {
-		return fmt.Errorf("%s: %v", prefix, err)
-	}
-
-	// Ожидание интервалов
-	pollTicker := time.NewTicker(s.config.PollInterval)
-	defer pollTicker.Stop()
-	reportTicker := time.NewTicker(s.config.ReportInterval)
-	defer reportTicker.Stop()
-	for {
-		if ctx != nil && ctx.Err() != nil {
-			return fmt.Errorf("%s: metrics sending manager operation terminated: %w", prefix, ctx.Err())
-		}
-
-		select {
-		case <-pollTicker.C:
-			updateMetrics()
-		case <-reportTicker.C:
-			if err := reportMetrics(); err != nil {
-				return fmt.Errorf("%s: %v", prefix, err)
-			}
-		}
-	}
+	return nil
 }
 
 // Сжимает переданные данные с помощью gzip
@@ -207,9 +338,10 @@ func compress(data []byte) ([]byte, error) {
 
 // Отправляет метрики серверу
 //
+//	@param ctx     контекст для завершения работы
 //	@param metrics метрики для отправки
 //	@returns ошибку, если возникли проблемы при отправки метрик
-func (s *sender) send(metrics []model.Metrics) error {
+func (s *sender) send(ctx context.Context, metrics []model.Metrics) error {
 	const prefix = "agent.sender.send"
 
 	logger.LogS.Debugw(fmt.Sprintf("%s: send metrics", prefix), "metrics", metrics)
@@ -240,7 +372,8 @@ func (s *sender) send(metrics []model.Metrics) error {
 	url := fmt.Sprintf("%s://%s:%d/updates", s.config.getConnectionType(), s.config.Host, s.config.Port)
 	request := s.client.R().
 		SetBody(compressedMetricsJSON).
-		SetHeaders(requestHeaders)
+		SetHeaders(requestHeaders).
+		SetContext(ctx)
 
 	response, err := request.Post(url)
 	if err != nil {
