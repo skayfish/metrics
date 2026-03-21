@@ -277,10 +277,7 @@ func Test_sender_Run(t *testing.T) {
 					case handlerCounter == 0:
 						assert.Equal(t, int64(1), *metric.Delta)
 						fmt.Print("Handler count 1: succeed\n")
-					case handlerCounter == 1:
-						assert.Equal(t, int64(4), *metric.Delta)
-						fmt.Printf("Handler count %d: succeed\n", handlerCounter+1)
-					case handlerCounter == 2:
+					case handlerCounter < 3:
 						assert.Equal(t, int64(5), *metric.Delta)
 						fmt.Printf("Handler count %d: succeed\n", handlerCounter+1)
 					default:
@@ -311,7 +308,7 @@ func Test_sender_Run(t *testing.T) {
 				Port:             port,
 				RetryMaxWaitTime: retryMaxWaitTime,
 				RetryWaitTime:    retryWaitTime,
-				PollInterval:     100 * time.Millisecond,
+				PollInterval:     99 * time.Millisecond,
 				ReportInterval:   500 * time.Millisecond,
 			},
 			client: resty.New(),

@@ -97,30 +97,36 @@ func filtrate(metrics *runtime.MemStats) map[string]float64 {
 }
 
 // SF TODO
-func updateMS(ctx context.Context, signal <-chan struct{}) <-chan runtime.MemStats {
-	const prefix = "sender.updateMS"
+func updateMS(ctx context.Context, interval time.Duration) <-chan runtime.MemStats {
+	const prefix = "sender.update"
 
 	out := make(chan runtime.MemStats)
+
+	getMS := func() (ms runtime.MemStats) {
+		runtime.ReadMemStats(&ms)
+		return ms
+	}
 
 	go func() {
 		logger.LogS.Debugf("%s: started", prefix)
 
 		defer close(out)
 
+		// Сразу обновляем и отправляем метрики
+		out <- getMS()
+
+		// Запуск таймера
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
 		for {
 			select {
 			case <-ctx.Done():
 				logger.LogS.Debugf("%s: terminated by context", prefix)
 				return
-			case _, ok := <-signal:
-				if !ok {
-					logger.LogS.Debugf("%s: signal channel is closed", prefix)
-					return
-				}
-
-				var ms runtime.MemStats
-				runtime.ReadMemStats(&ms)
-				out <- ms
+			case <-ticker.C:
+				logger.LogS.Debugf("%s: got time tick", prefix)
+				out <- getMS()
 			}
 		}
 	}()
@@ -129,69 +135,7 @@ func updateMS(ctx context.Context, signal <-chan struct{}) <-chan runtime.MemSta
 }
 
 // SF TODO
-type updateChannels struct {
-	// SF LOGIC ps <- chan ...
-	ms        <-chan runtime.MemStats // SF TODO
-	pollCount <-chan struct{}         // SF TODO
-	first     <-chan struct{}         // SF TODO
-}
-
-// SF TODO
-func update(ctx context.Context, interval time.Duration) updateChannels {
-	const prefix = "sender.update"
-
-	// Каналы для внутренней работы функции
-	msSignal := make(chan struct{})
-	// SF LOGIC psSignal := make(chan struct{})
-	pollCountSignal := make(chan struct{})
-
-	// Каналы для отправки наружу
-	firstCh := make(chan struct{})
-	msCh := updateMS(ctx, msSignal)
-	// SF LOGIC psCh := updatePS(ctx, psSignal)
-
-	sendSignals := func() {
-		msSignal <- struct{}{}
-		// SF LOGIC psSignal <- struct{}{}
-		pollCountSignal <- struct{}{}
-	}
-
-	go func() {
-		logger.LogS.Debugf("%s: started", prefix)
-
-		// Сразу обновляем и отправляем метрики
-		sendSignals()
-		firstCh <- struct{}{}
-		defer close(firstCh)
-
-		// Запуск таймера
-		ticker := time.NewTicker(interval)
-		defer ticker.Stop()
-
-		defer close(msSignal)
-		// SF LOGIC defer close(psSignal)
-		defer close(pollCountSignal)
-
-		for {
-			select {
-			case <-ctx.Done():
-				logger.LogS.Debugf("%s: terminated by context", prefix)
-				return
-			case <-ticker.C:
-				sendSignals()
-			}
-		}
-	}()
-
-	return updateChannels{
-		ms:        msCh,
-		pollCount: pollCountSignal,
-		first:     firstCh,
-	}
-}
-
-// SF TODO
-func collect(ctx context.Context, chs updateChannels, interval time.Duration) <-chan []model.Metrics {
+func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.MemStats) <-chan []model.Metrics {
 	const prefix = "sender.collect"
 
 	out := make(chan []model.Metrics)
@@ -204,24 +148,23 @@ func collect(ctx context.Context, chs updateChannels, interval time.Duration) <-
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 
-		pollCounter := int64(0)
-		lastMS := make([]model.Metrics, 0)
+		msFirstTime := true
+		type memStatsData struct {
+			counter int64
+			last    []model.Metrics
+		}
+		var msData memStatsData
 
 		sendMetrics := func() {
-			metrics := make([]model.Metrics, len(lastMS))
-			copy(metrics, lastMS)
-
-			pc := pollCounter
-			metrics = append(metrics, model.Metrics{
+			pc := msData.counter
+			msData.last = append(msData.last, model.Metrics{
 				ID:    "PollCount",
 				MType: model.Counter,
 				Delta: &pc,
 			})
 
-			out <- metrics
-
-			lastMS = make([]model.Metrics, 0)
-			pollCounter = 0
+			out <- msData.last
+			msData = memStatsData{}
 		}
 
 		for {
@@ -229,7 +172,7 @@ func collect(ctx context.Context, chs updateChannels, interval time.Duration) <-
 			case <-ctx.Done():
 				logger.LogS.Debugf("%s: terminated by context", prefix)
 				return
-			case ms, ok := <-chs.ms:
+			case ms, ok := <-msCh:
 				if !ok {
 					logger.LogS.Debugf("%s: memory stats channel is closed", prefix)
 					return
@@ -238,32 +181,30 @@ func collect(ctx context.Context, chs updateChannels, interval time.Duration) <-
 				logger.LogS.Debugf("%s: got memory stats", prefix)
 
 				filtered := filtrate(&ms)
+
 				// Добавление дополнительных gauge метрик
 				filtered["RandomValue"] = generateFloat64()
 
-				lastMS = make([]model.Metrics, 0)
+				// Заполнение данных ms
+				msData.last = make([]model.Metrics, 0)
 				for id, value := range filtered {
-					lastMS = append(lastMS, model.Metrics{
+					msData.last = append(msData.last, model.Metrics{
 						ID:    id,
 						MType: model.Gauge,
 						Value: &value,
 					})
 				}
-			// SF LOGIC case ps, ok := <-chs.ps:
-			case _, ok := <-chs.pollCount:
-				if !ok {
-					logger.LogS.Debugf("%s: poll count channel is closed", prefix)
-					return
+				msData.counter++
+
+				if msFirstTime {
+					sendMetrics()
+					msFirstTime = false
 				}
-
-				logger.LogS.Debugf("%s: got poll count signal", prefix)
-
-				pollCounter++
-			case <-chs.first:
-				logger.LogS.Debugf(`%s: got "first" signal`, prefix)
-				sendMetrics()
+			// SF LOGIC case ps, ok := <-psCh:
 			case <-ticker.C:
+				logger.LogS.Debugf("%s: got time tick", prefix)
 				sendMetrics()
+				msFirstTime = false
 			}
 		}
 	}()
@@ -279,6 +220,7 @@ func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) error {
 	for m := range in {
 		metrics := m
 		errg.Go(func() error {
+			logger.LogS.Debugf("%s: sending: %v", prefix, metrics)
 			return s.send(ctx, metrics)
 		})
 	}
@@ -301,8 +243,8 @@ func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) error {
 func (s *sender) Run(ctx context.Context) error {
 	const prefix = "agent.sender.Run"
 
-	updateChs := update(ctx, s.config.PollInterval)
-	collectCh := collect(ctx, updateChs, s.config.ReportInterval)
+	msChannel := updateMS(ctx, s.config.PollInterval)
+	collectCh := collect(ctx, s.config.ReportInterval, msChannel)
 	err := s.report(ctx, collectCh)
 	if err != nil {
 		return fmt.Errorf("%s: %w", prefix, err)
