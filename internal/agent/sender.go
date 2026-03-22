@@ -146,7 +146,12 @@ func updateMS(ctx context.Context, interval time.Duration) <-chan runtime.MemSta
 				return
 			case <-ticker.C:
 				logger.LogS.Debugf("%s: got time tick", prefix)
-				out <- getMS()
+				select {
+				case <-ctx.Done():
+					logger.LogS.Debugf("%s: sending memory stat terminated by context", prefix)
+					return
+				case out <- getMS():
+				}
 			}
 		}
 	}()
@@ -173,32 +178,48 @@ func updateSS(ctx context.Context, interval time.Duration) (<-chan systemStat, <
 	outErr := make(chan error)
 
 	getSS := func() error {
+		const prefix = "sender.updateSS.getSS"
 		vms, err := mem.VirtualMemoryWithContext(ctx)
 		if err != nil {
-			outErr <- err
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: sending err about virtual memory terminated by context", prefix)
+				return ctx.Err()
+			case outErr <- err:
+			}
+
 			logger.LogS.Debugf("%s: virtual memory stat getting failed: %v", prefix, err)
 			return err
 		}
 
 		cpu, err := cpu.CountsWithContext(ctx, true)
 		if err != nil {
-			outErr <- err
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: sending err about cpu counts terminated by context", prefix)
+				return ctx.Err()
+			case outErr <- err:
+			}
+
 			logger.LogS.Debugf("%s: cpu counts getting failed: %v", prefix, err)
 			return err
 		}
 
-		out <- systemStat{
-			vms: *vms,
-			cpu: cpu,
+		select {
+		case <-ctx.Done():
+			logger.LogS.Debugf("%s: sending system stat terminated by context", prefix)
+			return ctx.Err()
+		case out <- systemStat{vms: *vms, cpu: cpu}:
 		}
 
-		return err
+		return nil
 	}
 
 	go func() {
 		logger.LogS.Debugf("%s: started", prefix)
 
 		defer close(out)
+		defer close(outErr)
 
 		// Сразу обновляем и отправляем данные системы
 		if err := getSS(); err != nil {
@@ -286,7 +307,8 @@ func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.Me
 			case ms, ok := <-msCh:
 				if !ok {
 					logger.LogS.Debugf("%s: memory stats channel is closed", prefix)
-					return
+					msCh = nil
+					continue
 				}
 
 				logger.LogS.Debugf("%s: got memory stats", prefix)
@@ -302,22 +324,35 @@ func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.Me
 
 				if msFirstTime {
 					collectMS()
-					out <- msData.last
+					select {
+					case <-ctx.Done():
+						logger.LogS.Debugf("%s: sending memory stat terminated by context", prefix)
+						return
+					case out <- msData.last:
+					}
+
 					msData = memStatsData{}
 					msFirstTime = false
 				}
 			case ss, ok := <-ssCh:
 				if !ok {
-					logger.LogS.Debugf("%s: system stats channel is closed", prefix)
-					return
+					logger.LogS.Debugf("%s: system stat channel is closed", prefix)
+					ssCh = nil
+					continue
 				}
 
-				logger.LogS.Debugf("%s: got system stats", prefix)
+				logger.LogS.Debugf("%s: got system stat", prefix)
 
 				ssData = rawGaugesToMetrics(filtrateSS(&ss))
 
 				if ssFirstTime {
-					out <- ssData
+					select {
+					case <-ctx.Done():
+						logger.LogS.Debugf("%s: sending system stat terminated by context", prefix)
+						return
+					case out <- ssData:
+					}
+
 					ssData = nil
 					ssFirstTime = false
 				}
@@ -326,7 +361,14 @@ func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.Me
 
 				collectMS()
 				msData.last = append(msData.last, ssData...)
-				out <- msData.last
+
+				select {
+				case <-ctx.Done():
+					logger.LogS.Debugf("%s: sending metrics terminated by context", prefix)
+					return
+				case out <- msData.last:
+				}
+
 				msData = memStatsData{}
 				ssData = nil
 
@@ -351,14 +393,22 @@ func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) <-chan e
 	out := make(chan error)
 
 	go func() {
+		defer close(out)
+
 		var wg sync.WaitGroup
 		wg.Add(int(s.config.RateLimit))
 		for i := 0; i < int(s.config.RateLimit); i++ {
 			go func() {
+				num := i
 				defer wg.Done()
 				for metrics := range in {
 					if err := s.send(ctx, metrics); err != nil {
-						out <- fmt.Errorf("%s: %w", prefix, err)
+						select {
+						case <-ctx.Done():
+							logger.LogS.Debugf("%s: reporter %d: terminated by context", num, prefix)
+						case out <- fmt.Errorf("%s: %w", prefix, err):
+						}
+
 						return
 					}
 				}
@@ -387,12 +437,28 @@ func (s *sender) Run(ctx context.Context) error {
 	reportErrCh := s.report(curCtx, collectCh)
 
 	var err error
-	select {
-	case <-ctx.Done():
-		logger.LogS.Debugf("%s: terminated by context", prefix)
-		return fmt.Errorf("%s: %w", prefix, ctx.Err())
-	case err = <-ssErrCh:
-	case err = <-reportErrCh:
+	var ok bool
+errorLoop:
+	for {
+		select {
+		case <-ctx.Done():
+			logger.LogS.Debugf("%s: terminated by context", prefix)
+			return fmt.Errorf("%s: %w", prefix, ctx.Err())
+		case err, ok = <-ssErrCh:
+			if !ok {
+				ssErrCh = nil
+				continue
+			}
+
+			break errorLoop
+		case err, ok = <-reportErrCh:
+			if !ok {
+				reportErrCh = nil
+				continue
+			}
+
+			break errorLoop
+		}
 	}
 
 	return fmt.Errorf("%s: %w", prefix, err)
