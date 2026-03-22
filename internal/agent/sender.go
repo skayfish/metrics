@@ -14,10 +14,11 @@ import (
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
 	"github.com/skayfish/metrics/internal/encryption"
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
-	"golang.org/x/sync/errgroup"
 )
 
 // Менеджер отправки метрик серверу
@@ -62,7 +63,7 @@ func generateFloat64() float64 {
 //
 //	@param metrics метрики системы
 //	@returns отфильтрованные метрики системы
-func filtrate(metrics *runtime.MemStats) map[string]float64 {
+func filtrateMS(metrics *runtime.MemStats) map[string]float64 {
 	res := make(map[string]float64)
 
 	res["Alloc"] = float64(metrics.Alloc)
@@ -96,9 +97,25 @@ func filtrate(metrics *runtime.MemStats) map[string]float64 {
 	return res
 }
 
+// Фильтрует необходимые метрики системы
+//
+//	@param metrics метрики системы
+//	@returns отфильтрованные метрики системы
+//
+// SF TODO
+func filtrateSS(ss *systemStat) map[string]float64 {
+	res := make(map[string]float64)
+
+	res["TotalMemory"] = float64(ss.vms.Total)
+	res["FreeMemory"] = float64(ss.vms.Free)
+	res["CPUutilization1"] = float64(ss.cpu)
+
+	return res
+}
+
 // SF TODO
 func updateMS(ctx context.Context, interval time.Duration) <-chan runtime.MemStats {
-	const prefix = "sender.update"
+	const prefix = "sender.updateMS"
 
 	out := make(chan runtime.MemStats)
 
@@ -135,7 +152,74 @@ func updateMS(ctx context.Context, interval time.Duration) <-chan runtime.MemSta
 }
 
 // SF TODO
-func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.MemStats) <-chan []model.Metrics {
+type systemStat struct {
+	vms mem.VirtualMemoryStat // SF TODO
+	cpu int                   // SF TODO
+}
+
+// SF TODO
+func updateSS(ctx context.Context, interval time.Duration) (<-chan systemStat, <-chan error) {
+	const prefix = "sender.updateSS"
+
+	out := make(chan systemStat)
+	outErr := make(chan error)
+
+	getSS := func() error {
+		vms, err := mem.VirtualMemoryWithContext(ctx)
+		if err != nil {
+			outErr <- err
+			logger.LogS.Debugf("%s: virtual memory stat getting failed: %v", prefix, err)
+			return err
+		}
+
+		cpu, err := cpu.CountsWithContext(ctx, true)
+		if err != nil {
+			outErr <- err
+			logger.LogS.Debugf("%s: cpu counts getting failed: %v", prefix, err)
+			return err
+		}
+
+		out <- systemStat{
+			vms: *vms,
+			cpu: cpu,
+		}
+
+		return err
+	}
+
+	go func() {
+		logger.LogS.Debugf("%s: started", prefix)
+
+		defer close(out)
+
+		// Сразу обновляем и отправляем метрики
+		if err := getSS(); err != nil {
+			return
+		}
+
+		// Запуск таймера
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: terminated by context", prefix)
+				return
+			case <-ticker.C:
+				logger.LogS.Debugf("%s: got time tick", prefix)
+				if err := getSS(); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	return out, outErr
+}
+
+// SF TODO
+func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.MemStats, ssCh <-chan systemStat) <-chan []model.Metrics {
 	const prefix = "sender.collect"
 
 	out := make(chan []model.Metrics)
@@ -155,16 +239,29 @@ func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.Me
 		}
 		var msData memStatsData
 
-		sendMetrics := func() {
+		collectMS := func() {
 			pc := msData.counter
 			msData.last = append(msData.last, model.Metrics{
 				ID:    "PollCount",
 				MType: model.Counter,
 				Delta: &pc,
 			})
+		}
 
-			out <- msData.last
-			msData = memStatsData{}
+		ssFirstTime := true
+		var ssData []model.Metrics
+
+		rawGaugesToMetrics := func(gauges map[string]float64) []model.Metrics {
+			res := make([]model.Metrics, 0, len(gauges))
+			for id, value := range gauges {
+				res = append(res, model.Metrics{
+					ID:    id,
+					MType: model.Gauge,
+					Value: &value,
+				})
+			}
+
+			return res
 		}
 
 		for {
@@ -180,31 +277,47 @@ func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.Me
 
 				logger.LogS.Debugf("%s: got memory stats", prefix)
 
-				filtered := filtrate(&ms)
+				filtered := filtrateMS(&ms)
 
 				// Добавление дополнительных gauge метрик
 				filtered["RandomValue"] = generateFloat64()
 
 				// Заполнение данных ms
-				msData.last = make([]model.Metrics, 0)
-				for id, value := range filtered {
-					msData.last = append(msData.last, model.Metrics{
-						ID:    id,
-						MType: model.Gauge,
-						Value: &value,
-					})
-				}
+				msData.last = rawGaugesToMetrics(filtered)
 				msData.counter++
 
 				if msFirstTime {
-					sendMetrics()
+					collectMS()
+					out <- msData.last
+					msData = memStatsData{}
 					msFirstTime = false
 				}
-			// SF LOGIC case ps, ok := <-psCh:
+			case ss, ok := <-ssCh:
+				if !ok {
+					logger.LogS.Debugf("%s: system stats channel is closed", prefix)
+					return
+				}
+
+				logger.LogS.Debugf("%s: got system stats", prefix)
+
+				ssData = rawGaugesToMetrics(filtrateSS(&ss))
+
+				if ssFirstTime {
+					out <- ssData
+					ssData = nil
+					ssFirstTime = false
+				}
 			case <-ticker.C:
 				logger.LogS.Debugf("%s: got time tick", prefix)
-				sendMetrics()
+
+				collectMS()
+				msData.last = append(msData.last, ssData...)
+				out <- msData.last
+				msData = memStatsData{}
+				ssData = nil
+
 				msFirstTime = false
+				ssFirstTime = false
 			}
 		}
 	}()
@@ -213,27 +326,21 @@ func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.Me
 }
 
 // SF TODO
-func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) error {
+func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) <-chan error {
 	const prefix = "sender.sender.report"
 
-	errg := new(errgroup.Group)
-	for m := range in {
-		metrics := m
-		errg.Go(func() error {
-			logger.LogS.Debugf("%s: sending: %v", prefix, metrics)
-			return s.send(ctx, metrics)
-		})
-	}
+	out := make(chan error)
 
-	if err := errg.Wait(); err != nil {
-		return fmt.Errorf("%s: %w", prefix, err)
-	}
+	go func() {
+		for metrics := range in {
+			if err := s.send(ctx, metrics); err != nil {
+				out <- fmt.Errorf("%s: %w", prefix, err)
+				return
+			}
+		}
+	}()
 
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("%s: %w", prefix, err)
-	}
-
-	return nil
+	return out
 }
 
 // Запускает обновление метрик и отправку их серверу
@@ -243,14 +350,24 @@ func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) error {
 func (s *sender) Run(ctx context.Context) error {
 	const prefix = "agent.sender.Run"
 
-	msChannel := updateMS(ctx, s.config.PollInterval)
-	collectCh := collect(ctx, s.config.ReportInterval, msChannel)
-	err := s.report(ctx, collectCh)
-	if err != nil {
-		return fmt.Errorf("%s: %w", prefix, err)
+	curCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	msCh := updateMS(curCtx, s.config.PollInterval)
+	ssCh, ssErrCh := updateSS(curCtx, s.config.PollInterval)
+	collectCh := collect(curCtx, s.config.ReportInterval, msCh, ssCh)
+	reportErrCh := s.report(curCtx, collectCh)
+
+	var err error
+	select {
+	case <-ctx.Done():
+		logger.LogS.Debugf("%s: terminated by context", prefix)
+		return fmt.Errorf("%s: %w", prefix, ctx.Err())
+	case err = <-ssErrCh:
+	case err = <-reportErrCh:
 	}
 
-	return nil
+	return fmt.Errorf("%s: %w", prefix, err)
 }
 
 // Сжимает переданные данные с помощью gzip

@@ -103,7 +103,7 @@ func TestNewSender(t *testing.T) {
 }
 
 // Проверяет фильтрацию метрик
-func Test_filtrate(t *testing.T) {
+func Test_filtrateMS(t *testing.T) {
 	tests := []struct {
 		name    string
 		metrics runtime.MemStats
@@ -242,7 +242,7 @@ func Test_filtrate(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if gotRes := filtrate(&tt.metrics); !reflect.DeepEqual(gotRes, tt.wantRes) {
+			if gotRes := filtrateMS(&tt.metrics); !reflect.DeepEqual(gotRes, tt.wantRes) {
 				t.Errorf("sender.filtrate() = %v, want %v", gotRes, tt.wantRes)
 			}
 		})
@@ -319,6 +319,6 @@ func Test_sender_Run(t *testing.T) {
 		err = sender.Run(ctx)
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.Equal(t, 3, handlerCounter)
-		assert.Equal(t, 28*handlerCounter, gaugeCounter)
+		assert.Equal(t, 28*handlerCounter+3*handlerCounter, gaugeCounter)
 	})
 }
