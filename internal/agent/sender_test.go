@@ -255,7 +255,10 @@ func Test_sender_Run(t *testing.T) {
 		router := chi.NewRouter()
 		handlerCounter := 0
 		gaugeCounter := 0
+		countCounter := 0
 		router.Post("/updates", func(resp http.ResponseWriter, req *http.Request) {
+			handlerCounter++
+
 			require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 			require.Equal(t, "gzip", req.Header.Get("Content-Encoding"))
 
@@ -274,17 +277,15 @@ func Test_sender_Run(t *testing.T) {
 				if metric.MType == model.Counter && metric.ID == "PollCount" {
 					require.NotNil(t, metric.Delta)
 					switch {
-					case handlerCounter == 0:
-						assert.Equal(t, int64(1), *metric.Delta)
-						fmt.Print("Handler count 1: succeed\n")
 					case handlerCounter < 3:
+						assert.Equal(t, int64(1), *metric.Delta)
+					case handlerCounter < 5:
 						assert.Equal(t, int64(5), *metric.Delta)
-						fmt.Printf("Handler count %d: succeed\n", handlerCounter+1)
 					default:
-						t.Errorf("expected handler call count = 3, actual = %d", handlerCounter+1)
+						t.Errorf("expected count metric times: 3, actual: %d", countCounter+1)
 					}
 
-					handlerCounter++
+					countCounter++
 				} else if metric.MType == model.Gauge {
 					require.NotNil(t, metric.Value)
 					gaugeCounter++
@@ -292,6 +293,8 @@ func Test_sender_Run(t *testing.T) {
 					t.Errorf("unknown metric type: %s", metric.MType)
 				}
 			}
+
+			fmt.Printf("Handler count %d: finished\n", handlerCounter)
 		})
 
 		server := httptest.NewServer(router)
@@ -318,7 +321,7 @@ func Test_sender_Run(t *testing.T) {
 		defer cancel()
 		err = sender.Run(ctx)
 		require.ErrorIs(t, err, context.DeadlineExceeded)
-		assert.Equal(t, 3, handlerCounter)
-		assert.Equal(t, 28*handlerCounter+3*handlerCounter, gaugeCounter)
+		assert.Equal(t, 4, handlerCounter)
+		assert.Equal(t, (28+3)*3, gaugeCounter) // (28:mem stats + 3:system stats) * 3:times
 	})
 }
