@@ -133,7 +133,12 @@ func updateMS(ctx context.Context, interval time.Duration) <-chan runtime.MemSta
 		defer close(out)
 
 		// Сразу обновляем и отправляем метрики
-		out <- getMS()
+		select {
+		case <-ctx.Done():
+			logger.LogS.Debugf("%s: sending memory stat terminated by context", prefix)
+			return
+		case out <- getMS():
+		}
 
 		// Запуск таймера
 		ticker := time.NewTicker(interval)
