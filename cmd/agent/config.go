@@ -25,7 +25,7 @@ type environments struct {
 	// Ключ для подписи запросов и ответов
 	KeyEncryption *string `env:"KEY" example:"somekey554%!@#$"`
 
-	// SF TODO
+	// Ограничение одновременно исходящих запросов на сервер
 	RateLimit *uint `env:"RATE_LIMIT" example:"10"`
 }
 
@@ -50,7 +50,7 @@ func parseConfig() (*agent.Config, error) {
 	var logLevel logger.Level
 	pflag.Var(&logLevel, "log-level", "Logging level")
 	keyEncryption := pflag.StringP("key-hash", "k", "", "Cryptographic key component used to sign HTTP requests and responses")
-	rateLimit := pflag.UintP("rate-limit", "l", 1, "") // SF TODO
+	rateLimit := pflag.UintP("rate-limit", "l", 1, "Limit for concurrent requests sent to server")
 
 	pflag.Parse()
 

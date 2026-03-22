@@ -105,8 +105,19 @@ func HeadersEqual(t *testing.T, expected map[string][]string, actual http.Header
 	assert.True(t, reflect.DeepEqual(http.Header(expected), actual))
 }
 
-// SF TODO
-// Рекомендация по использованию: defer testutil.DebugLogsOn(t)()
+// Инициализирует менеджер логирования, и останавливает его в дебажный режим
+// Рекомендация по использованию:
+//
+// Пример 1:
+// defer testutil.DebugLogsOn(t)()
+//
+// Пример 2:
+// close := testutil.DebugLogsOn(t)
+// ... Ваш код ...
+// close()
+//
+//	@param t экземпляр теста
+//	@returns func() функцию для закрытия менеджера логирования
 func DebugLogsOn(t *testing.T) func() {
 	require.NoError(t, logger.Init(logger.Level(zapcore.DebugLevel)))
 	return logger.Close

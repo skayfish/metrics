@@ -35,7 +35,7 @@ type Config struct {
 	// Ключ для подписи запросов и ответов
 	KeyEncryption *string
 
-	// SF TODO
+	// Ограничение одновременно исходящих запросов на сервер
 	RateLimit uint
 }
 

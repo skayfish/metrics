@@ -60,9 +60,9 @@ func generateFloat64() float64 {
 	return min + gen.Float64()*(max-min)
 }
 
-// Фильтрует необходимые метрики системы
+// Фильтрует необходимые runtime метрики системы
 //
-//	@param metrics метрики системы
+//	@param metrics runtime метрики системы
 //	@returns отфильтрованные метрики системы
 func filtrateMS(metrics *runtime.MemStats) map[string]float64 {
 	res := make(map[string]float64)
@@ -100,10 +100,8 @@ func filtrateMS(metrics *runtime.MemStats) map[string]float64 {
 
 // Фильтрует необходимые метрики системы
 //
-//	@param metrics метрики системы
+//	@param ss метрики системы
 //	@returns отфильтрованные метрики системы
-//
-// SF TODO
 func filtrateSS(ss *systemStat) map[string]float64 {
 	res := make(map[string]float64)
 
@@ -114,7 +112,11 @@ func filtrateSS(ss *systemStat) map[string]float64 {
 	return res
 }
 
-// SF TODO
+// Обновляет runtime метрики системы и отправляет их по выходному каналу
+//
+//	@param ctx      контекст для завершения работы
+//	@param interval интервал между обновлениями
+//	@returns <-chan runtime.MemStats канал, в который будут отправляться runtime метрики системы
 func updateMS(ctx context.Context, interval time.Duration) <-chan runtime.MemStats {
 	const prefix = "sender.updateMS"
 
@@ -152,13 +154,18 @@ func updateMS(ctx context.Context, interval time.Duration) <-chan runtime.MemSta
 	return out
 }
 
-// SF TODO
+// Данные системы
 type systemStat struct {
-	vms mem.VirtualMemoryStat // SF TODO
-	cpu int                   // SF TODO
+	vms mem.VirtualMemoryStat // Данные виртуальной памяти
+	cpu int                   // Количество логических процессоров
 }
 
-// SF TODO
+// Обновляет данные системы и отправляет их по выходному каналу
+//
+//	@param ctx      контекст для завершения работы
+//	@param interval интервал между обновлениями
+//	@returns <-chan systemStat канал, в который будут отправляться данные системы
+//	@returns <-chan error канал, в который будут отправляться ошибки, если возникли проблемы
 func updateSS(ctx context.Context, interval time.Duration) (<-chan systemStat, <-chan error) {
 	const prefix = "sender.updateSS"
 
@@ -193,7 +200,7 @@ func updateSS(ctx context.Context, interval time.Duration) (<-chan systemStat, <
 
 		defer close(out)
 
-		// Сразу обновляем и отправляем метрики
+		// Сразу обновляем и отправляем данные системы
 		if err := getSS(); err != nil {
 			return
 		}
@@ -219,7 +226,13 @@ func updateSS(ctx context.Context, interval time.Duration) (<-chan systemStat, <
 	return out, outErr
 }
 
-// SF TODO
+// Собирает метрики и отправляет их по выходному каналу
+//
+//	@param ctx      контекст для завершения работы
+//	@param interval интервал между отправками метрики по выходному каналу
+//	@param msCh     входной канал с runtime метриками системы
+//	@param ssCh     входной канал с данными системы
+//	@returns <-chan []model.Metrics канал, в который будут отправляться метрики
 func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.MemStats, ssCh <-chan systemStat) <-chan []model.Metrics {
 	const prefix = "sender.collect"
 
@@ -326,7 +339,12 @@ func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.Me
 	return out
 }
 
-// SF TODO
+// Запускает максимально возможное количество отправителей (учитывая RateLimit).
+// Каждый отправитель: получает метрики из входного канала, отправляет метрики на сервер
+//
+//	@param ctx контекст для завершения работы
+//	@param in  входной канал с метриками
+//	@returns <-chan error канал, в который будут отправляться ошибки, если возникли проблемы
 func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) <-chan error {
 	const prefix = "sender.sender.report"
 
