@@ -255,11 +255,13 @@ func Test_filtrateMS(t *testing.T) {
 func Test_sender_Run(t *testing.T) {
 	t.Run("metrics counting", func(t *testing.T) {
 		router := chi.NewRouter()
-		handlerCounter := 0
-		gaugeCounter := 0
-		countCounter := 0
+		var handlerCounter atomic.Uint32
+		var gaugeCounter atomic.Uint32
+		var countCounter atomic.Uint32
 		router.Post("/updates", func(resp http.ResponseWriter, req *http.Request) {
-			handlerCounter++
+			curHandlerCounter := handlerCounter.Add(1)
+
+			fmt.Printf("Handler %d: started\n", curHandlerCounter)
 
 			require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 			require.Equal(t, "gzip", req.Header.Get("Content-Encoding"))
@@ -277,26 +279,27 @@ func Test_sender_Run(t *testing.T) {
 
 			for _, metric := range metrics {
 				if metric.MType == model.Counter && metric.ID == "PollCount" {
+					curCountCounter := countCounter.Add(1)
+
 					require.NotNil(t, metric.Delta)
 					switch {
-					case handlerCounter < 3:
+					case curHandlerCounter < 3:
 						assert.Equal(t, int64(1), *metric.Delta)
-					case handlerCounter < 5:
+					case curHandlerCounter < 5:
 						assert.Equal(t, int64(5), *metric.Delta)
 					default:
-						t.Errorf("expected count metric times: 3, actual: %d", countCounter+1)
+						t.Errorf("expected count metric times: 3, actual: %d", curCountCounter)
 					}
 
-					countCounter++
 				} else if metric.MType == model.Gauge {
 					require.NotNil(t, metric.Value)
-					gaugeCounter++
+					gaugeCounter.Add(1)
 				} else {
 					t.Errorf("unknown metric type: %s", metric.MType)
 				}
 			}
 
-			fmt.Printf("Handler count %d: finished\n", handlerCounter)
+			fmt.Printf("Handler %d: finished\n", curHandlerCounter)
 		})
 
 		server := httptest.NewServer(router)
@@ -324,8 +327,8 @@ func Test_sender_Run(t *testing.T) {
 		defer cancel()
 		err = sender.Run(ctx)
 		require.ErrorIs(t, err, context.DeadlineExceeded)
-		assert.Equal(t, 4, handlerCounter)
-		assert.Equal(t, (28+3)*3, gaugeCounter) // (28:mem stats + 3:system stats) * 3:times
+		assert.Equal(t, uint32(4), handlerCounter.Load())
+		assert.Equal(t, uint32((28+3)*3), gaugeCounter.Load()) // (28:mem stats + 3:system stats) * 3:times
 	})
 
 	rateLimitTests := []struct {
