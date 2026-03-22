@@ -28,6 +28,7 @@ func Test_parseConfig(t *testing.T) {
 			ToRestore:       false,
 			DatabaseDSN:     nil,
 			MigrationsPath:  "migrations",
+			KeyEncryption:   nil,
 		}, *config)
 	})
 }

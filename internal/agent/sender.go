@@ -4,14 +4,20 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/skayfish/metrics/internal/encryption"
 	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 )
@@ -20,9 +26,6 @@ import (
 type sender struct {
 	// Конфигурация работы системы
 	config Config
-
-	// Количество обновлений метрик за время работы программы
-	pollCount int64
 
 	// Клиент для отправки запросов серверу
 	client *resty.Client
@@ -44,18 +47,10 @@ func NewSender(config Config) sender {
 	return sender{config: config, client: client}
 }
 
-// Получает метрики из системы
-//
-//	@returns метрики из системы
-func (sender) getMetrics() (res runtime.MemStats) {
-	runtime.ReadMemStats(&res)
-	return
-}
-
 // Генерирует случайное вещественное число
 //
 //	@returns случайное вещественное число
-func (sender) generateFloat64() float64 {
+func generateFloat64() float64 {
 	min := -math.MaxFloat32
 	max := math.MaxFloat32
 
@@ -65,12 +60,12 @@ func (sender) generateFloat64() float64 {
 	return min + gen.Float64()*(max-min)
 }
 
-// Фильтрует необходимые метрики системы
+// Фильтрует необходимые runtime метрики системы
 //
-//	@param metrics метрики системы
+//	@param metrics runtime метрики системы
 //	@returns отфильтрованные метрики системы
-func (sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
-	res = make(map[string]float64)
+func filtrateMS(metrics *runtime.MemStats) map[string]float64 {
+	res := make(map[string]float64)
 
 	res["Alloc"] = float64(metrics.Alloc)
 	res["BuckHashSys"] = float64(metrics.BuckHashSys)
@@ -100,7 +95,335 @@ func (sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 	res["Sys"] = float64(metrics.Sys)
 	res["TotalAlloc"] = float64(metrics.TotalAlloc)
 
-	return
+	return res
+}
+
+// Фильтрует необходимые метрики системы
+//
+//	@param ss метрики системы
+//	@returns отфильтрованные метрики системы
+func filtrateSS(ss *systemStat) map[string]float64 {
+	res := make(map[string]float64)
+
+	res["TotalMemory"] = float64(ss.vms.Total)
+	res["FreeMemory"] = float64(ss.vms.Free)
+	res["CPUutilization1"] = float64(ss.cpu)
+
+	return res
+}
+
+// Обновляет runtime метрики системы и отправляет их по выходному каналу
+//
+//	@param ctx      контекст для завершения работы
+//	@param interval интервал между обновлениями
+//	@returns <-chan runtime.MemStats канал, в который будут отправляться runtime метрики системы
+func updateMS(ctx context.Context, interval time.Duration) <-chan runtime.MemStats {
+	const prefix = "sender.updateMS"
+
+	out := make(chan runtime.MemStats)
+
+	getMS := func() (ms runtime.MemStats) {
+		runtime.ReadMemStats(&ms)
+		return ms
+	}
+
+	go func() {
+		logger.LogS.Debugf("%s: started", prefix)
+
+		defer close(out)
+
+		// Сразу обновляем и отправляем метрики
+		select {
+		case <-ctx.Done():
+			logger.LogS.Debugf("%s: sending memory stat terminated by context", prefix)
+			return
+		case out <- getMS():
+		}
+
+		// Запуск таймера
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: terminated by context", prefix)
+				return
+			case <-ticker.C:
+				logger.LogS.Debugf("%s: got time tick", prefix)
+				select {
+				case <-ctx.Done():
+					logger.LogS.Debugf("%s: sending memory stat terminated by context", prefix)
+					return
+				case out <- getMS():
+				}
+			}
+		}
+	}()
+
+	return out
+}
+
+// Данные системы
+type systemStat struct {
+	vms mem.VirtualMemoryStat // Данные виртуальной памяти
+	cpu int                   // Количество логических процессоров
+}
+
+// Обновляет данные системы и отправляет их по выходному каналу
+//
+//	@param ctx      контекст для завершения работы
+//	@param interval интервал между обновлениями
+//	@returns <-chan systemStat канал, в который будут отправляться данные системы
+//	@returns <-chan error канал, в который будут отправляться ошибки, если возникли проблемы
+func updateSS(ctx context.Context, interval time.Duration) (<-chan systemStat, <-chan error) {
+	const prefix = "sender.updateSS"
+
+	out := make(chan systemStat)
+	outErr := make(chan error)
+
+	getSS := func() error {
+		const prefix = "sender.updateSS.getSS"
+		vms, err := mem.VirtualMemoryWithContext(ctx)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: sending err about virtual memory terminated by context", prefix)
+				return ctx.Err()
+			case outErr <- err:
+			}
+
+			logger.LogS.Debugf("%s: virtual memory stat getting failed: %v", prefix, err)
+			return err
+		}
+
+		cpu, err := cpu.CountsWithContext(ctx, true)
+		if err != nil {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: sending err about cpu counts terminated by context", prefix)
+				return ctx.Err()
+			case outErr <- err:
+			}
+
+			logger.LogS.Debugf("%s: cpu counts getting failed: %v", prefix, err)
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			logger.LogS.Debugf("%s: sending system stat terminated by context", prefix)
+			return ctx.Err()
+		case out <- systemStat{vms: *vms, cpu: cpu}:
+		}
+
+		return nil
+	}
+
+	go func() {
+		logger.LogS.Debugf("%s: started", prefix)
+
+		defer close(out)
+		defer close(outErr)
+
+		// Сразу обновляем и отправляем данные системы
+		if err := getSS(); err != nil {
+			return
+		}
+
+		// Запуск таймера
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: terminated by context", prefix)
+				return
+			case <-ticker.C:
+				logger.LogS.Debugf("%s: got time tick", prefix)
+				if err := getSS(); err != nil {
+					return
+				}
+			}
+		}
+	}()
+
+	return out, outErr
+}
+
+// Собирает метрики и отправляет их по выходному каналу
+//
+//	@param ctx      контекст для завершения работы
+//	@param interval интервал между отправками метрики по выходному каналу
+//	@param msCh     входной канал с runtime метриками системы
+//	@param ssCh     входной канал с данными системы
+//	@returns <-chan []model.Metrics канал, в который будут отправляться метрики
+func collect(ctx context.Context, interval time.Duration, msCh <-chan runtime.MemStats, ssCh <-chan systemStat) <-chan []model.Metrics {
+	const prefix = "sender.collect"
+
+	out := make(chan []model.Metrics)
+
+	go func() {
+		logger.LogS.Debugf("%s: started", prefix)
+
+		defer close(out)
+
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+
+		msFirstTime := true
+		type memStatsData struct {
+			counter int64
+			last    []model.Metrics
+		}
+		var msData memStatsData
+
+		collectMS := func() {
+			pc := msData.counter
+			msData.last = append(msData.last, model.Metrics{
+				ID:    "PollCount",
+				MType: model.Counter,
+				Delta: &pc,
+			})
+		}
+
+		ssFirstTime := true
+		var ssData []model.Metrics
+
+		rawGaugesToMetrics := func(gauges map[string]float64) []model.Metrics {
+			res := make([]model.Metrics, 0, len(gauges))
+			for id, value := range gauges {
+				res = append(res, model.Metrics{
+					ID:    id,
+					MType: model.Gauge,
+					Value: &value,
+				})
+			}
+
+			return res
+		}
+
+		for {
+			select {
+			case <-ctx.Done():
+				logger.LogS.Debugf("%s: terminated by context", prefix)
+				return
+			case ms, ok := <-msCh:
+				if !ok {
+					logger.LogS.Debugf("%s: memory stats channel is closed", prefix)
+					msCh = nil
+					continue
+				}
+
+				logger.LogS.Debugf("%s: got memory stats", prefix)
+
+				filtered := filtrateMS(&ms)
+
+				// Добавление дополнительных gauge метрик
+				filtered["RandomValue"] = generateFloat64()
+
+				// Заполнение данных ms
+				msData.last = rawGaugesToMetrics(filtered)
+				msData.counter++
+
+				if msFirstTime {
+					collectMS()
+					select {
+					case <-ctx.Done():
+						logger.LogS.Debugf("%s: sending memory stat terminated by context", prefix)
+						return
+					case out <- msData.last:
+					}
+
+					msData = memStatsData{}
+					msFirstTime = false
+				}
+			case ss, ok := <-ssCh:
+				if !ok {
+					logger.LogS.Debugf("%s: system stat channel is closed", prefix)
+					ssCh = nil
+					continue
+				}
+
+				logger.LogS.Debugf("%s: got system stat", prefix)
+
+				ssData = rawGaugesToMetrics(filtrateSS(&ss))
+
+				if ssFirstTime {
+					select {
+					case <-ctx.Done():
+						logger.LogS.Debugf("%s: sending system stat terminated by context", prefix)
+						return
+					case out <- ssData:
+					}
+
+					ssData = nil
+					ssFirstTime = false
+				}
+			case <-ticker.C:
+				logger.LogS.Debugf("%s: got time tick", prefix)
+
+				collectMS()
+				msData.last = append(msData.last, ssData...)
+
+				select {
+				case <-ctx.Done():
+					logger.LogS.Debugf("%s: sending metrics terminated by context", prefix)
+					return
+				case out <- msData.last:
+				}
+
+				msData = memStatsData{}
+				ssData = nil
+
+				msFirstTime = false
+				ssFirstTime = false
+			}
+		}
+	}()
+
+	return out
+}
+
+// Запускает максимально возможное количество отправителей (учитывая RateLimit).
+// Каждый отправитель: получает метрики из входного канала, отправляет метрики на сервер
+//
+//	@param ctx контекст для завершения работы
+//	@param in  входной канал с метриками
+//	@returns <-chan error канал, в который будут отправляться ошибки, если возникли проблемы
+func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) <-chan error {
+	const prefix = "sender.sender.report"
+
+	out := make(chan error)
+
+	go func() {
+		defer close(out)
+
+		var wg sync.WaitGroup
+		wg.Add(int(s.config.RateLimit))
+		for i := 0; i < int(s.config.RateLimit); i++ {
+			go func() {
+				num := i
+				defer wg.Done()
+				for metrics := range in {
+					if err := s.send(ctx, metrics); err != nil {
+						select {
+						case <-ctx.Done():
+							logger.LogS.Debugf("%s: reporter %d: terminated by context", num, prefix)
+						case out <- fmt.Errorf("%s: %w", prefix, err):
+						}
+
+						return
+					}
+				}
+			}()
+		}
+
+		wg.Wait()
+	}()
+
+	return out
 }
 
 // Запускает обновление метрик и отправку их серверу
@@ -110,71 +433,40 @@ func (sender) filtrate(metrics runtime.MemStats) (res map[string]float64) {
 func (s *sender) Run(ctx context.Context) error {
 	const prefix = "agent.sender.Run"
 
-	var metrics runtime.MemStats
-	updateMetrics := func() {
-		metrics = s.getMetrics()
-		s.pollCount++
-	}
-	collectMetrics := func() (result []model.Metrics) {
-		result = make([]model.Metrics, 0)
+	curCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
-		// Фильтрация метрик, полученных из системы
-		filteredMetrics := s.filtrate(metrics)
-		// Добавление дополнительных gauge метрик
-		filteredMetrics["RandomValue"] = s.generateFloat64()
+	msCh := updateMS(curCtx, s.config.PollInterval)
+	ssCh, ssErrCh := updateSS(curCtx, s.config.PollInterval)
+	collectCh := collect(curCtx, s.config.ReportInterval, msCh, ssCh)
+	reportErrCh := s.report(curCtx, collectCh)
 
-		for id, value := range filteredMetrics {
-			result = append(result, model.Metrics{
-				ID:    id,
-				MType: model.Gauge,
-				Value: &value,
-			})
-		}
-
-		result = append(result, model.Metrics{
-			ID:    "PollCount",
-			MType: model.Counter,
-			Delta: &s.pollCount,
-		})
-
-		return result
-	}
-	reportMetrics := func() error {
-		err := s.send(collectMetrics())
-		if err != nil {
-			return err
-		}
-
-		s.pollCount = 0
-
-		return nil
-	}
-
-	// Сразу обновляются и отправляются метрики
-	updateMetrics()
-	if err := reportMetrics(); err != nil {
-		return fmt.Errorf("%s: %v", prefix, err)
-	}
-
-	// Ожидание интервалов
-	pollTicker := time.NewTicker(s.config.PollInterval)
-	defer pollTicker.Stop()
-	reportTicker := time.NewTicker(s.config.ReportInterval)
-	defer reportTicker.Stop()
+	var err error
+	var ok bool
+errorLoop:
 	for {
-		if ctx != nil && ctx.Err() != nil {
-			return fmt.Errorf("%s: metrics sending manager operation terminated: %w", prefix, ctx.Err())
-		}
-
 		select {
-		case <-pollTicker.C:
-			updateMetrics()
-		case <-reportTicker.C:
-			if err := reportMetrics(); err != nil {
-				return fmt.Errorf("%s: %v", prefix, err)
+		case <-ctx.Done():
+			logger.LogS.Debugf("%s: terminated by context", prefix)
+			return fmt.Errorf("%s: %w", prefix, ctx.Err())
+		case err, ok = <-ssErrCh:
+			if !ok {
+				ssErrCh = nil
+				continue
 			}
+
+			break errorLoop
+		case err, ok = <-reportErrCh:
+			if !ok {
+				reportErrCh = nil
+				continue
+			}
+
+			break errorLoop
 		}
 	}
+
+	return fmt.Errorf("%s: %w", prefix, err)
 }
 
 // Сжимает переданные данные с помощью gzip
@@ -204,14 +496,15 @@ func compress(data []byte) ([]byte, error) {
 
 // Отправляет метрики серверу
 //
+//	@param ctx     контекст для завершения работы
 //	@param metrics метрики для отправки
 //	@returns ошибку, если возникли проблемы при отправки метрик
-func (s *sender) send(metrics []model.Metrics) error {
+func (s *sender) send(ctx context.Context, metrics []model.Metrics) error {
 	const prefix = "agent.sender.send"
 
 	logger.LogS.Debugw(fmt.Sprintf("%s: send metrics", prefix), "metrics", metrics)
 
-	metricsJSON, err := json.MarshalIndent(metrics, "", "    ")
+	metricsJSON, err := json.Marshal(metrics)
 	if err != nil {
 		return fmt.Errorf("%s: failed marshal metrics: %w", prefix, err)
 	}
@@ -221,13 +514,24 @@ func (s *sender) send(metrics []model.Metrics) error {
 		return fmt.Errorf("%s: %v", prefix, err)
 	}
 
+	requestHeaders := map[string]string{
+		"Content-Type":     "application/json",
+		"Content-Encoding": "gzip",
+	}
+	if s.config.KeyEncryption != nil {
+		hmac, err := encryption.SignHMAC(compressedMetricsJSON, []byte(*s.config.KeyEncryption), sha256.New)
+		if err != nil {
+			return fmt.Errorf("%s: %v", prefix, err)
+		}
+
+		requestHeaders["HashSHA256"] = hex.EncodeToString(hmac)
+	}
+
 	url := fmt.Sprintf("%s://%s:%d/updates", s.config.getConnectionType(), s.config.Host, s.config.Port)
 	request := s.client.R().
 		SetBody(compressedMetricsJSON).
-		SetHeaders(map[string]string{
-			"Content-Type":     "application/json",
-			"Content-Encoding": "gzip",
-		})
+		SetHeaders(requestHeaders).
+		SetContext(ctx)
 
 	response, err := request.Post(url)
 	if err != nil {

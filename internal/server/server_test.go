@@ -30,13 +30,14 @@ func getEmptyMiddleware() func(http.HandlerFunc) http.HandlerFunc {
 
 // Проверяет настройку маршрутизатора запросов
 func Test_getRouter(t *testing.T) {
+	key := "some encryption key"
 	t.Run("success", func(t *testing.T) {
 		s := storage.NewMemStorage()
-		_, err := getRouter(&s, getEmptyMiddleware())
+		_, err := getRouter(&s, getEmptyMiddleware(), &key)
 		assert.NoError(t, err)
 	})
 	t.Run("success", func(t *testing.T) {
-		_, err := getRouter(nil, getEmptyMiddleware())
+		_, err := getRouter(nil, getEmptyMiddleware(), &key)
 		assert.NoError(t, err)
 	})
 }
@@ -117,6 +118,7 @@ func Test_createStorageFromJSON(t *testing.T) {
 func TestNewServer(t *testing.T) {
 	emptyMemStorage := storage.NewMemStorage()
 	notEmptyMemStorage := newSuccessMemStorage()
+	keyEncryption := "some key encryption"
 
 	tests := []struct {
 		test   string
@@ -128,6 +130,7 @@ func TestNewServer(t *testing.T) {
 			config: Config{
 				FileStoragePath: "",
 				ToRestore:       true,
+				KeyEncryption:   &keyEncryption,
 			},
 			want: &emptyMemStorage,
 		},
@@ -136,6 +139,7 @@ func TestNewServer(t *testing.T) {
 			config: Config{
 				FileStoragePath: "./testdata/errorJSON.json",
 				ToRestore:       true,
+				KeyEncryption:   &keyEncryption,
 			},
 			want: &emptyMemStorage,
 		},
@@ -144,6 +148,7 @@ func TestNewServer(t *testing.T) {
 			config: Config{
 				FileStoragePath: "./testdata/success.json",
 				ToRestore:       true,
+				KeyEncryption:   &keyEncryption,
 			},
 			want: notEmptyMemStorage,
 		},
@@ -152,6 +157,7 @@ func TestNewServer(t *testing.T) {
 			config: Config{
 				FileStoragePath: "./testdata/success.json",
 				ToRestore:       false,
+				KeyEncryption:   &keyEncryption,
 			},
 			want: &emptyMemStorage,
 		},
@@ -160,6 +166,7 @@ func TestNewServer(t *testing.T) {
 			config: Config{
 				FileStoragePath: "./testdata/errorJSON.json",
 				ToRestore:       false,
+				KeyEncryption:   &keyEncryption,
 			},
 			want: &emptyMemStorage,
 		},
@@ -168,6 +175,14 @@ func TestNewServer(t *testing.T) {
 			config: Config{
 				FileStoragePath: "",
 				ToRestore:       false,
+				KeyEncryption:   &keyEncryption,
+			},
+			want: &emptyMemStorage,
+		},
+		{
+			test: "key is nil",
+			config: Config{
+				KeyEncryption: nil,
 			},
 			want: &emptyMemStorage,
 		},
@@ -219,6 +234,8 @@ func createServer(t *testing.T, restore bool, fileStoragePath string, storeInter
 	port, err := getFreePort()
 	require.NoError(t, err)
 
+	key := "some key encryption"
+
 	s, err := NewServer(
 		context.Background(),
 		&Config{
@@ -226,6 +243,7 @@ func createServer(t *testing.T, restore bool, fileStoragePath string, storeInter
 			FileStoragePath: fileStoragePath,
 			ToRestore:       restore,
 			StoreInterval:   storeInterval,
+			KeyEncryption:   &key,
 		})
 	require.NoError(t, err)
 

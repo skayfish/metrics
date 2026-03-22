@@ -31,6 +31,12 @@ type Config struct {
 
 	// Уровень логирования
 	LogLevel logger.Level
+
+	// Ключ для подписи запросов и ответов
+	KeyEncryption *string
+
+	// Ограничение одновременно исходящих запросов на сервер
+	RateLimit uint
 }
 
 // Возвращает тип соединения

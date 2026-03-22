@@ -2,13 +2,16 @@ package testutil
 
 import (
 	"math"
+	"net/http"
 	"reflect"
 	"testing"
 
+	"github.com/skayfish/metrics/internal/logger"
 	"github.com/skayfish/metrics/internal/model"
 	"github.com/skayfish/metrics/internal/server/storage"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 )
 
 // Формирует хранилище по метрикам
@@ -91,4 +94,31 @@ func StoragesEqual(t *testing.T, expected, storage *storage.MemStorage) {
 
 		MetricsEqual(t, metric, metricRHS)
 	}
+}
+
+// Сравнивает в глубину два словаря с заголовками
+//
+//	@param t        экземпляр теста
+//	@param expected ожидаемый словарь с заголовками
+//	@param actual   фактический словарь с заголовками
+func HeadersEqual(t *testing.T, expected map[string][]string, actual http.Header) {
+	assert.True(t, reflect.DeepEqual(http.Header(expected), actual))
+}
+
+// Инициализирует менеджер логирования, и останавливает его в дебажный режим
+// Рекомендация по использованию:
+//
+// Пример 1:
+// defer testutil.DebugLogsOn(t)()
+//
+// Пример 2:
+// close := testutil.DebugLogsOn(t)
+// ... Ваш код ...
+// close()
+//
+//	@param t экземпляр теста
+//	@returns func() функцию для закрытия менеджера логирования
+func DebugLogsOn(t *testing.T) func() {
+	require.NoError(t, logger.Init(logger.Level(zapcore.DebugLevel)))
+	return logger.Close
 }

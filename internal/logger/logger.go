@@ -48,3 +48,9 @@ func Init(level Level) error {
 
 	return nil
 }
+
+// Закрывает менеджер логирования
+func Close() {
+	Log = zap.NewNop()
+	LogS = Log.Sugar()
+}

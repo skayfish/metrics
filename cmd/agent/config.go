@@ -21,6 +21,12 @@ type environments struct {
 
 	// Частота обновления метрик (например, раз в 2 секунды)
 	PollInterval *uint `env:"POLL_INTERVAL" example:"2"`
+
+	// Ключ для подписи запросов и ответов
+	KeyEncryption *string `env:"KEY" example:"somekey554%!@#$"`
+
+	// Ограничение одновременно исходящих запросов на сервер
+	RateLimit *uint `env:"RATE_LIMIT" example:"10"`
 }
 
 // Парсит флаги, указанные при запуске программы и переменные окружения
@@ -42,7 +48,9 @@ func parseConfig() (*agent.Config, error) {
 	retryWaitTime := pflag.Uint("retry-wait-time", 2,
 		"Connection retry interval, in seconds")
 	var logLevel logger.Level
-	pflag.VarP(&logLevel, "log-level", "l", "Logging level")
+	pflag.Var(&logLevel, "log-level", "Logging level")
+	keyEncryption := pflag.StringP("key-hash", "k", "", "Cryptographic key component used to sign HTTP requests and responses")
+	rateLimit := pflag.UintP("rate-limit", "l", 1, "Limit for concurrent requests sent to server")
 
 	pflag.Parse()
 
@@ -65,6 +73,19 @@ func parseConfig() (*agent.Config, error) {
 		*reportInterval = *envs.ReportInterval
 	}
 
+	if envs.KeyEncryption != nil {
+		*keyEncryption = *envs.KeyEncryption
+	}
+
+	if envs.RateLimit != nil {
+		*rateLimit = *envs.RateLimit
+	}
+
+	// Формирование результата
+	if *keyEncryption == "" {
+		keyEncryption = nil
+	}
+
 	return &agent.Config{
 		SecureConnection: *isSecure,
 		Host:             addr.Host,
@@ -74,5 +95,7 @@ func parseConfig() (*agent.Config, error) {
 		PollInterval:     time.Duration(*pollInterval) * time.Second,
 		ReportInterval:   time.Duration(*reportInterval) * time.Second,
 		LogLevel:         logLevel,
+		KeyEncryption:    keyEncryption,
+		RateLimit:        *rateLimit,
 	}, nil
 }
