@@ -11,20 +11,20 @@ import (
 
 // Проверяет создание объекта записи http ответов
 func Test_newDefaultResponseWriter(t *testing.T) {
-	rw := newDefaultResponseWriter()
-	require.Empty(t, rw.headers)
-	assert.Empty(t, rw.body)
-	assert.Equal(t, -1, rw.status)
+	rw := NewDefaultResponseWriter()
+	require.Empty(t, rw.Headers)
+	assert.Empty(t, rw.Body)
+	assert.Equal(t, -1, rw.Status)
 }
 
 // Проверяет возврат заголовков объекта записи http ответов
 func Test_defaultResponseWriter_Header(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		rw := newDefaultResponseWriter()
+		rw := NewDefaultResponseWriter()
 		require.Empty(t, rw.Header())
 	})
 	t.Run("not empty", func(t *testing.T) {
-		rw := newDefaultResponseWriter()
+		rw := NewDefaultResponseWriter()
 		headers := rw.Header()
 		headers.Add("key", "value1")
 		headers.Add("key", "value2")
@@ -57,33 +57,33 @@ func Test_defaultResponseWriter_Write(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
-			rw := newDefaultResponseWriter()
+			rw := NewDefaultResponseWriter()
 			num := len(tt.data)
 
 			n, err := rw.Write(tt.data)
 			require.NoError(t, err)
 			assert.Equal(t, num, n)
-			assert.Equal(t, string(tt.data), rw.body)
+			assert.Equal(t, string(tt.data), rw.Body)
 
 			// Повтор записи
 			n, err = rw.Write(tt.data)
 			require.NoError(t, err)
 			assert.Equal(t, num*2, n*2)
-			assert.Equal(t, tt.body, rw.body)
+			assert.Equal(t, tt.body, rw.Body)
 		})
 	}
 	t.Run("status", func(t *testing.T) {
-		rw := newDefaultResponseWriter()
+		rw := NewDefaultResponseWriter()
 
 		data := []byte("some data")
 		n, err := rw.Write(data)
 		require.NoError(t, err)
 		assert.Equal(t, len(data), n)
 
-		assert.Equal(t, rw.status, http.StatusOK)
+		assert.Equal(t, rw.Status, http.StatusOK)
 	})
 	t.Run("status", func(t *testing.T) {
-		rw := newDefaultResponseWriter()
+		rw := NewDefaultResponseWriter()
 		rw.WriteHeader(http.StatusInternalServerError)
 
 		data := []byte("some data")
@@ -91,7 +91,7 @@ func Test_defaultResponseWriter_Write(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, len(data), n)
 
-		assert.Equal(t, rw.status, http.StatusInternalServerError)
+		assert.Equal(t, rw.Status, http.StatusInternalServerError)
 	})
 }
 
@@ -112,15 +112,15 @@ func Test_defaultResponseWriter_WriteHeader(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.test, func(t *testing.T) {
-			rw := newDefaultResponseWriter()
+			rw := NewDefaultResponseWriter()
 			rw.WriteHeader(tt.statusCode)
 
-			assert.Equal(t, tt.statusCode, rw.status)
+			assert.Equal(t, tt.statusCode, rw.Status)
 		})
 	}
 
 	t.Run("do nothing", func(t *testing.T) {
-		rw := newDefaultResponseWriter()
-		assert.Equal(t, -1, rw.status)
+		rw := NewDefaultResponseWriter()
+		assert.Equal(t, -1, rw.Status)
 	})
 }

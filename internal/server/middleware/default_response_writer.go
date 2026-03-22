@@ -4,23 +4,23 @@ import "net/http"
 
 // Базовый объект записи http ответов
 type defaultResponseWriter struct {
-	headers http.Header // Заголовки ответа
-	status  int         // Статус ответа
-	body    string      // Тело ответа
+	Headers http.Header // Заголовки ответа
+	Status  int         // Статус ответа
+	Body    string      // Тело ответа
 }
 
 // Создаёт новый базовый объект записи http ответов
-func newDefaultResponseWriter() defaultResponseWriter {
+func NewDefaultResponseWriter() defaultResponseWriter {
 	return defaultResponseWriter{
-		headers: make(http.Header),
-		status:  -1,
+		Headers: make(http.Header),
+		Status:  -1,
 	}
 }
 
 // Возвращает заголовки ответа
 //	@returns http.Header заголовки ответа
 func (rw *defaultResponseWriter) Header() http.Header {
-	return rw.headers
+	return rw.Headers
 }
 
 // Сохраняет данные тела ответа
@@ -28,9 +28,9 @@ func (rw *defaultResponseWriter) Header() http.Header {
 //	@returns int размер данных, которые удалось записать
 //	@returns error nil, необходимо для поддержки интерфейса http.ResponseWriter
 func (rw *defaultResponseWriter) Write(data []byte) (int, error) {
-	rw.body += string(data)
-	if rw.status == -1 {
-		rw.status = http.StatusOK
+	rw.Body += string(data)
+	if rw.Status == -1 {
+		rw.Status = http.StatusOK
 	}
 
 	return len(data), nil
@@ -39,5 +39,5 @@ func (rw *defaultResponseWriter) Write(data []byte) (int, error) {
 // Сохраняет статус ответа
 //	@param statusCode статус ответа
 func (rw *defaultResponseWriter) WriteHeader(statusCode int) {
-	rw.status = statusCode
+	rw.Status = statusCode
 }

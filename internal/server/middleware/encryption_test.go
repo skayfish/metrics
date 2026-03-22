@@ -133,22 +133,22 @@ func Test_hmacMiddleware_F(t *testing.T) {
 			request, err := http.NewRequest("POST", "host:port", strings.NewReader(tt.body))
 			request.Header.Add(hmacHeaderKey, tt.hmac)
 			require.NoError(t, err)
-			response := newDefaultResponseWriter()
+			response := NewDefaultResponseWriter()
 			mid.F(handler).ServeHTTP(&response, request)
 
 			checkRequest(request, tt.body)
 			if tt.hmac == "" {
 				assert.True(t, handlerUsed)
-				assert.Equal(t, tt.bodyResult, response.body)
-				assert.Equal(t, tt.statusResult, response.status)
+				assert.Equal(t, tt.bodyResult, response.Body)
+				assert.Equal(t, tt.statusResult, response.Status)
 				testutil.HeadersEqual(t, map[string][]string{"Content-Type": {"text/plain"}}, response.Header())
 			} else if tt.wantHandlerUsed {
 				assert.True(t, handlerUsed)
-				assert.Equal(t, tt.bodyResult, response.body)
-				assert.Equal(t, tt.statusResult, response.status)
+				assert.Equal(t, tt.bodyResult, response.Body)
+				assert.Equal(t, tt.statusResult, response.Status)
 				hmacResult, err := encryption.SignHMAC([]byte(tt.bodyResult), []byte(key), sha256.New)
 				require.NoError(t, err)
-				assert.Equal(t, hex.EncodeToString(hmacResult), response.headers.Get(hmacHeaderKey))
+				assert.Equal(t, hex.EncodeToString(hmacResult), response.Headers.Get(hmacHeaderKey))
 				expectedHeaders := map[string][]string{
 					"Content-Type": {"text/plain"},
 					"Hashsha256":   {hex.EncodeToString(hmacResult)},
@@ -157,8 +157,8 @@ func Test_hmacMiddleware_F(t *testing.T) {
 				t.Logf("\n%+v\n%+v", expectedHeaders, response.Header())
 			} else {
 				assert.False(t, handlerUsed)
-				assert.Contains(t, response.body, tt.bodyResult)
-				assert.Equal(t, tt.statusResult, response.status)
+				assert.Contains(t, response.Body, tt.bodyResult)
+				assert.Equal(t, tt.statusResult, response.Status)
 				assert.Empty(t, response.Header().Get(hmacHeaderKey))
 			}
 		})

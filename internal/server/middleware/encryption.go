@@ -67,17 +67,17 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 			return
 		}
 
-		tmpResponse := newDefaultResponseWriter()
+		tmpResponse := NewDefaultResponseWriter()
 		handler.ServeHTTP(&tmpResponse, req)
 
-		encryptedBody, err := encryption.SignHMAC([]byte(tmpResponse.body), []byte(m.keyEncryption), sha256.New)
+		encryptedBody, err := encryption.SignHMAC([]byte(tmpResponse.Body), []byte(m.keyEncryption), sha256.New)
 		if err != nil {
-			logger.LogS.Errorw(fmt.Sprintf("%s: failed hmac sign: %v", prefix, err), "body", tmpResponse.body, "key", m.keyEncryption)
+			logger.LogS.Errorw(fmt.Sprintf("%s: failed hmac sign: %v", prefix, err), "body", tmpResponse.Body, "key", m.keyEncryption)
 			resp.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		tmpResponse.headers.Add(hmacHeaderKey, hex.EncodeToString(encryptedBody))
+		tmpResponse.Headers.Add(hmacHeaderKey, hex.EncodeToString(encryptedBody))
 
 		for key, values := range tmpResponse.Header() {
 			for _, value := range values {
@@ -85,11 +85,11 @@ func (m *hmacMiddleware) F(handler http.Handler) http.Handler {
 			}
 		}
 
-		if tmpResponse.status != -1 {
-			resp.WriteHeader(tmpResponse.status)
+		if tmpResponse.Status != -1 {
+			resp.WriteHeader(tmpResponse.Status)
 		}
 
-		resp.Write([]byte(tmpResponse.body))
+		resp.Write([]byte(tmpResponse.Body))
 	}
 	return http.HandlerFunc(fn)
 }

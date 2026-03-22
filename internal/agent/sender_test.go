@@ -12,12 +12,14 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-resty/resty/v2"
 	"github.com/skayfish/metrics/internal/model"
+	"github.com/skayfish/metrics/internal/server/middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -251,7 +253,7 @@ func Test_filtrateMS(t *testing.T) {
 
 // Проверяет запуск менеджера отправки метрик серверу
 func Test_sender_Run(t *testing.T) {
-	t.Run("correct poll counting", func(t *testing.T) {
+	t.Run("metrics counting", func(t *testing.T) {
 		router := chi.NewRouter()
 		handlerCounter := 0
 		gaugeCounter := 0
@@ -313,6 +315,7 @@ func Test_sender_Run(t *testing.T) {
 				RetryWaitTime:    retryWaitTime,
 				PollInterval:     99 * time.Millisecond,
 				ReportInterval:   500 * time.Millisecond,
+				RateLimit:        10,
 			},
 			client: resty.New(),
 		}
@@ -323,5 +326,106 @@ func Test_sender_Run(t *testing.T) {
 		require.ErrorIs(t, err, context.DeadlineExceeded)
 		assert.Equal(t, 4, handlerCounter)
 		assert.Equal(t, (28+3)*3, gaugeCounter) // (28:mem stats + 3:system stats) * 3:times
+	})
+
+	rateLimitTests := []struct {
+		test                 string
+		rateLimit            uint
+		expectedHandlerCount uint32
+	}{
+		{
+			test:                 "low rate limit",
+			rateLimit:            1,
+			expectedHandlerCount: 3, // ms, ss, ms+ss
+		},
+		{
+			test:                 "good rate limit",
+			rateLimit:            5,
+			expectedHandlerCount: 12, // ms, ss, (ms+ss)*10
+		},
+	}
+	for _, tt := range rateLimitTests {
+		t.Run(tt.test, func(t *testing.T) {
+			router := chi.NewRouter()
+			var handlerCounter atomic.Uint32
+			router.Post("/updates", func(resp http.ResponseWriter, req *http.Request) {
+				hc := handlerCounter.Add(1)
+				fmt.Printf("handler %d: started\n", hc)
+				time.Sleep(time.Second)
+				fmt.Printf("handler %d: finished\n", hc)
+			})
+
+			server := httptest.NewServer(router)
+			defer server.Close()
+
+			hostPort := strings.Split(server.URL[7:], ":")
+			port, err := strconv.Atoi(string(hostPort[1]))
+			require.NoError(t, err)
+
+			sender := sender{
+				config: Config{
+					SecureConnection: false,
+					Host:             string(hostPort[0]),
+					Port:             port,
+					RetryMaxWaitTime: retryMaxWaitTime,
+					RetryWaitTime:    retryWaitTime,
+					PollInterval:     99 * time.Millisecond,
+					ReportInterval:   200 * time.Millisecond,
+					RateLimit:        tt.rateLimit,
+				},
+				client: resty.New(),
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 2050*time.Millisecond)
+			defer cancel()
+			err = sender.Run(ctx)
+			require.ErrorIs(t, err, context.DeadlineExceeded)
+			assert.Equal(t, tt.expectedHandlerCount, handlerCounter.Load())
+		})
+	}
+
+	t.Run("sign hmac", func(t *testing.T) {
+		hmacKey := "some key"
+
+		router := chi.NewRouter()
+		mid := middleware.NewHMACMiddleware(hmacKey)
+		h := mid.F(http.HandlerFunc(func(resp http.ResponseWriter, req *http.Request) {
+			// do nothing
+		})).(http.HandlerFunc)
+		router.Post("/updates", func(resp http.ResponseWriter, req *http.Request) {
+			require.NotEmpty(t, req.Header.Get("HashSHA256"), req.Header)
+
+			rw := middleware.NewDefaultResponseWriter()
+			h.ServeHTTP(&rw, req)
+
+			assert.Equal(t, http.StatusOK, rw.Status)
+		})
+
+		server := httptest.NewServer(router)
+		defer server.Close()
+
+		hostPort := strings.Split(server.URL[7:], ":")
+		port, err := strconv.Atoi(string(hostPort[1]))
+		require.NoError(t, err)
+
+		sender := sender{
+			config: Config{
+				SecureConnection: false,
+				Host:             string(hostPort[0]),
+				Port:             port,
+				RetryMaxWaitTime: retryMaxWaitTime,
+				RetryWaitTime:    retryWaitTime,
+				PollInterval:     99 * time.Millisecond,
+				ReportInterval:   200 * time.Millisecond,
+				RateLimit:        1,
+				KeyEncryption:    &hmacKey,
+			},
+			client: resty.New(),
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+		defer cancel()
+		err = sender.Run(ctx)
+		require.ErrorIs(t, err, context.DeadlineExceeded)
 	})
 }

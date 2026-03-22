@@ -11,6 +11,7 @@ import (
 	"math"
 	"math/rand"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -332,12 +333,21 @@ func (s *sender) report(ctx context.Context, in <-chan []model.Metrics) <-chan e
 	out := make(chan error)
 
 	go func() {
-		for metrics := range in {
-			if err := s.send(ctx, metrics); err != nil {
-				out <- fmt.Errorf("%s: %w", prefix, err)
-				return
-			}
+		var wg sync.WaitGroup
+		wg.Add(int(s.config.RateLimit))
+		for i := 0; i < int(s.config.RateLimit); i++ {
+			go func() {
+				defer wg.Done()
+				for metrics := range in {
+					if err := s.send(ctx, metrics); err != nil {
+						out <- fmt.Errorf("%s: %w", prefix, err)
+						return
+					}
+				}
+			}()
 		}
+
+		wg.Wait()
 	}()
 
 	return out
